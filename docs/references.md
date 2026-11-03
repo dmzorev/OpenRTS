@@ -17,6 +17,6 @@
 | Ограничения потоков Godot | [Godot thread-safe APIs](https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html) | Какие действия выполняет основной поток, какие можно делегировать |
 | Код и отдельные CC ассеты | [Creative Commons FAQ](https://creativecommons.org/faq/#if-i-create-a-collection-that-includes-a-work-offered-under-a-cc-license-which-licenses-may-i-choose-for-the-collection) | Как сохранить отдельные лицензии и условия NC, ND и SA |
 
-Локальная библиотека для переиспользования: `/Users/dmzorev/projects/games/hyperfleets/libs/DeclarativeContent`. Её README, LICENSE, исходники и тесты в `tests/DeclarativeContent.Tests` проверяются и переносятся вместе на этапе каркаса. Библиотека не предоставляет игровой цикл или готовые RTS правила.
+Переиспользована библиотека из `/Users/dmzorev/projects/games/hyperfleets/libs/DeclarativeContent`. Её README, LICENSE, исходники и тесты перенесены вместе. [Манифест импорта](vendor/declarative-content.json) содержит исходный commit и SHA-256 файлов. Библиотека не предоставляет игровой цикл или готовые RTS правила.
 
 OpenRTSv1 находится в `/Users/dmzorev/projects/games/OpenRTSv1`. Он служит источником опыта разделения систем. Его план совместимости с OpenRA не является планом нового MIT проекта.

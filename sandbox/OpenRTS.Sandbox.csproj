@@ -1,0 +1,13 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Sandbox.cs" />
+    <Compile Include="../src/OpenRTS.Godot/**/*.cs" />
+    <ProjectReference Include="../src/OpenRTS.Content/OpenRTS.Content.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,43 @@
+{
+  "source": "hyperfleets",
+  "source_commit": "5d6eb66e86a8e9e45d1bfe6fa87ac767d637b25a",
+  "license": "MIT",
+  "files": [
+    {
+      "path": "libs/DeclarativeContent/ContentSchema.cs",
+      "sha256": "1026cb2a8786c12befc0d0f8ec7ce742bf86d03123e35eee5106f13652c69bd3"
+    },
+    {
+      "path": "libs/DeclarativeContent/DeclarativeContent.csproj",
+      "sha256": "70bb7d161b7abac36bb3422dca49d14719f662c7adf6db77f547d1bb85dcf8c8"
+    },
+    {
+      "path": "libs/DeclarativeContent/Definitions.cs",
+      "sha256": "f0e867c98e9cf37ff78fc903084a7f734b55be80fa9e2a78f9e00be9c0b42251"
+    },
+    {
+      "path": "libs/DeclarativeContent/LICENSE",
+      "sha256": "041cb11aeb2640d71d7c14e7b0374abd8272ea95c4fc3d16c81af5fe975d7ef8"
+    },
+    {
+      "path": "libs/DeclarativeContent/Options.cs",
+      "sha256": "cbe54572ba60e6b84a6a57009a37bef97a6fd0fd928da78cb933073d440cb4d7"
+    },
+    {
+      "path": "libs/DeclarativeContent/README.md",
+      "sha256": "318ded027997ca2b453b530b6031c43e49344a5203643f4eab2af8ead74fed42"
+    },
+    {
+      "path": "libs/DeclarativeContent/Traits.cs",
+      "sha256": "c76af95d5be4afcdce756f120cf8ce811df602f254db7bf45e7088a369e7785a"
+    },
+    {
+      "path": "tests/DeclarativeContent.Tests/DeclarativeContent.Tests.csproj",
+      "sha256": "83f84a69a57b1388ce4a69a8fdd8a728dca959772d9bd0b6999e8b6bdc03646a"
+    },
+    {
+      "path": "tests/DeclarativeContent.Tests/Program.cs",
+      "sha256": "a898aba0a0140f89b00bf00639c3fec14c89e5e512e18f7581646a5c70d97c99"
+    }
+  ]
+}

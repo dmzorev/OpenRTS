@@ -1,0 +1,9 @@
+.godot/
+**/.godot/
+**/bin/
+**/obj/
+.packages/
+.dotnet-home/
+artifacts/
+.DS_Store
+__pycache__/

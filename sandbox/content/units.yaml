@@ -1,0 +1,11 @@
+^unit:
+  Health:
+    HP: 100
+
+scout:
+  Inherits: ^unit
+
+tank:
+  Inherits: ^unit
+  Health:
+    HP: 400
