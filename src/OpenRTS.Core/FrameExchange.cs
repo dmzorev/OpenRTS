@@ -8,8 +8,9 @@ public sealed class FrameExchange
     private sealed class Slot
     {
         public EntityPose[] Poses = [];
-        public int Count, Readers, TickRate;
+        public int Count, Readers, TickRate, NavigationWaitingCount;
         public long Tick, Timestamp;
+        public NavigationGrid? Grid;
     }
 
     private readonly object _gate = new();
@@ -31,6 +32,8 @@ public sealed class FrameExchange
             slot.Tick = world.Tick;
             slot.TickRate = world.TickRate;
             slot.Timestamp = Stopwatch.GetTimestamp();
+            slot.Grid = world.NavigationGrid;
+            slot.NavigationWaitingCount = world.NavigationWaitingCount;
             _latest = index;
             return true;
         }
@@ -64,6 +67,8 @@ public sealed class FrameExchange
         public long Tick => Data.Tick;
         public int TickRate => Data.TickRate;
         public long Timestamp => Data.Timestamp;
+        public NavigationGrid? Grid => Data.Grid;
+        public int NavigationWaitingCount => Data.NavigationWaitingCount;
         public ReadOnlySpan<EntityPose> Poses => Data.Poses.AsSpan(0, Data.Count);
 
         public void Dispose()

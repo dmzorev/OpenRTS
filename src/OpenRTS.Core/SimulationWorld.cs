@@ -13,6 +13,7 @@ public sealed class SimulationWorld
         public int UnitType, Health;
         public WorldPosition Previous, Position, Target;
         public bool Moving;
+        public int OccupiedCell, WaypointCell, GoalCell;
     }
 
     private readonly UnitDefinition[] _types;
@@ -23,6 +24,12 @@ public sealed class SimulationWorld
     private int _commandCount;
     private uint _nextId = 1;
     private DeterministicRandom _random;
+    private readonly GridNavigator? _navigation;
+    private readonly Dictionary<int, EntityId> _occupied = new();
+    private readonly HashSet<int> _vacated = [];
+    private int[] _movementOrder = [], _navigationGoals = [];
+    private bool _orderDirty = true, _failed;
+    private readonly IComparer<int> _idOrder;
 
     public int Width { get; }
     public int Depth { get; }
@@ -30,6 +37,11 @@ public sealed class SimulationWorld
     public int SpeedPerTick { get; }
     public long Tick { get; private set; }
     public int Count { get; private set; }
+    public NavigationGrid? NavigationGrid => _navigation?.Grid;
+    public int NavigationWaitingCount { get; private set; }
+    public int NavigationBuiltFields => _navigation?.LastBuildCount ?? 0;
+    public int NavigationVisitedCells => _navigation?.LastVisitedCells ?? 0;
+    public double NavigationBuildMilliseconds => _navigation?.LastBuildMilliseconds ?? 0;
     public int MovingCount
     {
         get
@@ -43,7 +55,9 @@ public sealed class SimulationWorld
     public ReadOnlySpan<WorldCommand> AppliedCommands => _commands.AsSpan(0, _commandCount);
 
     public SimulationWorld(IEnumerable<UnitDefinition> unitTypes, int width, int depth, ulong seed = 1,
-        int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128)
+        int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
+        NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
+        int cachedFields = 8, bool reverseNavigationJobs = false)
     {
         if (width < 1 || width > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(width));
         if (depth < 1 || depth > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(depth));
@@ -60,6 +74,16 @@ public sealed class SimulationWorld
         _entities = new EntityState[initialCapacity];
         _indices = new(initialCapacity);
         _random = new(seed);
+        _idOrder = Comparer<int>.Create((a, b) => _entities[a].Id.Value.CompareTo(_entities[b].Id.Value));
+        if (navigationGrid is not null)
+        {
+            if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "Cell reservations allow at most one cell per tick.");
+            if (width != (long)navigationGrid.Width * 1024 || depth != (long)navigationGrid.Height * 1024)
+                throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
+            _navigation = new(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
+            _occupied.EnsureCapacity(checked(initialCapacity * 2));
+            _vacated.EnsureCapacity(initialCapacity);
+        }
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position)
@@ -67,11 +91,20 @@ public sealed class SimulationWorld
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
+        ValidateNavigationSpawn(position);
+        if (_navigation is not null)
+        {
+            int cell = _navigation.Grid.CellAt(position);
+            if (_navigation.Grid.IsBlocked(cell) || _occupied.ContainsKey(cell))
+                throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
+        }
         return Spawn(unitType, position);
     }
 
-    public void Step(ReadOnlySpan<WorldCommand> commands = default)
+    public void Step(ReadOnlySpan<WorldCommand> commands = default, CancellationToken cancellationToken = default)
     {
+        if (_failed) throw new InvalidOperationException("An interrupted world cannot be advanced.");
+        cancellationToken.ThrowIfCancellationRequested();
         long nextTick = checked(Tick + 1);
         if (_commands.Length < commands.Length) Array.Resize(ref _commands, commands.Length);
         commands.CopyTo(_commands);
@@ -83,47 +116,34 @@ public sealed class SimulationWorld
                 throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
             if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
                 throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.Scatter or CommandKind.Spawn)
+            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell)
                 ValidatePosition(command.Position);
             if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
                 throw new ArgumentException("Scatter area must have positive extents.", nameof(commands));
-            if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
+            if (command.Kind == CommandKind.Spawn) { ValidateType(command.UnitType); ValidateNavigationSpawn(command.Position); }
+            if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell) && _navigation is null)
+                throw new ArgumentException("This world has no navigation layer.", nameof(commands));
         }
 
         _events.Clear();
+        _vacated.Clear();
         _commandCount = commands.Length;
         Tick = nextTick;
         foreach (var command in AppliedCommands) Apply(command);
 
-        for (int i = 0; i < Count; i++)
+        for (int i = 0; i < Count; i++) _entities[i].Previous = _entities[i].Position;
+        if (_navigation is not null)
         {
-            ref var entity = ref _entities[i];
-            entity.Previous = entity.Position;
-            if (!entity.Moving) continue;
-            long dx = (long)entity.Target.X - entity.Position.X;
-            long dy = (long)entity.Target.Y - entity.Position.Y;
-            ulong squared = (ulong)(dx * dx + dy * dy);
-            if (squared <= (ulong)SpeedPerTick * (ulong)SpeedPerTick)
-            {
-                entity.Position = entity.Target;
-                entity.Moving = false;
-                continue;
-            }
-            long distance = (long)SquareRoot(squared);
-            if ((ulong)(distance * distance) < squared) distance++;
-            int stepX = (int)(dx * SpeedPerTick / distance);
-            int stepY = (int)(dy * SpeedPerTick / distance);
-            if (stepX == 0 && stepY == 0)
-            {
-                if (Math.Abs(dx) >= Math.Abs(dy)) stepX = Math.Sign(dx);
-                else stepY = Math.Sign(dy);
-            }
-            entity.Position = new(checked(entity.Position.X + stepX), checked(entity.Position.Y + stepY), entity.Position.Elevation);
+            try { UpdateNavigation(cancellationToken); }
+            catch { _failed = true; throw; }
         }
+        else for (int i = 0; i < Count; i++)
+            if (_entities[i].Moving && Advance(ref _entities[i], _entities[i].Target)) _entities[i].Moving = false;
     }
 
     public void CopyPoses(Span<EntityPose> destination)
     {
+        if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < Count) throw new ArgumentException("Destination is too small.", nameof(destination));
         for (int i = 0; i < Count; i++)
         {
@@ -134,10 +154,11 @@ public sealed class SimulationWorld
 
     public SimulationReport Report()
     {
+        if (_failed) throw new InvalidOperationException("An interrupted world has no completed state.");
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(1);
+            writer.Write(_navigation is null ? 1 : 2);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -149,15 +170,38 @@ public sealed class SimulationWorld
                 writer.Write(entity.Position.X); writer.Write(entity.Position.Y); writer.Write(entity.Position.Elevation);
                 writer.Write(entity.Target.X); writer.Write(entity.Target.Y); writer.Write(entity.Target.Elevation);
                 writer.Write(entity.Moving);
+                if (_navigation is not null)
+                {
+                    writer.Write(entity.OccupiedCell); writer.Write(entity.WaypointCell); writer.Write(entity.GoalCell);
+                }
             }
+            _navigation?.WriteState(writer);
         }
         return new(Tick, Count, Convert.ToHexString(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length))));
     }
 
     private void Apply(WorldCommand command)
     {
+        if (command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell)
+        {
+            int cell = _navigation!.Grid.CellAt(command.Position);
+            if (command.Kind == CommandKind.BlockCell && _occupied.TryGetValue(cell, out var occupant))
+                _events.Add(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation.Grid.Center(cell)));
+            else _navigation.SetBlocked(cell, command.Kind == CommandKind.BlockCell);
+            return;
+        }
         if (command.Kind == CommandKind.Spawn)
         {
+            if (_navigation is not null)
+            {
+                int cell = _navigation.Grid.CellAt(command.Position);
+                if (_navigation.Grid.IsBlocked(cell) || _occupied.ContainsKey(cell))
+                {
+                    _events.Add(new(Tick, _occupied.ContainsKey(cell) ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
+                        default, command.Position, command.UnitType));
+                    return;
+                }
+            }
             var id = Spawn(command.UnitType, command.Position);
             _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType));
             return;
@@ -184,7 +228,13 @@ public sealed class SimulationWorld
         else
         {
             _events.Add(new(Tick, WorldEventKind.Destroyed, command.Entity, _entities[index].Position, _entities[index].UnitType));
+            if (_navigation is not null)
+            {
+                _occupied.Remove(_entities[index].OccupiedCell);
+                if (_entities[index].WaypointCell >= 0) _occupied.Remove(_entities[index].WaypointCell);
+            }
             _indices.Remove(command.Entity);
+            _orderDirty = true;
             Count--;
             if (index != Count)
             {
@@ -199,18 +249,117 @@ public sealed class SimulationWorld
     {
         ref var entity = ref _entities[index];
         entity.Target = position with { Elevation = entity.Position.Elevation };
+        if (_navigation is not null)
+        {
+            entity.GoalCell = _navigation.Grid.CellAt(position);
+            entity.Target = _navigation.Grid.Center(entity.GoalCell, entity.Position.Elevation);
+        }
         entity.Moving = entity.Position != entity.Target;
     }
 
     private EntityId Spawn(int unitType, WorldPosition position)
     {
         if (_nextId == uint.MaxValue) throw new InvalidOperationException("Entity ID space exhausted.");
-        if (Count == _entities.Length) Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
+        if (Count == _entities.Length)
+        {
+            Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
+            if (_navigation is not null)
+            {
+                _occupied.EnsureCapacity(checked(_entities.Length * 2));
+                _vacated.EnsureCapacity(_entities.Length);
+            }
+        }
         var id = new EntityId(_nextId++);
         _entities[Count] = new() { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
-            Previous = position, Position = position, Target = position };
+            Previous = position, Position = position, Target = position,
+            OccupiedCell = _navigation?.Grid.CellAt(position) ?? -1, WaypointCell = -1, GoalCell = -1 };
+        if (_navigation is not null) _occupied.Add(_entities[Count].OccupiedCell, id);
         _indices.Add(id, Count++);
+        _orderDirty = true;
         return id;
+    }
+
+    private void ValidateNavigationSpawn(WorldPosition position)
+    {
+        if (_navigation is not null && (position.X % 1024 != 512 || position.Y % 1024 != 512))
+            throw new ArgumentException("Navigation units must spawn at cell centers.", nameof(position));
+    }
+
+    private void UpdateNavigation(CancellationToken cancellationToken)
+    {
+        var navigation = _navigation!;
+        var grid = navigation.Grid;
+        if (_navigationGoals.Length < Count) Array.Resize(ref _navigationGoals, _entities.Length);
+        if (_orderDirty)
+        {
+            if (_movementOrder.Length < Count) Array.Resize(ref _movementOrder, _entities.Length);
+            for (int i = 0; i < Count; i++) _movementOrder[i] = i;
+            Array.Sort(_movementOrder, 0, Count, _idOrder);
+            _orderDirty = false;
+        }
+        int goals = 0;
+        for (int i = 0; i < Count; i++) if (_entities[i].Moving) _navigationGoals[goals++] = _entities[i].GoalCell;
+        navigation.Prepare(_navigationGoals.AsSpan(0, goals), cancellationToken);
+        NavigationWaitingCount = 0;
+        for (int order = 0; order < Count; order++)
+        {
+            int index = _movementOrder[(order + (int)(Tick % Count)) % Count];
+            ref var entity = ref _entities[index];
+            if (!entity.Moving) continue;
+            if (entity.WaypointCell < 0)
+            {
+                if (entity.OccupiedCell == entity.GoalCell) { entity.Moving = false; continue; }
+                if (!navigation.TryDistance(entity.GoalCell, entity.OccupiedCell, out int distance))
+                { NavigationWaitingCount++; continue; }
+                if (distance < 0)
+                {
+                    entity.Moving = false;
+                    _events.Add(new(Tick, WorldEventKind.NoRoute, entity.Id, entity.Target, entity.UnitType));
+                    continue;
+                }
+                int cell = entity.OccupiedCell, x = cell % grid.Width, candidate = -1, best = distance;
+                Consider(cell >= grid.Width ? cell - grid.Width : -1);
+                Consider(x > 0 ? cell - 1 : -1);
+                Consider(x + 1 < grid.Width ? cell + 1 : -1);
+                Consider(cell + grid.Width < grid.CellCount ? cell + grid.Width : -1);
+                void Consider(int neighbor)
+                {
+                    if (neighbor < 0 || _occupied.ContainsKey(neighbor) || _vacated.Contains(neighbor)) return;
+                    navigation.TryDistance(_entities[index].GoalCell, neighbor, out int value);
+                    if (value >= 0 && value < distance && (value < best || value == best && neighbor < candidate))
+                    { candidate = neighbor; best = value; }
+                }
+                if (candidate < 0) { NavigationWaitingCount++; continue; }
+                entity.WaypointCell = candidate;
+                _occupied.Add(candidate, entity.Id);
+            }
+            var waypoint = grid.Center(entity.WaypointCell, entity.Position.Elevation);
+            if (Advance(ref entity, waypoint))
+            {
+                // Keep swept cells disjoint for interpolation: another unit may enter only next tick.
+                _vacated.Add(entity.OccupiedCell);
+                _occupied.Remove(entity.OccupiedCell);
+                entity.OccupiedCell = entity.WaypointCell;
+                entity.WaypointCell = -1;
+                if (entity.OccupiedCell == entity.GoalCell) entity.Moving = false;
+            }
+        }
+    }
+
+    private bool Advance(ref EntityState entity, WorldPosition target)
+    {
+        long dx = (long)target.X - entity.Position.X, dy = (long)target.Y - entity.Position.Y;
+        ulong squared = (ulong)(dx * dx + dy * dy);
+        if (squared <= (ulong)SpeedPerTick * (ulong)SpeedPerTick) { entity.Position = target; return true; }
+        long distance = (long)SquareRoot(squared);
+        if ((ulong)(distance * distance) < squared) distance++;
+        int stepX = (int)(dx * SpeedPerTick / distance), stepY = (int)(dy * SpeedPerTick / distance);
+        if (stepX == 0 && stepY == 0)
+        {
+            if (Math.Abs(dx) >= Math.Abs(dy)) stepX = Math.Sign(dx); else stepY = Math.Sign(dy);
+        }
+        entity.Position = new(checked(entity.Position.X + stepX), checked(entity.Position.Y + stepY), entity.Position.Elevation);
+        return false;
     }
 
     private void ValidateType(int type)

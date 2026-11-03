@@ -93,7 +93,7 @@ public sealed class SimulationSession : IDisposable
                     Interlocked.Decrement(ref _pendingInput);
                     batch.Add(command with { Tick = world.Tick + 1 });
                 }
-                world.Step(CollectionsMarshal.AsSpan(batch));
+                world.Step(CollectionsMarshal.AsSpan(batch), _stop.Token);
                 if (world.AppliedCommands.Length > 0)
                     lock (_journalGate)
                         foreach (var command in world.AppliedCommands) _journal.Add(command);
@@ -112,6 +112,7 @@ public sealed class SimulationSession : IDisposable
             while (!Frames.TryPublish(world) && !_stop.IsCancellationRequested) _stop.Token.WaitHandle.WaitOne(1);
             _completion.TrySetResult(world.Report());
         }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { _completion.TrySetCanceled(); }
         catch (Exception error) { _completion.TrySetException(error); }
     }
 

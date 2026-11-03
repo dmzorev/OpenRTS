@@ -16,6 +16,11 @@ public partial class Sandbox : Node3D
     private Label? _label;
     private int _count = 10000, _ticks = DiagnosticScenario.DefaultTicks;
     private bool _verifySimulation, _pacedVerification, _verificationDone;
+    private bool _navigation, _reverseJobs, _leftGoal;
+    private int _workers = 4;
+    private ObstacleView? _obstacles;
+    private NavigationGrid? _displayGrid;
+    private string _notice = "";
 
     public override void _Ready()
     {
@@ -27,10 +32,13 @@ public partial class Sandbox : Node3D
                 if (arg == "--verify") continue;
                 if (arg == "--verify-simulation") { _verifySimulation = true; continue; }
                 if (arg == "--realtime") { _pacedVerification = true; continue; }
+                if (arg == "--navigation") { _navigation = true; continue; }
+                if (arg == "--reverse-jobs") { _reverseJobs = true; continue; }
                 if (arg.StartsWith("--count=", StringComparison.Ordinal) && int.TryParse(arg[8..], out int value) && value is >= 1 and <= 1000000) { _count = value; continue; }
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
-                throw new ArgumentException("Параметры: --verify, --verify-simulation, --realtime, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
+                throw new ArgumentException("Параметры: --verify, --verify-simulation, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
             if (verify && _verifySimulation) throw new ArgumentException("Выберите один режим проверки.");
             using var file = Godot.FileAccess.Open("res://content/units.yaml", Godot.FileAccess.ModeFlags.Read)
@@ -49,6 +57,11 @@ public partial class Sandbox : Node3D
             {
                 _view = new WorldView(_catalog.Units[0], _count);
                 AddChild(_view.Node);
+                if (_navigation)
+                {
+                    _obstacles = new ObstacleView();
+                    AddChild(_obstacles.Node);
+                }
                 BuildScene(_count, _catalog);
                 StartSession();
             }
@@ -65,10 +78,14 @@ public partial class Sandbox : Node3D
     {
         _session?.Dispose();
         _session = null;
+        _leftGoal = false;
+        _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
-        _session = new SimulationSession(() => DiagnosticScenario.Create(catalog, _count),
-            DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
-            _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification);
+        _session = new SimulationSession(() => _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            _navigation ? NavigationScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue)
+                : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
+            _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
+            maximumEventBacklog: Math.Max(65536, _count + 1024));
     }
 
     public override void _Process(double delta)
@@ -83,15 +100,40 @@ public partial class Sandbox : Node3D
             float alpha = completed ? 1 : (float)Math.Clamp(
                 Stopwatch.GetElapsedTime(frame.Timestamp).TotalSeconds * frame.TickRate, 0, 1);
             _view.Apply(frame.Poses, alpha);
-            while (_session.TryReadEvent(out _)) { }
+            _displayGrid = frame.Grid;
+            _obstacles?.Apply(frame.Grid);
+            while (_session.TryReadEvent(out var value))
+                _notice = value.Kind switch
+                {
+                    WorldEventKind.NoRoute => "Цель недостижима: задайте новый приказ после изменения карты.",
+                    WorldEventKind.CellOccupied => "Изменение отклонено: клетка занята или зарезервирована.",
+                    WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
+                    _ => _notice
+                };
             if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
-                    "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.";
+                    (_navigation ? $"Навигация · {_workers} потока поиска · ожидают {frame.NavigationWaitingCount}\n\nПКМ — общая цель · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nОдна клетка на юнит. Занятая цель вызывает очередь."
+                        : "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.") + (_notice.Length == 0 ? "" : "\nПоследний отказ: " + _notice);
             if (_verifySimulation && completed)
             {
                 var report = _session.Completion.GetAwaiter().GetResult();
                 if (frame.Tick != report.Tick || frame.Poses.Length != report.EntityCount)
                     throw new InvalidOperationException("Не опубликован конечный кадр симуляции.");
+                if (_navigation)
+                {
+                    var grid = frame.Grid ?? throw new InvalidOperationException("Кадр не содержит карту проходимости.");
+                    int blocked = 0, lastBlocked = -1;
+                    for (int i = 0; i < grid.CellCount; i++) if (grid.IsBlocked(i)) { blocked++; lastBlocked = i; }
+                    if (_obstacles!.Node.Multimesh.InstanceCount != blocked)
+                        throw new InvalidOperationException("Представление препятствий не соответствует карте.");
+                    if (blocked > 0 && DisplayServer.GetName() != "headless")
+                    {
+                        var center = grid.Center(lastBlocked);
+                        var point = _obstacles.Node.Multimesh.GetInstanceTransform(blocked - 1).Origin;
+                        if (!point.IsEqualApprox(new Vector3(center.X / 1024f, 0.6f, center.Y / 1024f)))
+                            throw new InvalidOperationException("Неверная позиция препятствия.");
+                    }
+                }
                 int capacity = _view.Node.Multimesh.InstanceCount;
                 _view.Apply(ReadOnlySpan<EntityPose>.Empty, 1);
                 if (_view.Node.Multimesh.VisibleInstanceCount != 0)
@@ -136,24 +178,43 @@ public partial class Sandbox : Node3D
                 else if (key.Keycode == Key.R) StartSession();
                 else if (key.Keycode == Key.Space)
                 {
-                    int side = DiagnosticScenario.SideCells(_count) * WorldPosition.UnitsPerCell;
-                    _session.Submit(CommandKind.Scatter, new(side, side));
+                    if (_displayGrid is not null)
+                    {
+                        _leftGoal = !_leftGoal;
+                        int cell = _displayGrid.Index(new(_leftGoal ? 4 : _displayGrid.Width - 8, _displayGrid.Height / 2));
+                        _session.Submit(CommandKind.MoveAll, _displayGrid.Center(cell));
+                    }
+                    else
+                    {
+                        int side = DiagnosticScenario.SideCells(_count) * WorldPosition.UnitsPerCell;
+                        _session.Submit(CommandKind.Scatter, new(side, side));
+                    }
+                }
+                else if (key.Keycode == Key.B && _displayGrid is not null && MousePoint(GetViewport().GetMousePosition()) is { } target)
+                {
+                    int cell = _displayGrid.CellAt(target);
+                    _session.Submit(_displayGrid.IsBlocked(cell) ? CommandKind.UnblockCell : CommandKind.BlockCell, target);
                 }
             }
             else if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } mouse && _camera is not null)
             {
-                var origin = _camera.ProjectRayOrigin(mouse.Position);
-                var direction = _camera.ProjectRayNormal(mouse.Position);
-                if (MathF.Abs(direction.Y) < 0.0001f) return;
-                float distance = -origin.Y / direction.Y;
-                if (distance < 0) return;
-                var point = origin + direction * distance;
-                int maximum = 4096 * WorldPosition.UnitsPerCell;
-                _session.Submit(CommandKind.MoveAll, new((int)Math.Clamp(point.X * 1024, 0, maximum),
-                    (int)Math.Clamp(point.Z * 1024, 0, maximum)));
+                if (MousePoint(mouse.Position) is { } target) _session.Submit(CommandKind.MoveAll, target);
             }
         }
         catch (Exception error) { GD.PushError(error.Message); }
+    }
+
+    private WorldPosition? MousePoint(Vector2 mouse)
+    {
+        if (_camera is null) return null;
+        var origin = _camera.ProjectRayOrigin(mouse);
+        var direction = _camera.ProjectRayNormal(mouse);
+        if (MathF.Abs(direction.Y) < 0.0001f) return null;
+        float distance = -origin.Y / direction.Y;
+        if (distance < 0) return null;
+        var point = origin + direction * distance;
+        int width = (_displayGrid?.Width ?? 4096) * 1024, height = (_displayGrid?.Height ?? 4096) * 1024;
+        return new((int)Math.Clamp(point.X * 1024, 0, width), (int)Math.Clamp(point.Z * 1024, 0, height));
     }
 
     public override void _ExitTree()
@@ -166,10 +227,18 @@ public partial class Sandbox : Node3D
     {
         float side = DiagnosticScenario.SideCells(count);
         var center = new Vector3(side / 2, 0, side / 2);
+        Vector2 groundSize = new(side, side);
+        if (_navigation)
+        {
+            var grid = NavigationScenario.Grid(count);
+            side = Math.Max(grid.Width, grid.Height);
+            center = new(grid.Width / 2f, 0, grid.Height / 2f);
+            groundSize = new(grid.Width, grid.Height);
+        }
         var ground = new MeshInstance3D
         {
             Position = center,
-            Mesh = new PlaneMesh { Size = new Vector2(side, side) },
+            Mesh = new PlaneMesh { Size = groundSize },
             MaterialOverride = new StandardMaterial3D
             {
                 AlbedoColor = new Color(0.055f, 0.09f, 0.12f),

@@ -9,12 +9,12 @@ public readonly record struct WorldPosition(int X, int Y, int Elevation = 0)
     public const int MaximumExtent = 1 << 29;
 }
 
-public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy }
+public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, UnblockCell }
 
 public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence, CommandKind Kind,
     EntityId Entity = default, WorldPosition Position = default, int UnitType = 0);
 
-public enum WorldEventKind { Spawned, Destroyed, MissingEntity }
+public enum WorldEventKind { Spawned, Destroyed, MissingEntity, NoRoute, CellOccupied, CellBlocked }
 public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityId Entity,
     WorldPosition Position = default, int UnitType = -1);
 
