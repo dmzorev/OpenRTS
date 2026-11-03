@@ -1,0 +1,48 @@
+--- a/src/OpenRTS.Core/SimulationWorld.GroupMovement.cs
++++ b/src/OpenRTS.Core/SimulationWorld.GroupMovement.cs
+@@ -274,6 +274,23 @@
+         return found;
+     }
+ 
++    private bool CanResolveByTargets(int index, int goal, int distance)
++    {
++        ref var entity = ref _entities[index];
++        var grid = _navigation!.Grid;
++        if (!entity.GroupMember || goal != entity.GoalCell || !grid.IsRectangleClear(entity.OccupiedCell, goal)) return false;
++        bool found = false;
++        for (int direction = 0; direction < 4; direction++)
++        {
++            int cell = LocalRouteSearch.Neighbor(grid, entity.OccupiedCell, direction);
++            if (cell < 0 || Manhattan(grid, cell, goal) >= distance) continue;
++            found = true;
++            if (_vacated.Contains(cell)) continue;
++            if (!TryOccupant(cell, out var owner) || !_entities[_indices[owner]].GroupMember) return false;
++        }
++        return found;
++    }
++
+     private bool TryExchangeGoals(int requesterIndex, int blockerIndex)
+     {
+         ref var requester = ref _entities[requesterIndex];
+@@ -393,7 +410,10 @@
+         int oldCursor = route.Cursor;
+         while (route.Cursor < route.Cells.Length && route.Cells[route.Cursor] == entity.OccupiedCell) route.Cursor++;
+         if (_navigation!.Grid.IsRectangleClear(entity.OccupiedCell, entity.GoalCell))
++        {
+             route.Cursor = route.Cells.Length;
++            if (entity.YieldFor.Value == 0) entity.PathLength = entity.PathCursor = 0;
++        }
+         else
+             // A local bypass need not touch every old corner: continue from the furthest visible future turn.
+             for (int i = route.Cells.Length - 2; i > route.Cursor; i--)
+--- a/src/OpenRTS.Core/SimulationWorld.Navigation.cs
++++ b/src/OpenRTS.Core/SimulationWorld.Navigation.cs
+@@ -100,6 +100,8 @@
+                             continue;
+                         }
+                         entity.WaitTicks = Math.Min(1024, entity.WaitTicks + 1);
++                        // In a terrain-free group convergence area, reassign targets instead of circling our own units.
++                        if (CanResolveByTargets(index, goal, distance)) { NavigationWaitingCount++; continue; }
+                         if (entity.WaitTicks >= 4 && (Tick + entity.Id.Value) % 8 == 0 && NavigationLocalSearches < LocalSearchBudget)
+                         {
+                             NavigationLocalSearches++;

@@ -69,6 +69,25 @@ public sealed class NavigationGrid
         return new(this, index, blocked);
     }
 
+    internal bool IsRectangleClear(int a, int b)
+    {
+        int minX = Math.Min(a % Width, b % Width), maxX = Math.Max(a % Width, b % Width);
+        int minY = Math.Min(a / Width, b / Width), maxY = Math.Max(a / Width, b / Width);
+        for (int y = minY; y <= maxY; y++)
+        {
+            int first = y * Width + minX, last = y * Width + maxX;
+            int left = first >> 5, right = last >> 5;
+            uint leftMask = uint.MaxValue << (first & 31), rightMask = uint.MaxValue >> (31 - (last & 31));
+            if (left == right) { if ((_blocked[left] & leftMask & rightMask) != 0) return false; }
+            else
+            {
+                if ((_blocked[left] & leftMask) != 0 || (_blocked[right] & rightMask) != 0) return false;
+                for (int word = left + 1; word < right; word++) if (_blocked[word] != 0) return false;
+            }
+        }
+        return true;
+    }
+
     internal void WriteState(BinaryWriter writer)
     {
         writer.Write(Width); writer.Write(Height); writer.Write(Revision);

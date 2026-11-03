@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-03",
+  "processor": "Apple M3 Max",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "configuration": "Release",
+  "environment": {
+    "DOTNET_TieredCompilation": "0"
+  },
+  "warmup_ticks": 64,
+  "variant": "Experimental prohibition of local detours against group members in terrain-free convergence; not selected. Applying monotone-convergence.patch to final sources reconstructs this variant. Final source hashes differ by that patch.",
+  "source_sha256": {
+    "src/OpenRTS.Core/FrameExchange.cs": "aadb037da4dba817da5b222850d631b58bf99a7efdbfcd561d0410e563eab089",
+    "src/OpenRTS.Core/GridNavigator.cs": "80b0c62fb538f956b4e9a739f9790cfc6b356a8f87bb0e1b47f6b8309baed0a5",
+    "src/OpenRTS.Core/GroupDestinations.cs": "3f7819450b1eca96f09b5f64f20da42768f35d9289380b69a1dab0fca5b1b032",
+    "src/OpenRTS.Core/LocalRouteSearch.cs": "242a7f45dd309212dd322d85f296110df7cec77dd1823f5d5a2fbf86af212c61",
+    "src/OpenRTS.Core/NavigationGrid.cs": "385bb43f09c80ac61131909870521cd1ec279970bb33c80e8119239dad111d2d",
+    "src/OpenRTS.Core/SharedRouteTree.cs": "c09798b47823c6209bdb16e0b95196d9d5539920bbf100b105a0bd42a0f43f15",
+    "src/OpenRTS.Core/SimulationSession.cs": "eda386b19f99f728dfbd3843b63f5b1e098664f43dd59ec639dc386927a63a1a",
+    "src/OpenRTS.Core/SimulationTypes.cs": "f4071458adcfdc973eddd3c168b2d094e9dc8e45a999d34dc3e606ed99c8c35e",
+    "src/OpenRTS.Core/SimulationWorld.GroupMovement.cs": "c0ec91e7e7fa03a3c37484bcef17dc913454fde6fe93f0e162afab12438ffe1d",
+    "src/OpenRTS.Core/SimulationWorld.Navigation.cs": "3241f9aad16e4df4cccef2aa5bb4e3492775701e7aa7c6b59141369221a4b28d",
+    "src/OpenRTS.Core/SimulationWorld.cs": "ccb20d9e4045d1402f2b955ff0c59838b91254a680e9ce98507014cadff1ade8",
+    "src/OpenRTS.Core/UnitDefinition.cs": "db5c923edc8e5e86696b16f932aa028ddcf1dd7120a765b2fa1a264d87c5441f",
+    "src/OpenRTS.Content/NavigationScenario.cs": "20510b86b2d97ac2f368d8b0e121af119b58f82d13ef0cbbf422a7cba2b20d7d",
+    "tools/OpenRTS.Headless/Program.cs": "26ca0a5962d57019ae7b5854d98d9b8d4b78421c48d1db85bafdca400997e75f"
+  },
+  "measurement": {
+    "Workload": "compact spatial assignment, coherent batches, shared route tree and local avoidance, no combat/rendering",
+    "TieredCompilation": "0",
+    "Count": 10000,
+    "Ticks": 131072,
+    "Workers": 4,
+    "MapWidthCells": 332,
+    "MapHeightCells": 232,
+    "TickRate": 25,
+    "P50Milliseconds": 0.755,
+    "P95Milliseconds": 1.7294,
+    "AllocatedBytes": 25955080,
+    "FirstTickMilliseconds": 13.4923,
+    "MaximumTickMilliseconds": 18.1153,
+    "MovingAtEnd": 825,
+    "WaitingAtEnd": 757,
+    "QueueWaitingAtEnd": 733,
+    "FieldsBuilt": 0,
+    "VisitedCells": 0,
+    "BuildsMilliseconds": 0,
+    "GroupSlots": 10000,
+    "LocalSearches": 656551,
+    "Yields": 0,
+    "GroupTreesBuilt": 1,
+    "GroupTreeVisitedCells": 76796,
+    "GroupRoutePreparationMilliseconds": 13.991,
+    "GoalExchanges": 140652,
+    "GroupTranslatingAtEnd": true,
+    "CompletedAtTick": null,
+    "FailedRoutes": 0
+  },
+  "report": {
+    "Tick": 131072,
+    "EntityCount": 10000,
+    "StateHash": "60E66B4561C6EF30D9ABC514120633442BFBC82520952E9CCC5063504D61DFD6"
+  }
+}

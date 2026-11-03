@@ -1,0 +1,267 @@
+{
+  "date": "2026-11-03",
+  "processor": "Apple M3 Max",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "configuration": "Release",
+  "environment": {
+    "DOTNET_TieredCompilation": "0"
+  },
+  "warmup_ticks": 64,
+  "scope": "World.Step only, no renderer/frames/combat. New larger map and MoveGroup at tick 41; not directly comparable with older MoveAll profile. Endpoint changes can rebuild the shared field. MovingAtEnd means active orders, not physical movement. Calling-thread allocations only. One serial local run per profile; no concurrent graphical QA. The 4096-tick run measures partial progress, not completion or a guarantee of liveness.",
+  "source_sha256": {
+    "src/OpenRTS.Core/FrameExchange.cs": "08240dd1fbe659ffc9f5686e1032056efe259c1767292c9e49678711bb726a6a",
+    "src/OpenRTS.Core/GridNavigator.cs": "9f94bfe7ab573a3e62573e980ef3bb29039fd5534b1684a57a833faba878fe64",
+    "src/OpenRTS.Core/LocalRouteSearch.cs": "5edf6afa64ffa889010d402abe7b0f130f22067c3b827115c63bf6815620b3ca",
+    "src/OpenRTS.Core/NavigationGrid.cs": "1fc60888d83cba29131e10a3a014df5de4e9dd9da9bde178b918ec9f06509c9f",
+    "src/OpenRTS.Core/SimulationSession.cs": "513d41df127834d4d09dcf97b926d4213557dbfb6cb5339c999e87f782ded060",
+    "src/OpenRTS.Core/SimulationTypes.cs": "f4071458adcfdc973eddd3c168b2d094e9dc8e45a999d34dc3e606ed99c8c35e",
+    "src/OpenRTS.Core/SimulationWorld.Navigation.cs": "3a3f4965e6e2b550f03dc6e560af456128e8fab8df3853f716493d3993d72e0e",
+    "src/OpenRTS.Core/SimulationWorld.cs": "590167c812cb93a1ec1c455baf83369d0f37b07b4417228a5cfc9d4534cdabda",
+    "src/OpenRTS.Core/UnitDefinition.cs": "db5c923edc8e5e86696b16f932aa028ddcf1dd7120a765b2fa1a264d87c5441f",
+    "src/OpenRTS.Content/NavigationScenario.cs": "50fc411cae264634985b1ead93534bc305011ebd70e96f4fc767c81a01e9520d",
+    "tools/OpenRTS.Headless/Program.cs": "d75959fe1a05206bf7002bba74e22af2d3eb9baf0088e765c8d6e7036f3cfa6c"
+  },
+  "results": [
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 1000,
+        "Ticks": 128,
+        "Workers": 1,
+        "MapWidthCells": 128,
+        "MapHeightCells": 96,
+        "TickRate": 25,
+        "P50Milliseconds": 0.0457,
+        "P95Milliseconds": 0.09,
+        "AllocatedBytes": 373432,
+        "FirstTickMilliseconds": 0.3075,
+        "MaximumTickMilliseconds": 0.3075,
+        "MovingAtEnd": 1000,
+        "WaitingAtEnd": 381,
+        "FieldsBuilt": 5,
+        "VisitedCells": 60980,
+        "BuildsMilliseconds": 0.2314,
+        "GroupSlots": 1000,
+        "LocalSearches": 7808,
+        "Yields": 78
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 1000,
+        "StateHash": "CA061580CE515FB860A68FF84F43928157BF842AC33F4C623B8EB339F2CF1AB4"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 1000,
+        "Ticks": 128,
+        "Workers": 4,
+        "MapWidthCells": 128,
+        "MapHeightCells": 96,
+        "TickRate": 25,
+        "P50Milliseconds": 0.0454,
+        "P95Milliseconds": 0.088,
+        "AllocatedBytes": 377048,
+        "FirstTickMilliseconds": 0.2372,
+        "MaximumTickMilliseconds": 0.2524,
+        "MovingAtEnd": 1000,
+        "WaitingAtEnd": 381,
+        "FieldsBuilt": 5,
+        "VisitedCells": 60980,
+        "BuildsMilliseconds": 0.1616,
+        "GroupSlots": 1000,
+        "LocalSearches": 7808,
+        "Yields": 78
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 1000,
+        "StateHash": "CA061580CE515FB860A68FF84F43928157BF842AC33F4C623B8EB339F2CF1AB4"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 10000,
+        "Ticks": 128,
+        "Workers": 1,
+        "MapWidthCells": 332,
+        "MapHeightCells": 232,
+        "TickRate": 25,
+        "P50Milliseconds": 0.4041,
+        "P95Milliseconds": 0.5765,
+        "AllocatedBytes": 3692736,
+        "FirstTickMilliseconds": 2.5398,
+        "MaximumTickMilliseconds": 2.5398,
+        "MovingAtEnd": 9997,
+        "WaitingAtEnd": 7718,
+        "FieldsBuilt": 8,
+        "VisitedCells": 614368,
+        "BuildsMilliseconds": 2.5682,
+        "GroupSlots": 10000,
+        "LocalSearches": 7808,
+        "Yields": 199
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 10000,
+        "StateHash": "021BE9D89FEE5F47B0FDF74DDC393CD80DCF645042349DDCD6341BA60CDDC01F"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 10000,
+        "Ticks": 128,
+        "Workers": 4,
+        "MapWidthCells": 332,
+        "MapHeightCells": 232,
+        "TickRate": 25,
+        "P50Milliseconds": 0.409,
+        "P95Milliseconds": 0.6337,
+        "AllocatedBytes": 3700168,
+        "FirstTickMilliseconds": 2.5049,
+        "MaximumTickMilliseconds": 2.5049,
+        "MovingAtEnd": 9997,
+        "WaitingAtEnd": 7718,
+        "FieldsBuilt": 8,
+        "VisitedCells": 614368,
+        "BuildsMilliseconds": 2.2347,
+        "GroupSlots": 10000,
+        "LocalSearches": 7808,
+        "Yields": 199
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 10000,
+        "StateHash": "021BE9D89FEE5F47B0FDF74DDC393CD80DCF645042349DDCD6341BA60CDDC01F"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 100000,
+        "Ticks": 128,
+        "Workers": 1,
+        "MapWidthCells": 983,
+        "MapHeightCells": 666,
+        "TickRate": 25,
+        "P50Milliseconds": 4.189,
+        "P95Milliseconds": 6.923,
+        "AllocatedBytes": 32576312,
+        "FirstTickMilliseconds": 24.5453,
+        "MaximumTickMilliseconds": 24.5453,
+        "MovingAtEnd": 98564,
+        "WaitingAtEnd": 91510,
+        "FieldsBuilt": 19,
+        "VisitedCells": 12426304,
+        "BuildsMilliseconds": 49.53289999999999,
+        "GroupSlots": 100000,
+        "LocalSearches": 7808,
+        "Yields": 514
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 100000,
+        "StateHash": "698AB28EF26C8D51AA8F2B1E0D7E9F073B5350EC6B7D048FC8A6162AF00D8070"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 100000,
+        "Ticks": 128,
+        "Workers": 4,
+        "MapWidthCells": 983,
+        "MapHeightCells": 666,
+        "TickRate": 25,
+        "P50Milliseconds": 4.2285,
+        "P95Milliseconds": 6.9444,
+        "AllocatedBytes": 32604568,
+        "FirstTickMilliseconds": 17.5302,
+        "MaximumTickMilliseconds": 19.6493,
+        "MovingAtEnd": 98564,
+        "WaitingAtEnd": 91510,
+        "FieldsBuilt": 19,
+        "VisitedCells": 12426304,
+        "BuildsMilliseconds": 42.331,
+        "GroupSlots": 100000,
+        "LocalSearches": 7808,
+        "Yields": 514
+      },
+      "report": {
+        "Tick": 128,
+        "EntityCount": 100000,
+        "StateHash": "698AB28EF26C8D51AA8F2B1E0D7E9F073B5350EC6B7D048FC8A6162AF00D8070"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 36,
+        "Ticks": 1024,
+        "Workers": 4,
+        "MapWidthCells": 50,
+        "MapHeightCells": 44,
+        "TickRate": 25,
+        "P50Milliseconds": 0.0015,
+        "P95Milliseconds": 0.006,
+        "AllocatedBytes": 148768,
+        "FirstTickMilliseconds": 0.0824,
+        "MaximumTickMilliseconds": 0.0824,
+        "MovingAtEnd": 0,
+        "WaitingAtEnd": 0,
+        "FieldsBuilt": 44,
+        "VisitedCells": 92880,
+        "BuildsMilliseconds": 0.6256999999999999,
+        "GroupSlots": 36,
+        "LocalSearches": 208,
+        "Yields": 3
+      },
+      "report": {
+        "Tick": 1024,
+        "EntityCount": 36,
+        "StateHash": "C04984DDE8E6598B4EC3F0F693759A523E1C7EC267D7F3FBC5829E5E4EB33434"
+      }
+    },
+    {
+      "measurement": {
+        "Workload": "shared BFS, group destinations and bounded local avoidance, no combat/rendering",
+        "TieredCompilation": "0",
+        "Count": 10000,
+        "Ticks": 4096,
+        "Workers": 4,
+        "MapWidthCells": 332,
+        "MapHeightCells": 232,
+        "TickRate": 25,
+        "P50Milliseconds": 0.451,
+        "P95Milliseconds": 0.748,
+        "AllocatedBytes": 4325448,
+        "FirstTickMilliseconds": 2.6883,
+        "MaximumTickMilliseconds": 2.6883,
+        "MovingAtEnd": 9622,
+        "WaitingAtEnd": 9465,
+        "FieldsBuilt": 357,
+        "VisitedCells": 27416172,
+        "BuildsMilliseconds": 107.5717000000001,
+        "GroupSlots": 10000,
+        "LocalSearches": 261760,
+        "Yields": 655
+      },
+      "report": {
+        "Tick": 4096,
+        "EntityCount": 10000,
+        "StateHash": "3683280E6777234B405C1F7CBC6B145DE185A6A0F96D0B327755981B7AF45907"
+      }
+    }
+  ]
+}

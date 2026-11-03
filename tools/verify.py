@@ -62,7 +62,7 @@ def main():
     print("PASS real-time worker pacing at 25 Hz with a 15 FPS presentation", flush=True)
 
     for count in (1, 10000):
-        arguments = ["--navigation", f"--count={count}", "--ticks=64"]
+        arguments = ["--navigation", f"--count={count}", f"--ticks={768 if count == 10000 else 128}"]
         expected_navigation = report(run(headless + arguments + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")
         reverse = report(run(headless + arguments + ["--workers=4", "--reverse-jobs"]).stdout, "OPENRTS_SIMULATION:")
         if reverse != expected_navigation:
@@ -73,6 +73,11 @@ def main():
             if "ERROR:" in result.stderr or report(result.stdout, "OPENRTS_SIMULATION:") != expected_navigation:
                 raise RuntimeError("Navigation host parity failed:\n" + result.stdout + result.stderr)
         print(f"PASS {count} navigation entities: sequential/parallel/reverse/Godot parity", flush=True)
+
+    controls = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-controls", "--navigation", "--count=100"])
+    if "ERROR:" in controls.stderr or "OPENRTS_CONTROLS:PASS" not in controls.stdout:
+        raise RuntimeError("Sandbox controls failed:\n" + controls.stdout + controls.stderr)
+    print("PASS Godot wheel focus, zoom, pan and playback input handlers", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

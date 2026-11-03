@@ -8,7 +8,7 @@ public sealed class FrameExchange
     private sealed class Slot
     {
         public EntityPose[] Poses = [];
-        public int Count, Readers, TickRate, NavigationWaitingCount;
+        public int Count, Readers, TickRate, NavigationWaitingCount, MovingCount, LocalSearches, Yields, GoalExchanges, QueueWaiting;
         public long Tick, Timestamp;
         public NavigationGrid? Grid;
     }
@@ -34,6 +34,11 @@ public sealed class FrameExchange
             slot.Timestamp = Stopwatch.GetTimestamp();
             slot.Grid = world.NavigationGrid;
             slot.NavigationWaitingCount = world.NavigationWaitingCount;
+            slot.MovingCount = world.MovingCount;
+            slot.LocalSearches = world.NavigationLocalSearches;
+            slot.Yields = world.NavigationYields;
+            slot.GoalExchanges = world.NavigationGoalExchanges;
+            slot.QueueWaiting = world.NavigationQueueWaitingCount;
             _latest = index;
             return true;
         }
@@ -69,6 +74,11 @@ public sealed class FrameExchange
         public long Timestamp => Data.Timestamp;
         public NavigationGrid? Grid => Data.Grid;
         public int NavigationWaitingCount => Data.NavigationWaitingCount;
+        public int MovingCount => Data.MovingCount;
+        public int NavigationLocalSearches => Data.LocalSearches;
+        public int NavigationYields => Data.Yields;
+        public int NavigationGoalExchanges => Data.GoalExchanges;
+        public int NavigationQueueWaitingCount => Data.QueueWaiting;
         public ReadOnlySpan<EntityPose> Poses => Data.Poses.AsSpan(0, Data.Count);
 
         public void Dispose()

@@ -41,4 +41,7 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
 });
 SimulationChecks.Run(Test);
 NavigationChecks.Run(Test);
+GroupNavigationChecks.Run(Test);
+PlaybackChecks.Run(Test);
+GroupPlanningChecks.Run(Test);
 Console.WriteLine($"{passed} OpenRTS checks passed.");

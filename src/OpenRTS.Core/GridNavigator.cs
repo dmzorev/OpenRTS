@@ -136,7 +136,7 @@ public sealed class GridNavigator
         foreach (var field in _fields) writer.Write(field.Goal);
     }
 
-    private static int Build(NavigationGrid grid, int goal, int[] distance, CancellationToken cancellationToken)
+    private int Build(NavigationGrid grid, int goal, int[] distance, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         Array.Fill(distance, -1);

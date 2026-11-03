@@ -3,17 +3,17 @@ using OpenRTS.Core;
 
 internal static class NavigationChecks
 {
-    private static void Check(bool condition, string message)
+    internal static void Check(bool condition, string message)
     {
         if (!condition) throw new Exception(message);
     }
-    private static void Reject<T>(Action action) where T : Exception
+    internal static void Reject<T>(Action action) where T : Exception
     {
         try { action(); }
         catch (T) { return; }
         throw new Exception("Expected " + typeof(T).Name);
     }
-    private static SimulationWorld World(NavigationGrid grid, GridCell[] starts, int workers = 1,
+    internal static SimulationWorld World(NavigationGrid grid, GridCell[] starts, int workers = 1,
         int speed = 1024, bool reverse = false, int budget = 2, int cache = 8)
     {
         var world = new SimulationWorld([new("unit", 100)], grid.Width * 1024, grid.Height * 1024,
@@ -22,11 +22,11 @@ internal static class NavigationChecks
         foreach (var start in starts) world.AddInitialUnit(0, grid.Center(grid.Index(start)));
         return world;
     }
-    private static EntityPose[] Poses(SimulationWorld world)
+    internal static EntityPose[] Poses(SimulationWorld world)
     {
         var poses = new EntityPose[world.Count]; world.CopyPoses(poses); return poses;
     }
-    private static void Separated(SimulationWorld world)
+    internal static void Separated(SimulationWorld world)
     {
         var poses = Poses(world);
         foreach (var pose in poses)
@@ -259,6 +259,8 @@ internal static class NavigationChecks
                 if (tick is 1 or 2 or 8 or 41 or 64)
                     Check(a.Report() == b.Report() && a.Report() == c.Report(), $"Navigation desync at tick {tick}");
             }
+            // A fixed point order isolates cached movement from group endpoint invalidations.
+            a.Step([new(a.Tick + 1, 0, 1, CommandKind.MoveAll, Position: a.NavigationGrid!.Center(a.NavigationGrid.CellCount - 1))]);
             for (int i = 0; i < 8; i++) a.Step();
             long allocated = GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < 16; i++) a.Step();

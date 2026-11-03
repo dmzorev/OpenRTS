@@ -39,7 +39,11 @@ try
             var samples = new double[ticks];
             long allocated = GC.GetAllocatedBytesForCurrentThread();
             int cursor = 0;
-            long fieldsBuilt = 0, visitedCells = 0;
+            long fieldsBuilt = 0, visitedCells = 0, localSearches = 0, yields = 0, groupTrees = 0, groupVisited = 0, exchanges = 0;
+            double groupMilliseconds = 0;
+            long? completedAtTick = null;
+            long failedRoutes = 0;
+            long lastOrderTick = commands.Length == 0 ? 0 : commands[^1].Tick;
             double buildsMilliseconds = 0;
             for (int i = 0; i < ticks; i++)
             {
@@ -51,13 +55,20 @@ try
                 fieldsBuilt += world.NavigationBuiltFields;
                 visitedCells += world.NavigationVisitedCells;
                 buildsMilliseconds += world.NavigationBuildMilliseconds;
+                localSearches += world.NavigationLocalSearches;
+                yields += world.NavigationYields;
+                groupTrees += world.GroupRouteBuilds; groupVisited += world.GroupRouteVisitedCells;
+                groupMilliseconds += world.GroupRouteBuildMilliseconds;
+                exchanges += world.NavigationGoalExchanges;
+                foreach (var value in world.Events) if (value.Kind == WorldEventKind.NoRoute) failedRoutes++;
+                if (completedAtTick is null && failedRoutes == 0 && world.Tick >= lastOrderTick && world.MovingCount == 0) completedAtTick = world.Tick;
             }
             allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
             double firstTickMilliseconds = samples[0];
             Array.Sort(samples);
             Console.WriteLine("OPENRTS_BENCHMARK:" + JsonSerializer.Serialize(new
             {
-                Workload = navigation ? "shared BFS and cell reservations, no combat/rendering" : "direct movement, no navigation/combat/rendering",
+                Workload = navigation ? "compact spatial assignment, coherent batches, shared route tree and local avoidance, no combat/rendering" : "direct movement, no navigation/combat/rendering",
                 TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "runtime default",
                 Count = count, Ticks = ticks, Workers = navigation ? workers : 1,
                 MapWidthCells = world.Width / 1024, MapHeightCells = world.Depth / 1024,
@@ -65,7 +76,12 @@ try
                 P95Milliseconds = samples[(int)Math.Ceiling(ticks * 0.95) - 1], AllocatedBytes = allocated,
                 FirstTickMilliseconds = firstTickMilliseconds, MaximumTickMilliseconds = samples[^1],
                 MovingAtEnd = world.MovingCount, WaitingAtEnd = world.NavigationWaitingCount,
-                FieldsBuilt = fieldsBuilt, VisitedCells = visitedCells, BuildsMilliseconds = buildsMilliseconds
+                QueueWaitingAtEnd = world.NavigationQueueWaitingCount,
+                FieldsBuilt = fieldsBuilt, VisitedCells = visitedCells, BuildsMilliseconds = buildsMilliseconds,
+                GroupSlots = world.GroupSlotCount, LocalSearches = localSearches, Yields = yields,
+                GroupTreesBuilt = groupTrees, GroupTreeVisitedCells = groupVisited, GroupRoutePreparationMilliseconds = groupMilliseconds,
+                GoalExchanges = exchanges,
+                GroupTranslatingAtEnd = world.GroupTranslating, CompletedAtTick = completedAtTick, FailedRoutes = failedRoutes
             }));
             report = world.Report();
         }

@@ -9,7 +9,7 @@ public readonly record struct WorldPosition(int X, int Y, int Elevation = 0)
     public const int MaximumExtent = 1 << 29;
 }
 
-public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, UnblockCell }
+public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, UnblockCell, MoveGroup }
 
 public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence, CommandKind Kind,
     EntityId Entity = default, WorldPosition Position = default, int UnitType = 0);
