@@ -14,12 +14,14 @@ if [[ -z "$godot_bin" ]]; then
 fi
 
 build() {
+  local target="${1:-OpenRTS.sln}"
+  local configuration="${2:-Debug}"
   if [[ -n "${OPENRTS_NUGET_SOURCE:-}" ]]; then
-    dotnet restore OpenRTS.sln --disable-build-servers --source "$OPENRTS_NUGET_SOURCE"
+    dotnet restore "$target" --disable-build-servers --source "$OPENRTS_NUGET_SOURCE"
   else
-    dotnet restore OpenRTS.sln --disable-build-servers
+    dotnet restore "$target" --disable-build-servers
   fi
-  dotnet build OpenRTS.sln --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false
+  dotnet build "$target" --configuration "$configuration" --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false
 }
 
 action="${1:-build}"
@@ -32,8 +34,12 @@ case "$action" in
     dotnet run --project tests/OpenRTS.Tests --no-build --no-launch-profile
     ;;
   headless) build; dotnet run --project tools/OpenRTS.Headless --no-build --no-launch-profile -- "$@" ;;
+  benchmark)
+    build tools/OpenRTS.Headless/OpenRTS.Headless.csproj Release
+    dotnet run --project tools/OpenRTS.Headless --configuration Release --no-build --no-launch-profile -- --benchmark "$@"
+    ;;
   run) build; exec "$godot_bin" --path "$PWD/sandbox" -- "$@" ;;
   editor) build; exec "$godot_bin" --path "$PWD/sandbox" --editor ;;
   verify) "$0" test; python3 tools/verify.py "$godot_bin" ;;
-  *) echo 'Usage: tools/dev.sh [build|test|headless|run|editor|verify]' >&2; exit 2 ;;
+  *) echo 'Usage: tools/dev.sh [build|test|headless|benchmark|run|editor|verify]' >&2; exit 2 ;;
 esac

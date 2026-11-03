@@ -1,6 +1,6 @@
 # DeclarativeContent
 
-Engine-independent C# library for YAML definitions, inheritance, strict parameter binding and trait factories. Targets .NET 8; works in newer .NET applications. No Godot or Hyperfleets references. MIT; depends on YamlDotNet 18.1.0 (MIT).
+Engine-independent C# library for YAML definitions, inheritance, strict parameter binding and trait factories. Targets .NET 8; works in newer .NET applications. MIT; depends on YamlDotNet 18.1.0 (MIT).
 
 This is an original implementation inspired by the data/trait pattern. It does not include OpenRA/OpenRTS source code and is not a MiniYaml compatibility layer.
 

@@ -1,4 +1,4 @@
-"""End-to-end content parity and static GPU-instancing smoke checks (no simulation benchmark)."""
+"""Content parity, simulation replay and static/animated rendering smoke checks."""
 import hashlib
 import json
 from pathlib import Path
@@ -16,8 +16,8 @@ def run(command, expected=0):
     return result
 
 
-def report(output):
-    lines = [line.removeprefix("OPENRTS_CONTENT:") for line in output.splitlines() if line.startswith("OPENRTS_CONTENT:")]
+def report(output, prefix="OPENRTS_CONTENT:"):
+    lines = [line.removeprefix(prefix) for line in output.splitlines() if line.startswith(prefix)]
     if len(lines) != 1:
         raise RuntimeError("Expected exactly one content report:\n" + output)
     return json.loads(lines[0])
@@ -28,9 +28,11 @@ def main():
     provenance = json.loads((ROOT / "docs/vendor/declarative-content.json").read_text())
     for source in provenance["files"]:
         actual = hashlib.sha256((ROOT / source["path"]).read_bytes()).hexdigest()
-        if actual != source["sha256"]:
+        if "local_sha256" in source and not source.get("local_change"):
+            raise RuntimeError("Local import change lacks a reason: " + source["path"])
+        if actual != source.get("local_sha256", source["sha256"]):
             raise RuntimeError("Vendored source differs from recorded import: " + source["path"])
-    print("PASS DeclarativeContent import matches recorded SHA-256", flush=True)
+    print("PASS DeclarativeContent import and documented local changes match SHA-256", flush=True)
 
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
@@ -43,6 +45,21 @@ def main():
         if report(result.stdout) != expected or f"OPENRTS_PREVIEW:{count}" not in result.stdout:
             raise RuntimeError("Godot/headless content mismatch or preview failed:\n" + result.stdout)
         print(f"PASS Godot/headless content parity; {count} static MultiMesh instances", flush=True)
+
+    for count in (1, 10000, 10001):
+        arguments = [f"--count={count}", "--ticks=64"]
+        direct = report(run(headless + ["--simulate"] + arguments).stdout, "OPENRTS_SIMULATION:")
+        for fps in (15, 120):
+            result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-simulation", f"--fps={fps}"] + arguments)
+            if "ERROR:" in result.stderr or report(result.stdout, "OPENRTS_SIMULATION:") != direct:
+                raise RuntimeError("Simulation parity failed:\n" + result.stdout + result.stderr)
+        print(f"PASS {count} moving entities: direct/worker/Godot parity at 15 and 120 FPS", flush=True)
+
+    paced = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-simulation", "--realtime", "--count=10000", "--ticks=8", "--fps=15"])
+    direct = report(run(headless + ["--simulate", "--count=10000", "--ticks=8"]).stdout, "OPENRTS_SIMULATION:")
+    if "ERROR:" in paced.stderr or report(paced.stdout, "OPENRTS_SIMULATION:") != direct:
+        raise RuntimeError("Real-time session parity failed:\n" + paced.stdout + paced.stderr)
+    print("PASS real-time worker pacing at 25 Hz with a 15 FPS presentation", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

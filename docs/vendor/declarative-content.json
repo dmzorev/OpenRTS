@@ -25,7 +25,9 @@
     },
     {
       "path": "libs/DeclarativeContent/README.md",
-      "sha256": "318ded027997ca2b453b530b6031c43e49344a5203643f4eab2af8ead74fed42"
+      "sha256": "318ded027997ca2b453b530b6031c43e49344a5203643f4eab2af8ead74fed42",
+      "local_sha256": "ef8be1a016c8052e2f62d7e089a6e474fd27a80f5cdf31f3d0e56551da89ee63",
+      "local_change": "Removed the host-specific sentence \"No Godot or Hyperfleets references.\" from the README; library source and license remain unchanged."
     },
     {
       "path": "libs/DeclarativeContent/Traits.cs",

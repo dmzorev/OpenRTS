@@ -39,4 +39,5 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
     Reject<ContentException>(() => Load("^unused: {Health: {Typo: 10}}\nx: {Health: {HP: 1}}"));
     Reject<ArgumentException>(() => Load("^base: {Health: {HP: 1}}"));
 });
+SimulationChecks.Run(Test);
 Console.WriteLine($"{passed} OpenRTS checks passed.");

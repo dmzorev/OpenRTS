@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-03",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "processor": "Apple M3 Max",
+  "configuration": "Release",
+  "ticks_measured": 128,
+  "warmup_ticks": 64,
+  "scope": "Single-thread World.Step only; no snapshots, hashing, navigation, collision, combat or rendering. One command-buffer allocation is included in the first measured tick. Single local run, not a cross-platform guarantee.",
+  "source_sha256": {
+    "src/OpenRTS.Core/FrameExchange.cs": "6033c21f278804014915dc4661383ab8a2443482450459383d8ab0b3fe4e630d",
+    "src/OpenRTS.Core/SimulationWorld.cs": "f613cdcbe7d8bf5ab9709d0f940e81a43b8bd29e8510bdfdd49ba3734dc640d5",
+    "src/OpenRTS.Core/UnitDefinition.cs": "db5c923edc8e5e86696b16f932aa028ddcf1dd7120a765b2fa1a264d87c5441f",
+    "src/OpenRTS.Core/SimulationTypes.cs": "0af848d76df38574359f6b16d8fe7edac009ca1908a1dbe16f89474bed0b1378",
+    "src/OpenRTS.Core/SimulationSession.cs": "6978e57101963eb23df1a1aa2061463d8e84ff1c49b5d08bac5c6709b7d09ab2"
+  },
+  "results": [
+    {
+      "Workload": "direct movement, no navigation/combat/rendering",
+      "Count": 1000,
+      "Ticks": 128,
+      "MapCells": 4096,
+      "TickRate": 25,
+      "P50Milliseconds": 0.1536,
+      "P95Milliseconds": 0.2002,
+      "AllocatedBytes": 72,
+      "MovingAtEnd": 1000
+    },
+    {
+      "Workload": "direct movement, no navigation/combat/rendering",
+      "Count": 10000,
+      "Ticks": 128,
+      "MapCells": 4096,
+      "TickRate": 25,
+      "P50Milliseconds": 0.5353,
+      "P95Milliseconds": 0.5746,
+      "AllocatedBytes": 72,
+      "MovingAtEnd": 10000
+    },
+    {
+      "Workload": "direct movement, no navigation/combat/rendering",
+      "Count": 100000,
+      "Ticks": 128,
+      "MapCells": 4096,
+      "TickRate": 25,
+      "P50Milliseconds": 4.6658,
+      "P95Milliseconds": 5.1387,
+      "AllocatedBytes": 328,
+      "MovingAtEnd": 100000
+    }
+  ],
+  "debug_release_report": {
+    "Tick": 64,
+    "EntityCount": 10000,
+    "StateHash": "286677C286FC5C4078677C4199ED0DC92B1CD2AD2FB8A5DF6ED252A400531431"
+  }
+}
