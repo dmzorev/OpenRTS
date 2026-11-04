@@ -1,0 +1,186 @@
+using System.Diagnostics;
+
+namespace OpenRTS.Core;
+
+public sealed partial class SimulationWorld
+{
+    private sealed class GroupRoute(int[] cells, int revision)
+    {
+        public readonly int[] Cells = cells;
+        public readonly int Revision = revision;
+        public int Cursor;
+        public WorldPosition Waypoint;
+        public bool HasWaypoint;
+        public long[]? CostPrefix;
+    }
+    private readonly Dictionary<EntityId, GroupRoute> _groupRoutes = new();
+    private SharedRouteTree? _routeTree;
+    private bool _bulkAllowed;
+    private int _treeRoot;
+    private bool[] _handled = [], _cohort = [];
+    private WorldPosition[] _groupSlots = [];
+    public bool GroupTranslating { get; private set; }
+    public int GroupRouteBuilds { get; private set; }
+    public int GroupRouteVisitedCells { get; private set; }
+    public double GroupRouteBuildMilliseconds { get; private set; }
+    public int NavigationGoalExchanges { get; private set; }
+    public int NavigationQueueWaitingCount { get; private set; }
+    public int GroupSlotCount => _groupSlots.Length;
+
+    private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
+    {
+        var grid = _navigation!.Grid;
+        if (members.Length == 0) return;
+        if (action == UnitActionKind.AttackMove && members.Any(i => _types[_entities[i].UnitType].Weapon is null))
+        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, default, position)); return; }
+        var assignments = members.Select(i => new GroupDestinations.Member(_entities[i].Id, _entities[i].Position, i)).ToArray();
+        WorldPosition[]? slots;
+        if (queued && members.Any(i => _entities[i].HasOrder))
+        {
+            int columns = (int)Math.Ceiling(Math.Sqrt(members.Length));
+            slots = Enumerable.Range(0, members.Length).Select(i => new WorldPosition(
+                Math.Clamp(position.X + (i % columns - (columns - 1) / 2) * 1024, 0, Width),
+                Math.Clamp(position.Y + (i / columns - ((members.Length + columns - 1) / columns - 1) / 2) * 1024, 0, Depth))).ToArray();
+            long cohort = checked(++_orderGroupSequence);
+            GroupDestinations.Assign(assignments, slots, (index, goal) => IssueOrder(index, new(action, goal, Group: true, Cohort: cohort), true));
+            return;
+        }
+        var components = new Dictionary<Locomotor, (DestinationResolver Resolver, int Component)>();
+        foreach (int i in members)
+        {
+            var profile = _types[_entities[i].UnitType].Locomotor; var resolver = Resolver(_entities[i].UnitType);
+            int component = resolver.Component(grid.CellAt(_entities[i].Position), _stepCancellation);
+            if (component == 0 || components.TryGetValue(profile, out var prior) && prior.Component != component) { SplitOrReject(); return; }
+            components[profile] = (resolver, component);
+        }
+        bool Valid(WorldPosition p) => components.Values.All(c => c.Resolver.CanStop(p) && c.Resolver.Component(grid.CellAt(p), _stepCancellation) == c.Component);
+        var anchor = Valid(position) ? position : DestinationResolver.Nearest(grid, position, Valid, _stepCancellation);
+        if (anchor is not { } destination) { SplitOrReject(); return; }
+        slots = GroupDestinations.Slots(grid, destination, members.Length, components.Keys.ToArray(), Valid);
+        if (slots is null) { Reject(); return; }
+        if (destination != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, default, destination));
+        _routeTree = null; _weightedTrees.Clear(); _bulkAllowed = _weighted is null;
+        _treeRoot = grid.CellAt(slots.OrderBy(point => DistanceSquared(point, destination)).ThenBy(point => point.Y).ThenBy(point => point.X).First());
+        long group = checked(++_orderGroupSequence);
+        GroupDestinations.Assign(assignments, slots, (index, goal) => IssueOrder(index, new(action, goal, Group: true, Cohort: group), queued));
+        Array.Sort(slots, (a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X)); _groupSlots = slots;
+        void SplitOrReject()
+        {
+            var parts = members.GroupBy(i => (_types[_entities[i].UnitType].Locomotor.Id, Component: Resolver(_entities[i].UnitType).Component(grid.CellAt(_entities[i].Position), _stepCancellation)))
+                .OrderBy(g => g.Key.Id, StringComparer.Ordinal).ThenBy(g => g.Key.Component).Select(g => g.ToArray()).ToArray();
+            if (parts.Length == 1) { Reject(); return; }
+            foreach (var part in parts) SetGroupTarget(position, part, action, queued);
+        }
+        void Reject() => _events.Add(new(Tick, WorldEventKind.NoRoute, default, position));
+    }
+
+    private void TryBulkStep()
+    {
+        if (!_bulkAllowed) return;
+        var grid = _navigation!.Grid;
+        int dx = 0, dy = 0, members = 0;
+        Array.Clear(_cohort, 0, Count);
+        for (int order = 0; order < Count; order++)
+        {
+            int i = _movementOrder[order]; ref var entity = ref _entities[i];
+            if (!entity.GroupMember) continue;
+            if (entity.YieldFor.Value != 0) { _bulkAllowed = false; return; }
+            int x = entity.Target.X - entity.Position.X, y = entity.Target.Y - entity.Position.Y;
+            if (members++ == 0) { dx = x; dy = y; }
+            else if (x != dx || y != dy) { _bulkAllowed = false; return; }
+            _cohort[i] = true;
+        }
+        if (members == 0 || dx == 0 && dy == 0) { _bulkAllowed = false; return; }
+        // This is a temporary common velocity, not a maintained formation or a route-cell reservation.
+        for (int order = 0; order < Count; order++)
+        {
+            int i = _movementOrder[order]; if (!_cohort[i]) continue;
+            ref var entity = ref _entities[i]; var next = StepTowards(entity.Position, entity.Target);
+            if (!TerrainGeometry.Clear(grid, entity.Position, next, MotionIndex.BodyRadius) ||
+                !_motion!.ClearMove(i, next, out _, _cohort)) { _bulkAllowed = false; return; }
+        }
+        GroupTranslating = true;
+        for (int i = 0; i < Count; i++) if (_cohort[i])
+        {
+            ref var entity = ref _entities[i];
+            entity.Position = StepTowards(entity.Position, entity.Target);
+            entity.LastProgressTick = Tick;
+            entity.Moving = entity.Position != entity.Target; entity.WaitTicks = 0;
+            _motion!.SetEnd(i, entity.Position); _handled[i] = true;
+        }
+    }
+
+    private void PrepareGroupRoutes(CancellationToken token)
+    {
+        if (_bulkAllowed) return;
+        var grid = _navigation!.Grid;
+        bool needed = false;
+        for (int i = 0; i < Count; i++)
+            if (_entities[i].GroupMember && _entities[i].Moving &&
+                (!_groupRoutes.TryGetValue(_entities[i].Id, out var route) || route.Revision != grid.Revision)) { needed = true; break; }
+        if (!needed) return;
+        long started = Stopwatch.GetTimestamp();
+        for (int order = 0; order < Count; order++)
+        {
+            token.ThrowIfCancellationRequested();
+            int i = _movementOrder[order]; ref var entity = ref _entities[i];
+            if (!entity.GroupMember || !entity.Moving || _groupRoutes.TryGetValue(entity.Id, out var existing) && existing.Revision == grid.Revision) continue;
+            if (!TerrainGeometry.Clear(grid, entity.Target, entity.Target, MotionIndex.BodyRadius)) { RejectRoute(ref entity); continue; }
+            if (TerrainGeometry.Clear(grid, entity.Position, entity.Target, MotionIndex.BodyRadius))
+                _groupRoutes[entity.Id] = new([entity.GoalCell], grid.Revision);
+            else
+            {
+                if (_routeTree is null || !ReferenceEquals(_routeTree.Grid, grid))
+                {
+                    _routeTree = new(grid, _treeRoot, token);
+                    GroupRouteBuilds++; GroupRouteVisitedCells += _routeTree.VisitedCells;
+                }
+                var route = _routeTree.Route(grid.CellAt(entity.Position), entity.GoalCell, token);
+                if (route is null) RejectRoute(ref entity);
+                else _groupRoutes[entity.Id] = new(route.Length == 0 ? [entity.GoalCell] : route, grid.Revision);
+            }
+        }
+        GroupRouteBuildMilliseconds += Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    }
+
+    private bool TryExchangeGoals(int requesterIndex, int blockerIndex)
+    {
+        ref var requester = ref _entities[requesterIndex]; ref var blocker = ref _entities[blockerIndex];
+        var grid = _navigation!.Grid;
+        if (!requester.GroupMember || !blocker.GroupMember || requester.Owner != blocker.Owner || requester.OrderGroup != blocker.OrderGroup || blocker.YieldFor.Value != 0 || requester.WaitTicks < 16) return false;
+        long oldCost = DistanceSquared(requester.Position, requester.Target) + DistanceSquared(blocker.Position, blocker.Target);
+        long newCost = DistanceSquared(requester.Position, blocker.Target) + DistanceSquared(blocker.Position, requester.Target);
+        if (newCost >= oldCost || !StopAllowed(requester.UnitType, blocker.Target) || !ClearTerrain(requesterIndex, requester.Position, blocker.Target) ||
+            !StopAllowed(blocker.UnitType, requester.Target) || !ClearTerrain(blockerIndex, blocker.Position, requester.Target)) return false;
+        var oldTarget = requester.Target;
+        requester.Target = blocker.Target with { Elevation = requester.Position.Elevation };
+        blocker.Target = oldTarget with { Elevation = blocker.Position.Elevation };
+        (requester.GoalCell, blocker.GoalCell) = (blocker.GoalCell, requester.GoalCell);
+        requester.ActiveOrder = requester.ActiveOrder with { Position = requester.Target };
+        blocker.ActiveOrder = blocker.ActiveOrder with { Position = blocker.Target };
+        requester.WaitTicks = blocker.WaitTicks = 0;
+        requester.PathLength = requester.PathCursor = blocker.PathLength = blocker.PathCursor = 0;
+        requester.Moving = requester.Position != requester.Target; blocker.Moving = blocker.Position != blocker.Target;
+        _groupRoutes.Remove(requester.Id); _groupRoutes.Remove(blocker.Id);
+        NavigationGoalExchanges++;
+        return true;
+    }
+
+    private void WriteGroupState(BinaryWriter writer)
+    {
+        writer.Write(MotionIndex.BodyRadius); writer.Write(_bulkAllowed);
+        writer.Write(_treeRoot); writer.Write(_routeTree?.Grid.Revision ?? -1);
+        writer.Write(_weightedTrees.Count);
+        foreach (var pair in _weightedTrees.OrderBy(p => p.Key)) { writer.Write(pair.Key); writer.Write(pair.Value.Grid.Revision); }
+        foreach (var entity in _entities.AsSpan(0, Count).ToArray().OrderBy(e => e.Id.Value))
+        {
+            if (_groupRoutes.TryGetValue(entity.Id, out var route))
+            {
+                writer.Write(route.Revision); writer.Write(route.Cells.Length - route.Cursor);
+                foreach (int cell in route.Cells.AsSpan(route.Cursor)) writer.Write(cell);
+                writer.Write(route.HasWaypoint); writer.Write(route.Waypoint.X); writer.Write(route.Waypoint.Y);
+            }
+            else writer.Write(-1);
+        }
+    }
+}

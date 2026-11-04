@@ -1,0 +1,105 @@
+{
+  "retrieved": "2026-11-04",
+  "scope": "Source inspection only, no source code imported",
+  "sources": [
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Game/Activities/Activity.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Game/Activities/Activity.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Game/Activities/Activity.cs",
+      "bytes": 9111,
+      "sha256": "b51aaefe24344acfa779b0b5abc48013e23db371d0d492405620ffbea624b6ee"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Orders/UnitOrderGenerator.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Orders/UnitOrderGenerator.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Orders/UnitOrderGenerator.cs",
+      "bytes": 8285,
+      "sha256": "c5abf616b8a5b0dae1aac74f34b2acf3d26eebba78f3b8727b8473f080db9cf8"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Widgets/WorldInteractionControllerWidget.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Widgets/WorldInteractionControllerWidget.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Widgets/WorldInteractionControllerWidget.cs",
+      "bytes": 7872,
+      "sha256": "39d70f7893aba0569c1fffa549672b543d8726e6896c9a83d10f2674a37c5d35"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/AttackMove.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/AttackMove.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/AttackMove.cs",
+      "bytes": 5936,
+      "sha256": "a9b84a3e3c3a8dc3e0592cbdd9ce4f2aac03f70ae2e2b545c7c90383efb82f7a"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Activities/Move/AttackMoveActivity.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Activities/Move/AttackMoveActivity.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Activities/Move/AttackMoveActivity.cs",
+      "bytes": 3309,
+      "sha256": "3046f6f82ca6f9d781d275ab9275303ce5335d54830fc6da2c8554b9c87209c3"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/gui/session/input.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/gui/session/input.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/gui/session/input.js",
+      "bytes": 50752,
+      "sha256": "3df063b41027cf53635cc4224b0e35d51ad971afb0e9293d042559b36a05e20b"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/helpers/Commands.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/helpers/Commands.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/helpers/Commands.js",
+      "bytes": 60158,
+      "sha256": "9a6371f936d4abe2ec63ce12029f622b5f198ad435d1cd30a2a5ab5506b21413"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/components/UnitAI.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/UnitAI.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/UnitAI.js",
+      "bytes": 192130,
+      "sha256": "5629b4216c9743c1d3ec133e9b24a83d220bd1f3f9dfe53e58d29ceaeb8044b4"
+    },
+    {
+      "repository": "philipbeaucamp/godot-rts-entity-controller",
+      "commit": "2c86dcbefd29ee46258638c84eac447ae6dfbf28",
+      "path": "addons/godot-rts-entity-controller/abilities/scripts/RTS_AbilityManager.gd",
+      "url": "https://github.com/philipbeaucamp/godot-rts-entity-controller/blob/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/abilities/scripts/RTS_AbilityManager.gd",
+      "raw_url": "https://raw.githubusercontent.com/philipbeaucamp/godot-rts-entity-controller/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/abilities/scripts/RTS_AbilityManager.gd",
+      "bytes": 10593,
+      "sha256": "cbfbfa213f54b36c35989dce1a0fb94b60db0b46f7c4ad9ac9b0d88c8301e94c"
+    },
+    {
+      "repository": "philipbeaucamp/godot-rts-entity-controller",
+      "commit": "2c86dcbefd29ee46258638c84eac447ae6dfbf28",
+      "path": "addons/godot-rts-entity-controller/abilities/scripts/RTS_ClickAbility.gd",
+      "url": "https://github.com/philipbeaucamp/godot-rts-entity-controller/blob/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/abilities/scripts/RTS_ClickAbility.gd",
+      "raw_url": "https://raw.githubusercontent.com/philipbeaucamp/godot-rts-entity-controller/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/abilities/scripts/RTS_ClickAbility.gd",
+      "bytes": 4922,
+      "sha256": "5fe044563060953b3609f056e10af0fb37da2bc39aac2d6da2882976704639d7"
+    },
+    {
+      "repository": "philipbeaucamp/godot-rts-entity-controller",
+      "commit": "2c86dcbefd29ee46258638c84eac447ae6dfbf28",
+      "path": "addons/godot-rts-entity-controller/core/selection/RTS_Selection.gd",
+      "url": "https://github.com/philipbeaucamp/godot-rts-entity-controller/blob/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/core/selection/RTS_Selection.gd",
+      "raw_url": "https://raw.githubusercontent.com/philipbeaucamp/godot-rts-entity-controller/2c86dcbefd29ee46258638c84eac447ae6dfbf28/addons/godot-rts-entity-controller/core/selection/RTS_Selection.gd",
+      "bytes": 10460,
+      "sha256": "14e957ad62125fd14bc0b4b1bd1a451cb96b55aa7232b92455de25b9c3307c88"
+    }
+  ]
+}

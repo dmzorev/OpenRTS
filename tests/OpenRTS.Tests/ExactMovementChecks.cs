@@ -96,8 +96,8 @@ internal static class ExactMovementChecks
             var grid = new NavigationGrid(2, 2, [new(1, 0), new(0, 1)]);
             var world = Exact(grid, new WorldPosition(512, 512));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1536, 1536))]);
-            NavigationChecks.Check(world.MovingCount == 0 && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute), "A finite body crossed touching obstacle corners");
-            NavigationChecks.Check(Poses(world)[0].Current == new WorldPosition(512, 512), "Rejected corner route moved the body");
+            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Missing near-side correction");
+            Finish(world); NavigationChecks.Check(Poses(world)[0].Current.X < 768 && Poses(world)[0].Current.Y < 768, "A finite body crossed touching obstacle corners");
         });
         test("An angled route around a wall reaches an exact off-center endpoint", () =>
         {
@@ -125,7 +125,7 @@ internal static class ExactMovementChecks
             NavigationChecks.Reject<ArgumentException>(() => Exact(grid, new WorldPosition(2000, 2500)));
             var world = Exact(grid, new WorldPosition(1200, 1200));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(2000, 2500))]);
-            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute), "Invalid body clearance was accepted as a target");
+            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Invalid body clearance was accepted as a target");
         });
         test("An occupied destination waits without changing terrain reachability", () =>
         {

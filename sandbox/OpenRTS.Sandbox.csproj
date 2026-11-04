@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Sandbox*.cs" />
+    <Compile Include="Controls/**/*.cs" />
+    <Compile Include="Verification/**/*.cs" />
     <Compile Include="../src/OpenRTS.Godot/**/*.cs" />
     <ProjectReference Include="../src/OpenRTS.Content/OpenRTS.Content.csproj" />
   </ItemGroup>

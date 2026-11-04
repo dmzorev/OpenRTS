@@ -2,11 +2,13 @@ using DeclarativeContent;
 using OpenRTS.Content;
 using OpenRTS.Core;
 
+string? filter = args.FirstOrDefault(a => a.StartsWith("--filter=", StringComparison.Ordinal))?[9..];
 int passed = 0;
 var failures = new List<Exception>();
 void Check(bool value, string message) { if (!value) throw new Exception(message); }
 void Test(string name, Action check)
 {
+    if (filter is not null && !name.Contains(filter, StringComparison.OrdinalIgnoreCase)) return;
     try { check(); passed++; Console.WriteLine("PASS " + name); }
     catch (Exception error) { failures.Add(error); Console.WriteLine($"FAIL {name}: {error.Message}"); }
 }
@@ -46,6 +48,7 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
 });
 PresentationChecks.Run(Test);
 LocomotionChecks.Run(Test);
+OrderChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

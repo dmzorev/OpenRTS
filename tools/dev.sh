@@ -35,7 +35,7 @@ case "$action" in
   test)
     build
     dotnet run --project tests/DeclarativeContent.Tests --no-build --no-launch-profile
-    dotnet run --project tests/OpenRTS.Tests --no-build --no-launch-profile
+    dotnet run --project tests/OpenRTS.Tests --no-build --no-launch-profile -- "$@"
     ;;
   headless) build; dotnet run --project tools/OpenRTS.Headless --no-build --no-launch-profile -- "$@" ;;
   benchmark)

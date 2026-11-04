@@ -122,12 +122,12 @@ internal static class NavigationChecks
             foreach (var pose in Poses(a))
                 Check(pose.Current == grid.Center(grid.Index(new(6, (int)pose.Id.Value - 1))), "Wrong group destination");
         });
-        test("Unreachable goals produce an event and opening terrain permits a new order", () =>
+        test("Unreachable goals project to shore and opening terrain permits a new order", () =>
         {
             var grid = new NavigationGrid(3, 3, Enumerable.Range(0, 3).Select(y => new GridCell(1, y)));
             var world = World(grid, [new(0, 1)]); var goal = grid.Center(grid.Index(new(2, 1)));
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: goal)]);
-            Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.NoRoute && world.MovingCount == 0, "Missing no-route event");
+            Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.DestinationAdjusted && Poses(world)[0].Order.Destination.X < 1024, "Missing reachable-shore correction");
             world.Step([new(2, 0, 1, CommandKind.UnblockCell, Position: grid.Center(grid.Index(new(1, 1))))]);
             Check(world.NavigationGrid!.Revision == 1 && grid.IsBlocked(grid.Index(new(1, 1))), "Map snapshots were mutated");
             world.Step([new(3, 0, 1, CommandKind.MoveAll, Position: goal)]); world.Step();
@@ -267,7 +267,7 @@ internal static class NavigationChecks
             long bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
             Check(bytes == 0, $"Cached navigation allocates per tick: {bytes} bytes");
         });
-        test("A bulk no-route event burst above the default queue limit is delivered with an explicit host budget", () =>
+        test("A bulk adjusted-destination event burst is delivered with an explicit host budget", () =>
         {
             const int count = 70000;
             var catalog = UnitCatalog.Load([new("test", "unit: {Health: {HP: 100}}")]);
@@ -280,7 +280,7 @@ internal static class NavigationChecks
             int delivered = 0;
             while (session.TryReadEvent(out var value))
             {
-                Check(value.Kind == WorldEventKind.NoRoute, "Unexpected bulk event");
+                Check(value.Kind == WorldEventKind.DestinationAdjusted, "Unexpected bulk event");
                 delivered++;
             }
             Check(report.EntityCount == count && delivered == count, "Bulk no-route events were lost");

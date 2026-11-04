@@ -76,14 +76,14 @@ internal static class GroupNavigationChecks
             for (int i = 0; i < 100; i++) { world.Step(); Separated(world); }
             NavigationChecks.Check(Poses(world).Select(p => p.Current).SequenceEqual(before.Select(p => p.Current)) && world.MovingCount == 2, "Impossible swap was forced");
         });
-        test("Group rejection is atomic and direct worlds reject group orders before advancing", () =>
+        test("Group goals project atomically and legacy direct group commands reject before advancing", () =>
         {
             var grid = new NavigationGrid(7, 3, Enumerable.Range(0, 3).Select(y => new GridCell(4, y)));
             var world = World(grid, [new(0, 0), new(1, 0), new(2, 0), new(0, 1), new(1, 1), new(2, 1), new(0, 2)]);
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(6, 1))))]);
-            NavigationChecks.Check(world.GroupSlotCount == 0 && world.MovingCount == 0 && world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.NoRoute, "Insufficient connected space did not reject order");
+            NavigationChecks.Check(world.GroupSlotCount == 7 && world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.DestinationAdjusted, "Unreachable anchor was not corrected to available space");
             world.Step([new(2, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(4, 1))))]);
-            NavigationChecks.Check(world.Events.Length == 1 && world.GroupSlotCount == 0, "Blocked anchor accepted");
+            NavigationChecks.Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.DestinationAdjusted && world.GroupSlotCount == 7, "Blocked anchor did not keep a legal packed destination");
             var direct = new SimulationWorld([new("unit", 100)], 10240, 10240);
             NavigationChecks.Reject<ArgumentException>(() => direct.Step([new(1, 0, 1, CommandKind.MoveGroup)]));
             NavigationChecks.Check(direct.Tick == 0, "Invalid group advanced direct world");
@@ -126,14 +126,14 @@ internal static class GroupNavigationChecks
             }
             NavigationChecks.Check(a.MovingCount == 0, "Detour lost after packed removal");
         });
-        test("Unreachable group members report terrain failure and public goals remain cell-bounded", () =>
+        test("Groups reach their own shoreline and public goals remain cell-bounded", () =>
         {
             var grid = new NavigationGrid(9, 3, Enumerable.Range(0, 3).Select(y => new GridCell(4, y)));
             var world = World(grid, [new(0, 1), new(1, 1)]);
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(7, 1))))]);
-            int failures = world.Events.ToArray().Count(e => e.Kind == WorldEventKind.NoRoute);
-            for (int i = 0; i < 8; i++) { world.Step(); failures += world.Events.ToArray().Count(e => e.Kind == WorldEventKind.NoRoute); }
-            NavigationChecks.Check(world.MovingCount == 0 && failures == 2, "Unreachable members waited without a failure");
+            int failures = world.Events.ToArray().Count(e => e.Kind == WorldEventKind.DestinationAdjusted);
+            for (int i = 0; i < 8; i++) { world.Step(); failures += world.Events.ToArray().Count(e => e.Kind == WorldEventKind.DestinationAdjusted); }
+            NavigationChecks.Check(world.MovingCount == 0 && failures == 1 && Poses(world).All(p => p.Current.X < 4096), "Members failed to reach their own shoreline");
             var navigation = new GridNavigator(grid);
             NavigationChecks.Reject<ArgumentOutOfRangeException>(() => navigation.Prepare([grid.CellCount]));
         });

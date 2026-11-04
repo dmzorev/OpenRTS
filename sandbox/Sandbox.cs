@@ -6,6 +6,8 @@ using Godot;
 using OpenRTS.Content;
 using OpenRTS.Godot;
 using OpenRTS.Core;
+using OpenRTS.Core.Orders;
+using OpenRTS.Godot.Controls;
 
 public partial class Sandbox : Node3D
 {
@@ -14,16 +16,17 @@ public partial class Sandbox : Node3D
     private WorldView? _view;
     private SpriteWorldView? _sprites;
     private bool _showcase, _verifyPresentation;
-    private EntityId _selected = new(1);
+    private readonly SelectionState _selection = new();
+    private EntityId _selected { get => _selection.Primary; set => _selection.Change(value.Value == 0 ? [] : [value], SelectionChange.Replace); }
     private EntityPose[] _displayPoses = [];
     private int _displayCount;
-    private MeshInstance3D? _selectionRing;
+    private MultiMeshInstance3D? _selectionRing;
     private string? _capturePath;
     private Camera3D? _camera;
     private Label? _label;
     private int _count = 10000, _ticks = DiagnosticScenario.DefaultTicks;
     private bool _verifySimulation, _pacedVerification, _verificationDone;
-    private bool _verifyControls;
+    private bool _verifyControls, _verifyRtsControls;
     private bool _navigation, _reverseJobs, _leftGoal;
     private int _workers = 4;
     private ObstacleView? _obstacles;
@@ -45,6 +48,7 @@ public partial class Sandbox : Node3D
                 if (arg == "--verify-presentation") { _verifyPresentation = _showcase = true; continue; }
                 if (arg.StartsWith("--capture=", StringComparison.Ordinal)) { _capturePath = arg[10..]; continue; }
                 if (arg == "--verify-simulation") { _verifySimulation = true; continue; }
+                if (arg == "--verify-rts-controls") { _verifyRtsControls = _verifyControls = _showcase = true; _paused = true; continue; }
                 if (arg == "--verify-controls") { _verifyControls = true; _paused = true; continue; }
                 if (arg == "--realtime") { _pacedVerification = true; continue; }
                 if (arg == "--navigation") { _navigation = true; continue; }
@@ -109,6 +113,7 @@ public partial class Sandbox : Node3D
         _session?.Dispose();
         _session = null;
         _leftGoal = false;
+        if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _pointerDown = false; }
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _session = new SimulationSession(() => _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
@@ -135,14 +140,18 @@ public partial class Sandbox : Node3D
             if (_showcase)
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
-                frame.Poses.CopyTo(_displayPoses); _displayCount = frame.Poses.Length; UpdateSelection(alpha);
+                frame.Poses.CopyTo(_displayPoses); _displayCount = frame.Poses.Length;
+                RefreshSelection(); UpdateSelection(alpha); UpdateRtsCursor();
             }
             _displayGrid = frame.Grid;
             _obstacles?.Apply(frame.Grid);
-            if (_verifyControls) { VerifyControls(frame.Tick); return; }
+            if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             while (_session.TryReadEvent(out var value))
                 _notice = value.Kind switch
                 {
+                    WorldEventKind.DestinationAdjusted => "Цель скорректирована к ближайшему достижимому месту.",
+                    WorldEventKind.InvalidOrder => "Действие недоступно выбранному юниту.",
+                    WorldEventKind.QueueFull => "Очередь приказов заполнена (32).",
                     WorldEventKind.NoRoute => "Маршрут или место остановки недоступны.",
                     WorldEventKind.CellOccupied => "Изменение отклонено: область пересекает тело юнита.",
                     WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
@@ -219,7 +228,8 @@ public partial class Sandbox : Node3D
             if (input is InputEventKey { Pressed: true, Echo: false } key)
             {
                 Key code = key.PhysicalKeycode == Key.None ? key.Keycode : key.PhysicalKeycode;
-                if (code == Key.Escape) GetTree().Quit();
+                if (_showcase && HandleRtsKey(key, code)) { }
+                else if (code == Key.Escape) GetTree().Quit();
                 else if (code == Key.R) StartSession();
                 else if (code == Key.P) { _paused = !_paused; _session.SetPlayback(_playbackSpeed, _paused); }
                 else if (code == Key.N) { if (!_paused) { _paused = true; _session.SetPlayback(_playbackSpeed, true); } _session.StepOnce(); }
@@ -259,9 +269,11 @@ public partial class Sandbox : Node3D
                 var before = GroundPoint(motion.Position - motion.Relative);
                 var after = GroundPoint(motion.Position);
                 if (before is { } from && after is { } to) MoveCamera(from - to);
+                if (_showcase) { _pointer = motion.Position; UpdateRtsCursor(); }
             }
-            else if (_showcase && input is InputEventMouseButton { Pressed: true } click && click.ButtonIndex is MouseButton.Left or MouseButton.Right)
+            else if (_showcase && input is InputEventMouseButton click && click.ButtonIndex is MouseButton.Left or MouseButton.Right)
             { HandleShowcaseClick(click); }
+            else if (_showcase && input is InputEventMouseMotion pointer) { _pointer = pointer.Position; UpdateRtsCursor(); }
             else if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } mouse && _camera is not null)
             {
                 if (MousePoint(mouse.Position) is { } target) _session.Submit(_navigation ? CommandKind.MoveGroup : CommandKind.MoveAll, target);
@@ -299,10 +311,10 @@ public partial class Sandbox : Node3D
     private void PanCamera(double delta)
     {
         if (_camera is null) return;
-        int x = (Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0)
-            - (Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
-        int z = (Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0)
-            - (Input.IsPhysicalKeyPressed(Key.W) || Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
+        int x = (!_showcase && Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0)
+            - (!_showcase && Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
+        int z = (!_showcase && Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0)
+            - (!_showcase && Input.IsPhysicalKeyPressed(Key.W) || Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
         var direction = new Vector3(x, 0, z);
         if (direction != Vector3.Zero) MoveCamera(direction.Normalized() * _camera.Size * (float)delta * 0.7f);
     }
@@ -318,6 +330,7 @@ public partial class Sandbox : Node3D
 
     public override void _ExitTree()
     {
+        if (_showcase) Input.MouseMode = Input.MouseModeEnum.Visible;
         _session?.Dispose();
         _session = null;
     }
@@ -370,6 +383,7 @@ public partial class Sandbox : Node3D
         AddChild(layer);
         var panel = new PanelContainer { Position = new Vector2(24, 24) };
         layer.AddChild(panel);
+        if (_showcase) _rtsPanels.Add(panel);
         var margin = new MarginContainer();
         foreach (string side in new[] { "left", "top", "right", "bottom" })
             margin.AddThemeConstantOverride("margin_" + side, 18);

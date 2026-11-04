@@ -8,7 +8,7 @@ internal static class PresentationChecks
     private static UnitDefinition Unit() => new("unit", 100, ["idle", "move", "fire", "deploy"], ["damaged", "swimming"]);
     public static void Run(Action<string, Action> test)
     {
-        test("Walking follows actual displacement and stops on arrival or blocked orders", () =>
+        test("Walking follows actual displacement and stops on arrival or Stop", () =>
         {
             var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
             world.AddInitialUnit(0, new(1000, 1000));
@@ -21,6 +21,7 @@ internal static class PresentationChecks
             var blocked = new SimulationWorld([type], 5120, 5120, navigationGrid: grid);
             blocked.AddInitialUnit(0, grid.Center(grid.Index(new(1, 2))));
             blocked.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(grid.Index(new(3, 2))))]);
+            blocked.Step([new(2, 0, 1, CommandKind.Stop, new(1))]);
             var waiting = Poses(blocked)[0];
             NavigationChecks.Check(waiting.Previous == waiting.Current && waiting.Presentation.Body.Animation == type.IdleAnimation, "Stationary unit walked because it had a move order");
         });

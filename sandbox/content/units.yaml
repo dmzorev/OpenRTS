@@ -8,18 +8,21 @@
 
 rifleman:
   Inherits: ^unit
+  Weapon: {Range: 4096, AcquireRange: 8192, Damage: 10, CooldownTicks: 12, WindupTicks: 2}
   Presentation:
     Model: infantry-rifle
     Name: Пехотинец с автоматом
 
 rocketeer:
   Inherits: ^unit
+  Weapon: {Range: 6144, AcquireRange: 8192, Damage: 30, CooldownTicks: 35, WindupTicks: 5}
   Presentation:
     Model: infantry-rocket
     Name: Пехотинец с ракетницей
 
 apc-mg:
   Inherits: ^unit
+  Weapon: {Range: 5120, AcquireRange: 8192, Damage: 8, CooldownTicks: 6, WindupTicks: 1}
   Movement: {Locomotor: amphibious}
   Health:
     HP: 250
@@ -30,12 +33,14 @@ apc-mg:
 
 apc-rocket:
   Inherits: apc-mg
+  Weapon: {Range: 6144, Damage: 25, CooldownTicks: 30, WindupTicks: 4}
   Presentation:
     Model: apc-missiles
     Name: БТР · ракеты
 
 tank:
   Inherits: ^unit
+  Weapon: {Range: 6144, AcquireRange: 8192, Damage: 40, CooldownTicks: 35, WindupTicks: 4}
   Movement: {Locomotor: tracked}
   Health:
     HP: 400

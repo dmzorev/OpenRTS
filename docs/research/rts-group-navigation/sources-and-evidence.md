@@ -50,7 +50,7 @@ Permafrost, commit `083a99cace3eb047e7a3ccb7dc6b22eb78e3967f`: [formation.c](htt
 
 ### S012
 
-Собственные реализации и эксперименты OpenRTS: [GroupDestinations.cs](../../../src/OpenRTS.Core/GroupDestinations.cs), [групповое движение](../../../src/OpenRTS.Core/SimulationWorld.GroupMovement.cs), [проверки](../../../tests/OpenRTS.Tests/GroupPlanningChecks.cs), [сырые измерения](measurements.json), [верификация](../../verification/006-compact-group-navigation.md). Именно эти сценарии подтверждают свойства нашего кода; источники S001–S011 сами их не доказывают.
+Собственные реализации и эксперименты OpenRTS: [GroupDestinations.cs](../../../src/OpenRTS.Core/Navigation/GroupDestinations.cs), [групповое движение](../../../src/OpenRTS.Core/Simulation/SimulationWorld.GroupMovement.cs), [проверки](../../../tests/OpenRTS.Tests/GroupPlanningChecks.cs), [сырые измерения](measurements.json), [верификация](../../verification/006-compact-group-navigation.md). Именно эти сценарии подтверждают свойства нашего кода; источники S001–S011 сами их не доказывают.
 
 ## Связь выводов с доказательствами
 

@@ -112,7 +112,7 @@ internal static class LocomotionChecks
                 NavigationChecks.Check(Poses(world)[0].Current.X == 1536 + factor, "Fractional speed lost distance: " + factor);
             }
         });
-        test("Transit-only ground permits crossing but rejects destinations and spawning", () =>
+        test("Transit-only ground permits crossing, redirects goals and rejects spawning", () =>
         {
             var grid = new NavigationGrid(7, 5, terrain: Enumerable.Range(0, 35).Select(i => i % 7 == 3 ? (byte)1 : (byte)0));
             var profile = new Locomotor("bridge", [TerrainRule.Ground, new(true, false, 1024, 1024)]);
@@ -124,7 +124,7 @@ internal static class LocomotionChecks
             NavigationChecks.Check(Poses(world)[0].Current.X == 5632, "Transit-only ground became a wall");
             world.Step([new(42, 0, 1, CommandKind.Move, new(1), new(3584, 2560)),
                 new(42, 0, 2, CommandKind.Spawn, Position: new(3584, 1536))]);
-            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute) && world.Count == 1 && world.MovingCount == 0, "Forbidden stopping position was accepted");
+            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted) && world.Count == 1 && profile.Rules[grid.TerrainAt(grid.CellAt(Poses(world)[0].Order.Destination))].CanStop, "Forbidden stopping position was accepted");
         });
         test("Profile-aware geometry keeps a tracked body's edge out of water", () =>
         {
@@ -134,9 +134,9 @@ internal static class LocomotionChecks
             NavigationChecks.Reject<ArgumentException>(() => world.AddInitialUnit(0, new(3000, 1536)));
             world.AddInitialUnit(0, new(1536, 1536));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(3000, 1536))]);
-            NavigationChecks.Check(world.MovingCount == 0 && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute), "Body entered a forbidden terrain edge");
+            NavigationChecks.Check(Poses(world)[0].Order.Destination.X < 2816 && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Body entered a forbidden terrain edge");
         });
-        test("Mixed groups reject incompatible stop areas atomically and preserve worker parity", () =>
+        test("Mixed groups project incompatible stop areas and preserve worker parity", () =>
         {
             var land = new Locomotor("land", [TerrainRule.Ground, TerrainRule.Blocked]);
             var amphibian = new Locomotor("amphibian", [TerrainRule.Ground, new(true, true, 512, 2048)]);
@@ -151,7 +151,7 @@ internal static class LocomotionChecks
                 WorldCommand[] commands = tick == 1 ? [new(1, 0, 1, CommandKind.MoveGroup, Position: new(9728, 3584))] :
                     tick == 2 ? [new(2, 0, 1, CommandKind.MoveGroup, Position: new(6656, 3584))] : [];
                 a.Step(commands); b.Step(commands);
-                if (tick == 1) NavigationChecks.Check(a.MovingCount == 0 && a.Events.ToArray().Single().Kind == WorldEventKind.NoRoute, "Incompatible group partly changed orders");
+                if (tick == 1) NavigationChecks.Check(a.MovingCount == 2 && a.Events.ToArray().Single().Kind == WorldEventKind.DestinationAdjusted, "Incompatible group partly changed orders");
                 NavigationChecks.Check(a.Report() == b.Report(), "Mixed group changed with worker count");
             }
             NavigationChecks.Check(a.MovingCount == 0, "Compatible mixed group did not finish");
@@ -176,7 +176,7 @@ internal static class LocomotionChecks
                 if (tick == 1) NavigationChecks.Check(a.NavigationBuiltFields == 2, "Expected one shared field per locomotor");
             }
         });
-        test("Stopping on one's current transit cell cannot cancel a valid crossing", () =>
+        test("Clicking the current transit cell resolves a legal stopping point", () =>
         {
             var grid = new NavigationGrid(7, 5, terrain: Enumerable.Range(0, 35).Select(i => i % 7 == 3 ? (byte)1 : (byte)0));
             var profile = new Locomotor("bridge", [TerrainRule.Ground, new(true, false, 1024, 1024)]);
@@ -186,7 +186,7 @@ internal static class LocomotionChecks
             var position = Poses(world)[0].Current;
             NavigationChecks.Check(grid.TerrainAt(grid.CellAt(position)) == 1, "Fixture did not reach transit ground");
             world.Step([new(14, 0, 1, CommandKind.Move, new(1), position)]);
-            NavigationChecks.Check(world.MovingCount == 1 && Poses(world)[0].Current != position && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute), "Illegal endpoint stopped a unit on transit ground");
+            NavigationChecks.Check(world.MovingCount == 1 && Poses(world)[0].Current != position && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Illegal endpoint stopped a unit on transit ground");
         });
         test("10000 weighted group members share terrain trees instead of individual global fields", () =>
         {

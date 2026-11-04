@@ -170,11 +170,11 @@ internal static class GroupPlanningChecks
             for (int i = 0; i < 160 && a.MovingCount > 0; i++) { Separated(a); a.Step(); }
             NavigationChecks.Check(a.MovingCount == 0 && a.Count == 3, "Membership changes froze a synchronized edge");
         });
-        test("Boundary placement stays compact and blocked anchors reject atomically", () =>
+        test("Boundary placement stays compact and blocked anchors project explicitly", () =>
         {
             var grid = new NavigationGrid(8, 8, [new(7, 7)]); var world = World(grid, [new(1, 1), new(2, 1), new(1, 2), new(2, 2)], speed: 1024);
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(7, 7))))]);
-            NavigationChecks.Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.NoRoute && world.MovingCount == 0, "A blocked assigned endpoint was silently reassigned");
+            NavigationChecks.Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.DestinationAdjusted && world.GroupSlotCount == 4, "Blocked anchor was not explicitly corrected");
             world.Step([new(2, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(7, 1))))]);
             for (int i = 0; i < 8 && world.MovingCount > 0; i++) { Separated(world); world.Step(); }
             var poses = Poses(world).OrderBy(p => p.Id.Value).ToArray();

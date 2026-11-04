@@ -89,6 +89,10 @@ def main():
     if "ERROR:" in controls.stderr or "OPENRTS_CONTROLS:PASS" not in controls.stdout:
         raise RuntimeError("Showcase controls failed:\n" + controls.stdout + controls.stderr)
     print("PASS SpriteFrames, layered presentation, alpha, states and showcase input", flush=True)
+    rts = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-rts-controls"])
+    if "ERROR:" in rts.stderr or "OPENRTS_RTS_CONTROLS:PASS" not in rts.stdout:
+        raise AssertionError("RTS selection/action/cursor verification failed: " + rts.stdout + rts.stderr)
+    print("PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:
