@@ -6,7 +6,7 @@ namespace OpenRTS.Content;
 
 public enum ModelFacing { Body, Weapon }
 public sealed record ModelPart(string Id, int Parent, string Resource, ModelFacing Facing,
-    double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer);
+    double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer, string? Mount = null);
 public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash);
 public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
@@ -41,7 +41,7 @@ public sealed class ModelCatalog
                     int parent = part.Parent is null ? -1 : ordered.FindIndex(p => p.Id == part.Parent);
                     if (part.Parent is not null && parent < 0) continue;
                     ValidateVector(part.Size, 0.01, 32, "Size"); ValidateVector(part.Pivot, 0, 1, "Pivot"); ValidateVector(part.Offset, -32, 32, "Offset");
-                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer));
+                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount));
                     pending.RemoveAt(i--); progress = true;
                 }
                 if (!progress) throw node.Error(id + ".Model.Parts", "Part parent cycle.");
@@ -75,6 +75,8 @@ public sealed class ModelCatalog
         {
             var binding = units.Presentations[i]; if (binding.Model is null) continue;
             if (!Models.TryGetValue(binding.Model, out var model)) throw new ArgumentException($"Unit {binding.UnitId}: unknown model {binding.Model}.");
+            foreach (var part in model.Parts)
+                if (part.Mount is not null && !units.Units[i].Weapons.Any(m => m.Id == part.Mount)) throw new ArgumentException($"Unit {binding.UnitId}: unknown mount {part.Mount}.");
             foreach (string animation in units.Units[i].Animations)
                 if (!model.Animations.ContainsKey(animation)) throw new ArgumentException($"Unit {binding.UnitId}: model lacks animation {animation}.");
             foreach (string state in units.Units[i].States)
@@ -93,6 +95,7 @@ public sealed class ModelCatalog
     {
         [Required] public string Resource { get; set; } = "";
         public string? Parent { get; set; }
+        public string? Mount { get; set; }
         public ModelFacing Facing { get; set; }
         public double[] Size { get; set; } = [1, 1];
         public double[] Pivot { get; set; } = [0.5, 0.5];

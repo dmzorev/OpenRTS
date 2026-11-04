@@ -1,0 +1,86 @@
+{
+  "retrieved": "2026-11-04",
+  "scope": "Focused primary-source inspection; no implementation code imported",
+  "sources": [
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/Armament.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/Armament.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/Armament.cs",
+      "bytes": 14061,
+      "sha256": "80b219e7cbd4ce1452f1f3517b97bfedcf6685cf75fdb6469263b77282195680",
+      "id": "S01"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Game/GameRules/WeaponInfo.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Game/GameRules/WeaponInfo.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Game/GameRules/WeaponInfo.cs",
+      "bytes": 8270,
+      "sha256": "693193abcedd752067618cf3c0e14f96d4f4d7439798acb064cc5911546fa39b",
+      "id": "S02"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Projectiles/Bullet.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Projectiles/Bullet.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Projectiles/Bullet.cs",
+      "bytes": 13689,
+      "sha256": "c30bc48262113be626a24637deaa85a62086a0c45a75efa9e97cb57c77008e13",
+      "id": "S03"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Projectiles/Missile.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Projectiles/Missile.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Projectiles/Missile.cs",
+      "bytes": 37877,
+      "sha256": "a1f19328735363ea8613940694cfa5747673c8002232313c306dbbfd52bd7b36",
+      "id": "S04"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Warheads/DamageWarhead.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/DamageWarhead.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/DamageWarhead.cs",
+      "bytes": 3171,
+      "sha256": "bfb6f8803ce2e3f0f0a3509a709210549e9ef0dd1ead3f60cbcae22f5b35b6d9",
+      "id": "S05"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "bytes": 4971,
+      "sha256": "dec78f237d58485c217ab799c79f9093a02fd12273155dd75e878280e6ed9c57",
+      "id": "S06"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/InstantlyRepairs.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/InstantlyRepairs.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/InstantlyRepairs.cs",
+      "bytes": 5564,
+      "sha256": "a2ff0969f80f83307ec6a17504bf5cc95ec0c3d031797c308e1b1c5265623dcc",
+      "id": "S07"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/components/DelayedDamage.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/DelayedDamage.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/DelayedDamage.js",
+      "bytes": 3550,
+      "sha256": "36243f3881c5c93ec887a7d94f6862aab74e3f7ecdcda514fc768eed92e783f8",
+      "id": "S08"
+    }
+  ]
+}

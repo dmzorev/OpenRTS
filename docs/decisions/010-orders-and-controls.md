@@ -72,3 +72,5 @@ RtsOverlay рисует анимированные векторные курсо
 | sandbox/Controls, Verification | Управление полигона и проверки; Sandbox.cs остаётся точкой входа сцены |
 
 Partial-файлы SimulationWorld остаются одним типом OpenRTS.Core, независимо от каталога. GlobalUsings проектов явно связывают подпространства. Локальные потребители обновлены; импорт MIT-библиотеки DeclarativeContent не менялся. Версии: direct hash 4, navigation hash 8, UnitCatalog fingerprint 4.
+
+Дополнение этапа 011: сценарии перенесены в sandbox/Scenarios (OpenRTS.Samples); минимальный hitscan заменён [системой оружия и снарядов](011-weapons-and-projectiles.md). Форматы и численные отчёты этого документа исторические.

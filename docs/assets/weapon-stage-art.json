@@ -1,0 +1,29 @@
+{
+  "tool": "built-in imagegen",
+  "assets": [
+    {
+      "asset": "sandbox/assets/units/engineer.png",
+      "source": "docs/assets/sources/engineer-source.png",
+      "source_sha256": "92a0a4ba8ed10f592702c68024615819dc0a2914a3eb7daae365a326eaec0eb9",
+      "sha256": "deea7559e867be531a2f196ddf28480ac2c721d901e5d4987b3ce4e6d01f8df2",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit1160, center1254; original alpha preserved",
+      "prompt": "Use case: stylized-concept. Asset: transparent top-down RTS game sprite, engineering repair vehicle. Create a single wheeled armored engineering service vehicle, strict orthographic directly overhead, front pointing up. Olive drab painted metal, dark rubber wheels, restrained hand-painted crisp industrial details matching reference style; service crane folded along hull, tool lockers and welding equipment, no gun. Bright flat magenta team-color panels on hood and rear, no text or insignia. Entire vehicle centered with transparent alpha background and margin, no ground plane, no cast shadow outside silhouette. Readable at small game scale."
+    },
+    {
+      "asset": "sandbox/assets/units/mixed-turret.png",
+      "source": "docs/assets/sources/mixed-turret-source.png",
+      "source_sha256": "df8fe906ad3d87500fed10963dd18b4155eb3384b970cea96ad069bd3c6ce56d",
+      "sha256": "d5bb6b029c3d4cd23df5d213d4161c0ef640cb7000f4dfa93bcade272ec57fa0",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit1160, center1254; original alpha preserved",
+      "prompt": "Use case: stylized-concept. Asset: single transparent top-down RTS game turret sprite. Strict orthographic directly overhead, front and two medium-length autocannon barrels pointing up; compact olive drab armored turret with paired cannon and two side missile pods inspired by classic combined air-defense game vehicles. ONLY detachable turret, no chassis or ground. Painted crisp industrial style matching reference, dark metal and olive, several flat vivid magenta team-color panels, no writing or insignia. Centered entire object with margin, genuinely transparent alpha background, no backdrop or external shadow. Designed as a readable small game sprite."
+    },
+    {
+      "asset": "sandbox/assets/units/bunker-base.png",
+      "source": "docs/assets/sources/bunker-base-source.png",
+      "source_sha256": "7a607f8076a65c0fff45bb52918aa259a8881f259f1dfee9f09bac5c60b9de5b",
+      "sha256": "aaddb85d55aeb1144ae6b15a00ad2addc7be433031d9653673c33cb6a68aad73",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit1160, center1254; original alpha preserved",
+      "prompt": "Use case: stylized-concept. Asset: transparent RTS game bunker base sprite. Strict orthographic top-down directly overhead. Single squat octagonal concrete pillbox base with armored roof and empty round mounting socket at the exact center for a separately rendered game turret. Weathered gray concrete and olive metal, crisp hand-painted industrial game art matching the reference style. A few flat vivid magenta team color panels at edges. No turret, barrels, weapons, characters, lettering or scenery. Whole small building centered with margin. Transparent alpha outside silhouette, no cast shadow or ground plane."
+    }
+  ]
+}

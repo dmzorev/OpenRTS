@@ -60,6 +60,7 @@ public sealed partial class SimulationWorld
                 if (dx != 0 || dy != 0) entity.WeaponFacing = new(dx, dy);
             }
             else entity.WeaponFacing = entity.BodyFacing;
+            foreach (ref var mount in entity.Weapons.AsSpan()) if (mount.Target.Value == 0) mount.Facing = entity.WeaponFacing;
         }
     }
 

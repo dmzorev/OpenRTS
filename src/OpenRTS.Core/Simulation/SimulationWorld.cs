@@ -19,8 +19,9 @@ public sealed partial class SimulationWorld
         public bool HasOrder;
         public OrderPhase OrderPhase;
         public Queue<UnitOrder>? PendingOrders;
-        public EntityId CombatTarget, ChargingTarget;
-        public long FireAtTick, WeaponReadyTick, OrderStarted, OrderGroup;
+        public WeaponState[] Weapons;
+        public EntityId CombatTarget;
+        public long WeaponReadyTick, OrderStarted, OrderGroup;
         public bool GroupMember;
         public int WaitTicks, PathLength, PathCursor;
         public EntityId YieldFor;
@@ -48,7 +49,6 @@ public sealed partial class SimulationWorld
     private readonly MotionIndex? _combatIndex;
     private CancellationToken _stepCancellation;
     private long _orderGroupSequence;
-    private readonly Func<int, int, int, bool> _canAcquire;
     private int[] _movementOrder = [], _navigationGoals = [];
     private bool _orderDirty = true, _failed;
     private readonly IComparer<int> _idOrder;
@@ -86,7 +86,6 @@ public sealed partial class SimulationWorld
         if (tickRate < 1 || tickRate > 1000) throw new ArgumentOutOfRangeException(nameof(tickRate));
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
-        _canAcquire = InWeaponRange;
         _types = unitTypes.ToArray();
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
@@ -168,6 +167,7 @@ public sealed partial class SimulationWorld
         {
             ref var entity = ref _entities[i];
             entity.Previous = entity.Position;
+            foreach (ref var mount in entity.Weapons.AsSpan()) mount.PreviousFacing = mount.Facing;
             entity.PreviousBodyFacing = entity.BodyFacing; entity.PreviousWeaponFacing = entity.WeaponFacing;
         }
         try
@@ -190,13 +190,15 @@ public sealed partial class SimulationWorld
     {
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < Count) throw new ArgumentException("Destination is too small.", nameof(destination));
+        int weaponOffset = 0;
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i];
             destination[i] = new(entity.Id, entity.UnitType, entity.Previous, entity.Position,
                 new(entity.Owner, entity.PreviousBodyFacing, entity.BodyFacing, entity.PreviousWeaponFacing, entity.WeaponFacing,
                     entity.BodyAnimation, entity.WeaponAnimation, entity.VisualStates),
-                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health);
+                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health, weaponOffset, entity.Weapons.Length);
+            weaponOffset += entity.Weapons.Length;
         }
     }
 
@@ -206,17 +208,13 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 4 : 8);
+            writer.Write(_navigation is null ? 5 : 9);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
             foreach (var type in _types)
             {
-                writer.Write(type.Id); writer.Write(type.MaxHealth); type.Locomotor.WriteState(writer);
-                writer.Write(type.Weapon is not null);
-                if (type.Weapon is { } weapon) { writer.Write(weapon.Range); writer.Write(weapon.AcquireRange); writer.Write(weapon.Damage); writer.Write(weapon.CooldownTicks); writer.Write(weapon.WindupTicks); }
-                writer.Write(type.Animations.Count); foreach (var name in type.Animations) writer.Write(name);
-                writer.Write(type.States.Count); foreach (var name in type.States) writer.Write(name);
+                type.WriteState(writer);
             }
             writer.Write(_orderGroupSequence); writer.Write(Count);
             foreach (var entity in _entities.AsSpan(0, Count).ToArray().OrderBy(e => e.Id.Value))
@@ -226,7 +224,7 @@ public sealed partial class SimulationWorld
                 writer.Write(entity.Target.X); writer.Write(entity.Target.Y); writer.Write(entity.Target.Elevation);
                 writer.Write(entity.Moving);
                 writer.Write(entity.MovementRemainder);
-                WritePresentation(writer, entity); WriteOrders(writer, entity);
+                WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entity.GoalCell); writer.Write(entity.GroupMember); writer.Write(entity.WaitTicks);
@@ -239,6 +237,7 @@ public sealed partial class SimulationWorld
                     { writer.Write(point.X); writer.Write(point.Y); }
                 }
             }
+            WriteProjectiles(writer);
             _navigation?.WriteState(writer);
             writer.Write(_weighted is not null); _weighted?.WriteState(writer);
             if (_navigation is not null)
@@ -253,10 +252,10 @@ public sealed partial class SimulationWorld
 
     private void Apply(WorldCommand command)
     {
-        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.Stop or CommandKind.HoldPosition)
+        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.Stop or CommandKind.HoldPosition)
         {
             var members = Recipients(command);
-            var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack,
+            var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair,
                 CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
             if (_navigation is not null && (command.Kind is CommandKind.MoveGroup or CommandKind.MoveSelected || command.Kind == CommandKind.AttackMove && members.Length > 1))
                 SetGroupTarget(command.Position, members, action, command.Queued);
@@ -332,6 +331,8 @@ public sealed partial class SimulationWorld
     private bool SetTarget(int index, WorldPosition position)
     {
         ref var entity = ref _entities[index];
+        if (!_types[entity.UnitType].Movable && position != entity.Position)
+        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entity.Id)); return false; }
         if (_navigation is not null)
         {
             if (!Resolver(entity.UnitType).Resolve(entity.Position, position, out var resolved, _stepCancellation))
@@ -365,6 +366,7 @@ public sealed partial class SimulationWorld
         var id = new EntityId(_nextId++);
         _entities[Count] = new() { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
             Previous = position, Position = position, Target = position, Owner = owner, VisualStates = states,
+            Weapons = _types[unitType].Weapons.Select(_ => new WeaponState { Facing = FacingDirection.North, PreviousFacing = FacingDirection.North, Animation = AnimationPlayback.None }).ToArray(),
             BodyFacing = FacingDirection.North, PreviousBodyFacing = FacingDirection.North,
             WeaponFacing = FacingDirection.North, PreviousWeaponFacing = FacingDirection.North,
             BodyAnimation = new(_types[unitType].IdleAnimation, Tick, 0), WeaponAnimation = AnimationPlayback.None,

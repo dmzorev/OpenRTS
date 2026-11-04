@@ -28,33 +28,25 @@ public sealed class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(4); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(5); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
             foreach (var unit in units)
             {
-                writer.Write(unit.Id);
-                writer.Write(unit.MaxHealth);
-                writer.Write(unit.Weapon is not null);
-                if (unit.Weapon is { } weapon) { writer.Write(weapon.Range); writer.Write(weapon.AcquireRange); writer.Write(weapon.Damage); writer.Write(weapon.CooldownTicks); writer.Write(weapon.WindupTicks); }
-                writer.Write(unit.Locomotor.Id); writer.Write(unit.Locomotor.Rules.Count);
-                foreach (var rule in unit.Locomotor.Rules)
-                { writer.Write(rule.Traverse); writer.Write(rule.CanStop); writer.Write(rule.Speed); writer.Write(rule.Cost); }
-                writer.Write(unit.Animations.Count); foreach (var name in unit.Animations) writer.Write(name);
-                writer.Write(unit.States.Count); foreach (var name in unit.States) writer.Write(name);
+                unit.WriteState(writer);
             }
         }
         Summary = new(units.Length, Convert.ToHexString(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length))));
     }
 
-    public static UnitCatalog Load(IEnumerable<ContentSource> sources, LocomotionCatalog? locomotion = null)
+    public static UnitCatalog Load(IEnumerable<ContentSource> sources, LocomotionCatalog? locomotion = null, WeaponCatalog? weapons = null)
     {
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>()
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
             .Register<MovementOptions>("Movement", (_, _, options) => options)
-            .Register<WeaponOptions>("Weapon", (_, _, options) => options)
+            .Register<ArmamentOptions>("Armaments", (_, _, options) => options)
             .Register<PresentationOptions>("Presentation", (_, _, options) => options);
         registry.ValidateTemplates(definitions);
         var entries = definitions.Concrete.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
@@ -67,10 +59,15 @@ public sealed class UnitCatalog
             var movement = traits.All<MovementOptions>().SingleOrDefault(); Locomotor? profile = null;
             if (movement is not null && (locomotion is null || !locomotion.Profiles.TryGetValue(movement.Locomotor, out profile)))
                 throw definition.Error(id + ".Movement.Locomotor", "Unknown locomotor: " + movement.Locomotor);
-            var weapon = traits.All<WeaponOptions>().SingleOrDefault();
-            try { units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile,
-                weapon is null ? null : new WeaponDefinition(weapon.Range, weapon.AcquireRange, weapon.Damage, weapon.CooldownTicks, weapon.WindupTicks)); }
-            catch (ArgumentException error) { throw definition.Error(id + ".Presentation", error.Message); }
+            var armaments = traits.All<ArmamentOptions>().SingleOrDefault();
+            var mounts = new List<WeaponMountDefinition>();
+            if (armaments is not null) foreach (var (name, mount) in armaments.Mounts.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                if (weapons is null || !weapons.Weapons.TryGetValue(mount.Weapon, out var weapon)) throw definition.Error(id + ".Armaments." + name, "Unknown weapon: " + mount.Weapon);
+                mounts.Add(new(name, weapon, mount.Animation, mount.FireWhileMoving));
+            }
+            try { units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? true); }
+            catch (ArgumentException error) { throw definition.Error(id, error.Message); }
             bindings[i] = new(id, visual?.Model, visual?.Name ?? id);
         }
         if (units.Length == 0)
@@ -89,14 +86,14 @@ public sealed class UnitCatalog
     private sealed class HealthOptions
     {
         [Required, Range(1, int.MaxValue)] public int HP { get; set; }
+        public ArmorKind Armor { get; set; }
     }
-    private sealed class WeaponOptions
+    private sealed class ArmamentOptions { public Dictionary<string, MountOptions> Mounts { get; set; } = new(); }
+    private sealed class MountOptions
     {
-        public int Range { get; set; } = 4096;
-        public int AcquireRange { get; set; } = 8192;
-        public int Damage { get; set; } = 10;
-        public int CooldownTicks { get; set; } = 20;
-        public int WindupTicks { get; set; } = 2;
+        [Required] public string Weapon { get; set; } = "";
+        public string Animation { get; set; } = "fire";
+        public bool FireWhileMoving { get; set; }
     }
-    private sealed class MovementOptions { [Required] public string Locomotor { get; set; } = ""; }
+    private sealed class MovementOptions { [Required] public string Locomotor { get; set; } = ""; public bool Enabled { get; set; } = true; }
 }

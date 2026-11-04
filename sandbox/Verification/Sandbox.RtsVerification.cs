@@ -26,12 +26,12 @@ public partial class Sandbox
                 _Input(new InputEventMouseMotion { Position = end, Relative = end - start, ButtonMask = MouseButtonMask.Left });
                 Check(_rtsOverlay!.Marquee is not null, "Drag marquee");
                 _Input(new InputEventMouseButton { Pressed = false, ButtonIndex = MouseButton.Left, Position = end });
-                Check(_selection.Count == 5 && Controlled().Length == 5, "Box must select only owned units");
-                Click(6, shift: true); Check(_selection.Count == 5, "Shift cannot mix an enemy into an owned selection");
+                Check(_selection.Count == 10 && Controlled().Length == 10, "Box must select only owned units");
+                Click(6, shift: true); Check(_selection.Count == 10, "Shift cannot mix an enemy into an owned selection");
                 var originals = _displayPoses.Take(_displayCount).ToArray();
-                _displayPoses = [.. originals, originals[0] with { Id = new(11), Current = originals[0].Current with { X = originals[0].Current.X + 2048 } }];
+                _displayPoses = [.. originals, originals[0] with { Id = new(100001), Current = originals[0].Current with { X = originals[0].Current.X + 2048 } }];
                 _displayCount++; RefreshSelection(); Click(1, doubleClick: true);
-                Check(_selection.Count == 2 && _selection.Contains(new(11)), "Double click selects visible same-type units");
+                Check(_selection.Count == 2 && _selection.Contains(new(100001)), "Double click selects visible same-type units");
                 Click(2, ctrl: true); Check(_selection.Count == 1 && _selected.Value == 2, "Ctrl-click type filter");
                 _displayPoses = originals; _displayCount = originals.Length; RefreshSelection();
                 Click(1); Click(2, shift: true); KeyInput(Key.Key1, ctrl: true);

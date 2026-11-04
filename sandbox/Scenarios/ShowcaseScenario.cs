@@ -1,11 +1,15 @@
 using OpenRTS.Core;
 
-namespace OpenRTS.Content.Scenarios;
+using OpenRTS.Content;
+using OpenRTS.Core.Navigation;
+using OpenRTS.Core.Orders;
+
+namespace OpenRTS.Samples;
 
 /// <summary>Presentation fixture; terrain types are visual here, not locomotor rules.</summary>
 public static class ShowcaseScenario
 {
-    public const int Width = 48, Height = 32, TileSize = 4, UnitCount = 10;
+    public const int Width = 48, Height = 32, TileSize = 4, UnitCount = 20;
     public static readonly string[] TerrainIds = ["road", "grass", "mud", "water", "forest", "swamp", "mountains"];
     public static string TerrainAt(int x, int y)
     {
@@ -34,6 +38,12 @@ public static class ShowcaseScenario
             int x = team == 0 && i == 3 ? 42 : 7 + i * 6, y = team == 0 ? 12 : 23;
             uint states = team == 0 && i == 3 ? catalog.Units[type].StateMask("swimming") : 0;
             world.AddInitialUnit(type, new(x * 1024, y * 1024), (uint)(team + 1), states);
+        }
+        string[] extras = ["grenadier", "engineer", "tank-mixed", "bunker-cannon", "bunker-mixed"];
+        for (int team = 0; team < 2; team++) for (int i = 0; i < extras.Length; i++)
+        {
+            int type = catalog.Units.ToList().FindIndex(u => u.Id == extras[i]);
+            world.AddInitialUnit(type, new((18 + i * 4) * 1024, (team == 0 ? 6 : 25) * 1024), (uint)(team + 1));
         }
         return world;
     }

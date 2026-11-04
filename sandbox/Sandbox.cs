@@ -15,6 +15,7 @@ public partial class Sandbox : Node3D
     private UnitCatalog? _catalog;
     private WorldView? _view;
     private SpriteWorldView? _sprites;
+    private CombatEffectsView? _combatEffects;
     private bool _showcase, _verifyPresentation;
     private readonly SelectionState _selection = new();
     private EntityId _selected { get => _selection.Primary; set => _selection.Change(value.Value == 0 ? [] : [value], SelectionChange.Replace); }
@@ -71,7 +72,8 @@ public partial class Sandbox : Node3D
             using var terrain = Godot.FileAccess.Open("res://content/terrain.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть terrain.yaml.");
             _catalog = UnitCatalog.Load([new ContentSource("content/units.yaml", file.GetAsText())],
-                LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]));
+                LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]),
+                WeaponCatalog.Load([new("weapons.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/weapons.yaml")))]));
             if (verify)
             {
                 var preview = PreviewRenderer.Create(_catalog.Units[0], _count);
@@ -87,8 +89,10 @@ public partial class Sandbox : Node3D
                 {
                     using var models = Godot.FileAccess.Open("res://content/models.yaml", Godot.FileAccess.ModeFlags.Read)
                         ?? throw new InvalidOperationException("Не удалось открыть models.yaml.");
-                    _sprites = new(_catalog, ModelCatalog.Load([new("models.yaml", models.GetAsText())]));
-                    AddChild(new TerrainView().Node); AddChild(_sprites.Node); CreateSelectionRing();
+                    _sprites = new(_catalog, ModelCatalog.Load([new("models.yaml", models.GetAsText())]), TeamColor);
+                    _combatEffects = new(_catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
+                    AddChild(_combatEffects.Node);
+                    AddChild(new TerrainView(ShowcaseScenario.Width, ShowcaseScenario.Height, ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
                 }
                 else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
                 if (_navigation)
@@ -116,6 +120,7 @@ public partial class Sandbox : Node3D
         if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _pointerDown = false; }
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
+        _combatEffects?.Clear();
         _session = new SimulationSession(() => _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
             _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
@@ -123,6 +128,8 @@ public partial class Sandbox : Node3D
             maximumEventBacklog: Math.Max(65536, _count + 1024),
             playbackSpeed: _verifySimulation ? 1 : _playbackSpeed, startPaused: !_verifySimulation && _paused);
     }
+
+    private static Color TeamColor(uint owner) => owner switch { 1 => new(0.14f, 0.52f, 1), 2 => new(1, 0.20f, 0.16f), _ => new(0.72f, 0.78f, 0.80f) };
 
     public override void _Process(double delta)
     {
@@ -136,7 +143,7 @@ public partial class Sandbox : Node3D
             if (frame is null) return;
             float alpha = completed ? 1 : _session.GetInterpolationAlpha(frame.Tick);
             _view?.Apply(frame.Poses, alpha);
-            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate);
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
             if (_showcase)
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
@@ -147,6 +154,8 @@ public partial class Sandbox : Node3D
             _obstacles?.Apply(frame.Grid);
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             while (_session.TryReadEvent(out var value))
+            {
+                _combatEffects?.Accept(value);
                 _notice = value.Kind switch
                 {
                     WorldEventKind.DestinationAdjusted => "Цель скорректирована к ближайшему достижимому месту.",
@@ -157,6 +166,8 @@ public partial class Sandbox : Node3D
                     WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
                     _ => _notice
                 };
+            }
+            _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick);
             else if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +

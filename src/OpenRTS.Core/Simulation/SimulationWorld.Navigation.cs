@@ -203,7 +203,7 @@ public sealed partial class SimulationWorld
     private void TryYield(int requesterIndex, int blockerIndex)
     {
         ref var requester = ref _entities[requesterIndex]; ref var blocker = ref _entities[blockerIndex];
-        if (requester.Owner != blocker.Owner || blocker.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
+        if (!_types[blocker.UnitType].Movable || requester.Owner != blocker.Owner || blocker.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
             !requester.GroupMember && requester.Target == blocker.Position) return;
         if (blocker.Moving && blocker.Id.Value < requester.Id.Value) return;
         NavigationLocalSearches++;

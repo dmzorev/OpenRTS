@@ -49,6 +49,7 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
 PresentationChecks.Run(Test);
 LocomotionChecks.Run(Test);
 OrderChecks.Run(Test);
+WeaponChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

@@ -2,7 +2,7 @@ using Godot;
 
 namespace OpenRTS.Godot.Controls;
 
-public enum RtsCursor { Default, Select, Inspect, Move, AdjustedMove, Attack, Unavailable }
+public enum RtsCursor { Default, Select, Inspect, Move, AdjustedMove, Attack, Unavailable, Repair }
 
 /// <summary>Animated vector cursors and marquee; UI time intentionally continues while the match is paused.</summary>
 public partial class RtsOverlay : Control
@@ -19,7 +19,7 @@ public partial class RtsOverlay : Control
         { DrawRect(box, new Color(0.2f, 0.8f, 1, 0.12f)); DrawRect(box, new Color(0.4f, 0.9f, 1), false, 1.5f); }
         Vector2 p = Pointer; float pulse = 0.5f + MathF.Sin(_time * 6) * 0.5f;
         var color = Cursor switch
-        { RtsCursor.Attack => new Color(1, 0.25f, 0.18f), RtsCursor.Unavailable => new Color(1, 0.35f, 0.3f),
+        { RtsCursor.Repair => new Color(0.2f, 1, 0.6f), RtsCursor.Attack => new Color(1, 0.25f, 0.18f), RtsCursor.Unavailable => new Color(1, 0.35f, 0.3f),
             RtsCursor.AdjustedMove => new Color(1, 0.77f, 0.25f), RtsCursor.Move => new Color(0.35f, 1, 0.55f),
             RtsCursor.Select => new Color(0.3f, 0.85f, 1), _ => Colors.White };
         if (Cursor is RtsCursor.Default or RtsCursor.Select or RtsCursor.Inspect)
@@ -38,7 +38,8 @@ public partial class RtsOverlay : Control
                 var direction = Vector2.FromAngle(d * MathF.PI / 2);
                 DrawLine(p + direction * 12, p + direction * (18 + pulse * 2), color, 2, true);
             }
-            if (Cursor == RtsCursor.Attack) { DrawLine(p - Vector2.One * 4, p + Vector2.One * 4, color, 1.5f); DrawLine(p + new Vector2(-4, 4), p + new Vector2(4, -4), color, 1.5f); }
+            if (Cursor == RtsCursor.Repair) { DrawLine(p + new Vector2(-5, 0), p + new Vector2(5, 0), color, 3); DrawLine(p + new Vector2(0, -5), p + new Vector2(0, 5), color, 3); }
+            else if (Cursor == RtsCursor.Attack) { DrawLine(p - Vector2.One * 4, p + Vector2.One * 4, color, 1.5f); DrawLine(p + new Vector2(-4, 4), p + new Vector2(4, -4), color, 1.5f); }
             else { DrawLine(p + new Vector2(-4, -2), p + new Vector2(0, 3), color, 2); DrawLine(p + new Vector2(0, 3), p + new Vector2(6, -6), color, 2); }
             if (Cursor == RtsCursor.AdjustedMove) DrawString(ThemeDB.FallbackFont, p + new Vector2(15, 28), "↪", HorizontalAlignment.Left, -1, 20, color);
         }

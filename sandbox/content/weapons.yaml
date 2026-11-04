@@ -1,0 +1,56 @@
+rifle:
+  Weapon:
+    Range: 4096
+    AcquireRange: 8192
+    Damage: 12
+    Burst: 3
+    BurstIntervalTicks: 3
+    ReloadTicks: 24
+    WindupTicks: 1
+    Versus: {Living: 100, Mechanical: 10, Building: 10}
+
+cannon:
+  Weapon:
+    Range: 6144
+    AcquireRange: 8192
+    Projectile: Cannon
+    Speed: 448
+    Damage: 70
+    ReloadTicks: 38
+    WindupTicks: 3
+    Versus: {Living: 10, Mechanical: 150, Building: 90}
+
+missile:
+  Weapon:
+    Range: 6144
+    AcquireRange: 8192
+    Projectile: Missile
+    Speed: 192
+    TravelLimit: 12288
+    Damage: 35
+    ReloadTicks: 48
+    WindupTicks: 4
+    Versus: {Living: 100, Mechanical: 100, Building: 100}
+
+grenade:
+  Weapon:
+    Range: 4096
+    AcquireRange: 6144
+    Projectile: Grenade
+    Speed: 224
+    SplashRadius: 1800
+    Damage: 45
+    ReloadTicks: 65
+    WindupTicks: 4
+    Versus: {Living: 140, Mechanical: 20, Building: 160}
+
+repair:
+  Weapon:
+    Effect: Repair
+    Range: 2048
+    AcquireRange: 2048
+    Damage: 18
+    ReloadTicks: 8
+    WindupTicks: 1
+    AnimationTicks: 6
+    Versus: {Living: 0, Mechanical: 100, Building: 100}

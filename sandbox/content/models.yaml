@@ -11,6 +11,7 @@ infantry-rifle:
     Parts:
       body:
         Facing: Weapon
+        Mount: main
         Resource: res://resources/units/rifleman.tres
         Size: [1.25, 1.25]
         Pivot: [0.5, 0.64]
@@ -39,6 +40,7 @@ apc-machinegun:
       turret:
         Parent: body
         Facing: Weapon
+        Mount: main
         Resource: res://resources/units/apc-mg-turret.tres
         Size: [1.25, 1.25]
         Pivot: [0.5, 0.70]
@@ -74,3 +76,53 @@ tank:
         Offset: [0, -0.07]
     Animations:
       fire: {Sequence: shoot, Parts: [turret], Recoil: 0.12, Flash: 0.38}
+
+infantry-grenade:
+  Inherits: infantry-rifle
+
+engineer:
+  Inherits: ^sprite
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/engineer.tres
+        Size: [1.9, 1.9]
+    Animations:
+      idle: {Sequence: stand, Parts: [body]}
+      move: {Sequence: travel, Parts: [body], Bob: 0.008}
+      repair: {Sequence: shoot, Parts: [body], Flash: 0.15}
+
+tank-mixed:
+  Inherits: tank
+  Model:
+    Parts:
+      turret:
+        Resource: res://resources/units/mixed-turret.tres
+        Size: [2.0, 2.0]
+        Pivot: [0.5, 0.73]
+    Animations:
+      missiles: {Sequence: shoot, Parts: [turret], Flash: 0.5}
+
+bunker-cannon:
+  Inherits: tank
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/bunker-base.tres
+        Size: [2.6, 2.6]
+      turret:
+        Offset: [0, 0]
+    Animations:
+      move: {Sequence: stand, Parts: [body]}
+
+bunker-mixed:
+  Inherits: tank-mixed
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/bunker-base.tres
+        Size: [2.6, 2.6]
+      turret:
+        Offset: [0, 0]
+    Animations:
+      move: {Sequence: stand, Parts: [body]}

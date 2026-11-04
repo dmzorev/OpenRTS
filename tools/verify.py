@@ -34,10 +34,18 @@ def main():
             raise RuntimeError("Vendored source differs from recorded import: " + source["path"])
     print("PASS DeclarativeContent import and documented local changes match SHA-256", flush=True)
 
+    art = json.loads((ROOT / "docs/assets/weapon-stage-art.json").read_text())
+    for item in art["assets"]:
+        for path_key, hash_key in (("source", "source_sha256"), ("asset", "sha256")):
+            actual = hashlib.sha256((ROOT / item[path_key]).read_bytes()).hexdigest()
+            if actual != item[hash_key]:
+                raise RuntimeError("Weapon-stage art provenance differs: " + item[path_key])
+    print("PASS weapon-stage sprite sources and normalized assets match SHA-256", flush=True)
+
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 5:
-        raise RuntimeError("Expected five concrete unit definitions")
+    if expected["DefinitionCount"] != 10:
+        raise RuntimeError("Expected ten concrete unit definitions")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -83,12 +91,12 @@ def main():
 
     presentation = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-presentation"])
     showcase = report(run(headless + ["--showcase", "--ticks=12"]).stdout, "OPENRTS_SIMULATION:")
-    if "ERROR:" in presentation.stderr or "OPENRTS_PRESENTATION:PASS" not in presentation.stdout or report(presentation.stdout, "OPENRTS_SIMULATION:") != showcase:
+    if "ERROR:" in presentation.stderr or "OPENRTS_PRESENTATION:PASS" not in presentation.stdout or "OPENRTS_COMBAT_PRESENTATION:PASS" not in presentation.stdout or report(presentation.stdout, "OPENRTS_SIMULATION:") != showcase:
         raise RuntimeError("Presentation verification failed:\n" + presentation.stdout + presentation.stderr)
     controls = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--showcase", "--verify-controls"])
     if "ERROR:" in controls.stderr or "OPENRTS_CONTROLS:PASS" not in controls.stdout:
         raise RuntimeError("Showcase controls failed:\n" + controls.stdout + controls.stderr)
-    print("PASS SpriteFrames, layered presentation, alpha, states and showcase input", flush=True)
+    print("PASS SpriteFrames, layered presentation, combat effects, repair cursor, alpha, states and showcase input", flush=True)
     rts = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-rts-controls"])
     if "ERROR:" in rts.stderr or "OPENRTS_RTS_CONTROLS:PASS" not in rts.stdout:
         raise AssertionError("RTS selection/action/cursor verification failed: " + rts.stdout + rts.stderr)

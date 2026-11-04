@@ -8,6 +8,9 @@ public sealed class FrameExchange
     private sealed class Slot
     {
         public EntityPose[] Poses = [];
+        public WeaponPose[] Weapons = [];
+        public ProjectilePose[] Projectiles = [];
+        public int WeaponCount, ProjectileCount;
         public int Count, Readers, TickRate, NavigationWaitingCount, MovingCount, LocalSearches, Yields, GoalExchanges, QueueWaiting;
         public long Tick, Timestamp;
         public NavigationGrid? Grid;
@@ -28,6 +31,10 @@ public sealed class FrameExchange
             var slot = _slots[index];
             if (slot.Poses.Length < world.Count) Array.Resize(ref slot.Poses, Math.Max(world.Count, checked(Math.Max(16, slot.Poses.Length * 2))));
             world.CopyPoses(slot.Poses);
+            slot.WeaponCount = world.WeaponCount; slot.ProjectileCount = world.ProjectileCount;
+            if (slot.Weapons.Length < slot.WeaponCount) Array.Resize(ref slot.Weapons, Math.Max(slot.WeaponCount, slot.Weapons.Length * 2));
+            if (slot.Projectiles.Length < slot.ProjectileCount) Array.Resize(ref slot.Projectiles, Math.Max(slot.ProjectileCount, slot.Projectiles.Length * 2));
+            world.CopyWeaponPoses(slot.Weapons); world.CopyProjectilePoses(slot.Projectiles);
             slot.Count = world.Count;
             slot.Tick = world.Tick;
             slot.TickRate = world.TickRate;
@@ -79,6 +86,8 @@ public sealed class FrameExchange
         public int NavigationYields => Data.Yields;
         public int NavigationGoalExchanges => Data.GoalExchanges;
         public int NavigationQueueWaitingCount => Data.QueueWaiting;
+        public ReadOnlySpan<WeaponPose> Weapons => Data.Weapons.AsSpan(0, Data.WeaponCount);
+        public ReadOnlySpan<ProjectilePose> Projectiles => Data.Projectiles.AsSpan(0, Data.ProjectileCount);
         public ReadOnlySpan<EntityPose> Poses => Data.Poses.AsSpan(0, Data.Count);
 
         public void Dispose()

@@ -149,6 +149,7 @@ public sealed class SimulationSession : IDisposable
             UnitActionKind.Move => action.Recipients.Count == 1 ? CommandKind.Move : CommandKind.MoveSelected,
             UnitActionKind.AttackMove => CommandKind.AttackMove,
             UnitActionKind.Attack => CommandKind.AttackTarget,
+            UnitActionKind.Repair => CommandKind.RepairTarget,
             UnitActionKind.Stop => CommandKind.Stop,
             UnitActionKind.HoldPosition => CommandKind.HoldPosition,
             _ => throw new ArgumentOutOfRangeException(nameof(action))

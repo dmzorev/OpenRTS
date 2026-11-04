@@ -27,23 +27,15 @@ internal sealed class MotionIndex(int maximumStep)
 
     internal void SetEnd(int index, WorldPosition position) => _bodies[index].End = position;
 
-    internal int NearestEnemy(int index, int range, Func<int, int, int, bool>? valid = null)
+    internal void Query(WorldPosition from, WorldPosition to, int radius, List<int> result)
     {
-        var actor = _bodies[index]; int best = -1; long distance = (long)range * range;
-        for (int y = Floor(actor.Start.Y - range); y <= Floor(actor.Start.Y + range); y++)
-            for (int x = Floor(actor.Start.X - range); x <= Floor(actor.Start.X + range); x++)
+        result.Clear(); int padding = radius + maximumStep;
+        for (int y = Floor(Math.Min(from.Y, to.Y) - padding); y <= Floor(Math.Max(from.Y, to.Y) + padding); y++)
+            for (int x = Floor(Math.Min(from.X, to.X) - padding); x <= Floor(Math.Max(from.X, to.X) + padding); x++)
             {
                 if (!_heads.TryGetValue(Key(x, y), out int next)) continue;
-                for (; next >= 0; next = _bodies[next].Next)
-                {
-                    var other = _bodies[next]; if (other.Owner == 0 || other.Owner == actor.Owner) continue;
-                    long dx = (long)actor.Start.X - other.Start.X, dy = (long)actor.Start.Y - other.Start.Y, squared = dx * dx + dy * dy;
-                    if (squared > distance || squared == distance && best >= 0 && other.Id.Value >= _bodies[best].Id.Value) continue;
-                    if (valid is not null && !valid(index, next, range)) continue;
-                    best = next; distance = squared;
-                }
+                for (; next >= 0; next = _bodies[next].Next) result.Add(next);
             }
-        return best;
     }
 
     internal bool ClearSegment(int index, WorldPosition from, WorldPosition to)

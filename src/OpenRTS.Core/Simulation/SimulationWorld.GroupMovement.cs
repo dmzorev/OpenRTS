@@ -29,10 +29,11 @@ public sealed partial class SimulationWorld
 
     private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
     {
+        bool Eligible(int i) => _types[_entities[i].UnitType].Movable && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
+        foreach (int i in members) if (!Eligible(i)) _events.Add(new(Tick, WorldEventKind.InvalidOrder, _entities[i].Id));
+        members = members.Where(Eligible).ToArray();
         var grid = _navigation!.Grid;
         if (members.Length == 0) return;
-        if (action == UnitActionKind.AttackMove && members.Any(i => _types[_entities[i].UnitType].Weapon is null))
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, default, position)); return; }
         var assignments = members.Select(i => new GroupDestinations.Member(_entities[i].Id, _entities[i].Position, i)).ToArray();
         WorldPosition[]? slots;
         if (queued && members.Any(i => _entities[i].HasOrder))

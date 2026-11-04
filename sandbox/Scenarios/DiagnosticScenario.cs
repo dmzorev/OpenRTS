@@ -1,6 +1,10 @@
 using OpenRTS.Core;
 
-namespace OpenRTS.Content.Scenarios;
+using OpenRTS.Content;
+using OpenRTS.Core.Navigation;
+using OpenRTS.Core.Orders;
+
+namespace OpenRTS.Samples;
 
 /// <summary>Shared host fixture, deliberately outside the simulation's gameplay API.</summary>
 public static class DiagnosticScenario
@@ -10,12 +14,14 @@ public static class DiagnosticScenario
 
     public static SimulationWorld Create(UnitCatalog catalog, int count)
     {
+        int[] movableTypes = Enumerable.Range(0, catalog.Units.Count).Where(t => catalog.Units[t].Movable).ToArray();
+        if (movableTypes.Length == 0) throw new ArgumentException("The movement fixture requires a movable unit.", nameof(catalog));
         if (count < 1 || count > 1000000) throw new ArgumentOutOfRangeException(nameof(count));
         int columns = (int)Math.Ceiling(Math.Sqrt(count));
         var world = new SimulationWorld(catalog.Units, 4096 * WorldPosition.UnitsPerCell,
             4096 * WorldPosition.UnitsPerCell, initialCapacity: count, seed: 12345);
         for (int i = 0; i < count; i++)
-            world.AddInitialUnit(i % catalog.Units.Count, new((i % columns + 4) * WorldPosition.UnitsPerCell,
+            world.AddInitialUnit(movableTypes[i % movableTypes.Length], new((i % columns + 4) * WorldPosition.UnitsPerCell,
                 (i / columns + 4) * WorldPosition.UnitsPerCell));
         return world;
     }

@@ -18,7 +18,7 @@ public sealed class SpriteWorldView
             return Frames[i];
         }
     }
-    private sealed record Part(ModelPart Definition, Sequence?[] Sequences, ModelAnimation?[] Animations);
+    private sealed record Part(ModelPart Definition, Sequence?[] Sequences, ModelAnimation?[] Animations, int Mount);
     private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States);
     private readonly Model[] _models;
     private readonly List<SpriteBatch> _batches = [];
@@ -29,8 +29,11 @@ public sealed class SpriteWorldView
     public int Capacity => _batches.Sum(batch => batch.Capacity);
     public int MaximumParts { get; }
 
-    public SpriteWorldView(UnitCatalog units, ModelCatalog models)
+    private readonly Func<uint, Color> _ownerColor;
+
+    public SpriteWorldView(UnitCatalog units, ModelCatalog models, Func<uint, Color>? ownerColor = null)
     {
+        _ownerColor = ownerColor ?? (_ => Colors.White);
         models.ValidateUnits(units);
         _models = new Model[units.Units.Count];
         for (int i = 0; i < _models.Length; i++)
@@ -67,7 +70,7 @@ public sealed class SpriteWorldView
                     sequences[a] = new(textures, ends, speed, loop != SpriteFrames.LoopMode.None); animations[a] = animation;
                 }
                 if (sequences[type.IdleAnimation] is null) throw new ArgumentException($"{definition.Id}.{part.Id}: idle must bind every part.");
-                parts[p] = new(part, sequences, animations);
+                parts[p] = new(part, sequences, animations, part.Mount is null ? -1 : type.Weapons.ToList().FindIndex(m => m.Id == part.Mount));
             }
             _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray());
             MaximumParts = Math.Max(MaximumParts, parts.Length);
@@ -82,7 +85,7 @@ public sealed class SpriteWorldView
         _textures.Add(key, batch); _batches.Add(batch); Node.AddChild(batch.Node); return batch;
     }
 
-    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate)
+    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate, ReadOnlySpan<WeaponPose> weapons = default)
     {
         alpha = Math.Clamp(alpha, 0, 1); double time = tick == 0 ? 0 : tick + alpha; SpriteCount = 0;
         foreach (var batch in _batches) batch.Clear();
@@ -103,6 +106,11 @@ public sealed class SpriteWorldView
             {
                 var runtime = model.Parts[p]; var part = runtime.Definition;
                 float angle = part.Facing == ModelFacing.Body ? body : weapon;
+                if (part.Facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
+                {
+                    var aim = weapons[pose.WeaponOffset + runtime.Mount];
+                    angle = Angle(aim.PreviousFacing, aim.Facing, alpha);
+                }
                 Vector2 mount = part.Parent < 0 ? origin : pivots[part.Parent];
                 mount += Rotate(new((float)part.OffsetX * scale, (float)part.OffsetY * scale), part.Parent < 0 ? body : angles[part.Parent]);
                 angles[p] = angle;
@@ -113,17 +121,29 @@ public sealed class SpriteWorldView
                 if (view.Weapon.Animation >= 0 && view.Weapon.Animation < runtime.Sequences.Length &&
                     view.Weapon.IsActive(tick) && runtime.Sequences[view.Weapon.Animation] is not null)
                 { playback = view.Weapon; animation = playback.Animation; }
+                float extraFlash = 0, extraRecoil = 0;
+                // shortcut: a shared part has one base clip; use rig mixing for layered skeletal animation.
+                if (pose.WeaponCount > 0 && pose.WeaponOffset + pose.WeaponCount <= weapons.Length)
+                    foreach (var channel in weapons.Slice(pose.WeaponOffset, pose.WeaponCount))
+                    {
+                        var clip = channel.Animation;
+                        if (!clip.IsActive(tick) || clip.Animation < 0 || clip.Animation >= runtime.Sequences.Length || runtime.Sequences[clip.Animation] is null) continue;
+                        float phase = (float)Math.Clamp((time - clip.StartTick) / clip.DurationTicks, 0, 1);
+                        float kick = MathF.Sin(MathF.PI * Math.Clamp(phase * 3, 0, 1));
+                        var style = runtime.Animations[clip.Animation]!;
+                        extraFlash = Math.Max(extraFlash, kick * (float)style.Flash); extraRecoil += kick * (float)style.Recoil;
+                        playback = clip; animation = clip.Animation;
+                    }
                 var effect = runtime.Animations[animation]!;
                 float progress = playback.DurationTicks > 0 ? (float)Math.Clamp((time - playback.StartTick) / playback.DurationTicks, 0, 1) : 0;
                 float pulse = playback.DurationTicks > 0 ? MathF.Sin(MathF.PI * Math.Clamp(progress * 3, 0, 1)) : 0;
                 float bob = (float)effect.Bob * MathF.Sin((float)(time - playback.StartTick) * MathF.Tau * 3 / tickRate);
-                mount += Rotate(new(bob, (float)effect.Recoil * pulse), angle);
+                mount += Rotate(new(bob, Math.Max((float)effect.Recoil * pulse, extraRecoil)), angle);
                 pivots[p] = mount;
                 Vector2 size = new((float)part.Width * scale, (float)part.Height * scale);
                 Vector2 center = mount + Rotate(new((0.5f - (float)part.PivotX) * size.X, (0.5f - (float)part.PivotY) * size.Y), angle);
-                // shortcut: two demo owner colors; load faction palettes when a game defines them.
-                var team = view.Owner switch { 1 => new Color(0.14f, 0.52f, 1), 2 => new Color(1, 0.20f, 0.16f), _ => new Color(0.72f, 0.78f, 0.80f) };
-                team.A = pulse * (float)effect.Flash;
+                var team = _ownerColor(view.Owner);
+                team.A = Math.Max(pulse * (float)effect.Flash, extraFlash);
                 runtime.Sequences[animation]!.At(playback, time, tickRate).Add(new(center.X, elevation + 0.035f + part.Layer * 0.015f, center.Y), angle, size, tint, team);
                 SpriteCount++;
             }

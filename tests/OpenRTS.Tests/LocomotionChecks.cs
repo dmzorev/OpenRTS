@@ -6,7 +6,8 @@ using static NavigationChecks;
 internal static class LocomotionChecks
 {
     internal static LocomotionCatalog Catalog() => LocomotionCatalog.Load([new("terrain", File.ReadAllText("sandbox/content/terrain.yaml"))]);
-    internal static UnitCatalog Units() => UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))], Catalog());
+    internal static WeaponCatalog Weapons() => WeaponCatalog.Load([new("weapons", File.ReadAllText("sandbox/content/weapons.yaml"))]);
+    internal static UnitCatalog Units() => UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))], Catalog(), Weapons());
     private static SimulationWorld World(NavigationGrid grid, Locomotor profile, int speed = 128, int workers = 1) =>
         new([new("unit", 100, locomotor: profile)], grid.Width * grid.CellSize, grid.Height * grid.CellSize,
             navigationGrid: grid, speedPerTick: speed, navigationWorkers: workers);
@@ -18,7 +19,7 @@ internal static class LocomotionChecks
             NavigationChecks.Check(catalog.Terrains.Count == 7 && catalog.Terrains[0] == "road" && catalog.Profiles.Count == 3, "Missing N1 definitions");
             NavigationChecks.Check(units.Units.Single(u => u.Id == "tank").Locomotor.Id == "tracked", "Movement binding lost");
             var changed = LocomotionCatalog.Load([new("modified", File.ReadAllText("sandbox/content/terrain.yaml").Replace("Speed: 384", "Speed: 383"))]);
-            NavigationChecks.Check(units.Summary != UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))], changed).Summary, "Speed change did not enter content fingerprint");
+            NavigationChecks.Check(units.Summary != UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))], changed, Weapons()).Summary, "Speed change did not enter content fingerprint");
             NavigationChecks.Reject<ContentException>(() => UnitCatalog.Load([new("units", "u: {Health: {HP: 1}, Movement: {Locomotor: typo}}")], catalog));
             NavigationChecks.Reject<ContentException>(() => LocomotionCatalog.Load([new("incomplete", "a: {Terrain: {Default: true}}\nb: {Terrain: {}}\np: {Locomotor: {Terrain: {a: {}}}}") ]));
             NavigationChecks.Reject<ArgumentException>(() => new Locomotor("p", [new(true, true, 0, 1024)]));
@@ -194,7 +195,8 @@ internal static class LocomotionChecks
             var grid = new NavigationGrid(240, 132, terrain: Enumerable.Range(0, 240 * 132).Select(i =>
                 i % 240 is >= 115 and <= 122 && i / 240 is not (>= 64 and <= 68) ? ground.TerrainIndex("mud") : (byte)0));
             var world = new SimulationWorld(catalog.Units, 240 * 1024, 132 * 1024, initialCapacity: 10000, navigationGrid: grid);
-            for (int i = 0; i < 10000; i++) world.AddInitialUnit(i % 5, new((i % 100 + 4) * 1024 + 512, (i / 100 + 4) * 1024 + 512));
+            int[] types = new[] { "apc-mg", "apc-rocket", "rifleman", "rocketeer", "tank" }.Select(id => catalog.Units.ToList().FindIndex(u => u.Id == id)).ToArray();
+            for (int i = 0; i < 10000; i++) world.AddInitialUnit(types[i % types.Length], new((i % 100 + 4) * 1024 + 512, (i / 100 + 4) * 1024 + 512));
             int trees = 0, fields = 0; double elapsed = 0; var samples = new double[8]; long allocated = GC.GetTotalAllocatedBytes(true);
             for (int tick = 1; tick <= 8; tick++)
             {

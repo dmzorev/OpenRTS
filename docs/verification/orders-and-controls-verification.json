@@ -48,7 +48,7 @@
     "sandbox/Sandbox.cs": "5915e50e1fcf2f9510de2cd86d71f7e45b298780dc5448b2f8866e5b85a6df2c",
     "sandbox/Verification/Sandbox.ControlsVerification.cs": "96979d305f05f8778e00fb006a35a1773a8cc0421f14a8863b1ed0866116eae5",
     "sandbox/Verification/Sandbox.PresentationVerification.cs": "d9103f3e18111919dbeec7a47a75ee88d70c3cda746f770d693a9591a42bc598",
-    "sandbox/Verification/Sandbox.RtsVerification.cs": "8cc662ca03f3cf917f81ed53c73845efac410aa95846fdae09ed3769d279a525",
+    "sandbox/Verification/Sandbox.RtsVerification.cs": "12d9f6b2e561fbfa20b873c92f13af3efb3dd46b5a4a326508deb4d458259a7a",
     "sandbox/content/terrain.yaml": "a91c561e65075782d280cd8de11899bb4945d51ff3948039bbbe31c9acb6b254",
     "sandbox/content/units.yaml": "26520d495e7c0f596dac8dfbdaff4f334548bee7f6663602b80cd23009e3f3e8",
     "sandbox/shaders/selection.gdshader": "3bdc036d0b76b09799525045b48f9b3147ad2fd4763d95a090429db53d618f9b",
@@ -111,5 +111,15 @@
     "tools/OpenRTS.Headless/Program.cs": "8b4aaa065bcb8b94f38f84e9688d3e9f284a620de151fc362bf70922a9c2a624",
     "tools/dev.sh": "a7678880f323ccf8f72a339d73c265ebf12b047ecf9be4287ff4c91036a8f93d",
     "tools/verify.py": "a09da81dad09c473ac9197f93e62e6fa4257e2b0c32542d53b87320b1b19276d"
+  },
+  "keyinput_fix_revalidation": {
+    "reason": "CS1739: KeyInput call used shift but helper accepted only ctrl. Previous final GUI checks had run a stale assembly after failed builds.",
+    "fix": "Added optional shift parameter and forwarded ShiftPressed.",
+    "checks": [
+      "Fresh full solution build: 0 warnings, 0 errors",
+      "tools/dev.sh run --verify-rts-controls: native PASS",
+      "tools/dev.sh verify: 20 vendor + 112 OpenRTS + integration PASS"
+    ],
+    "failure_gate": "Sequential commands with set -e; dev.sh also exits on errors."
   }
 }

@@ -25,7 +25,8 @@ try
     if (showcase && (navigation || benchmark)) throw new ArgumentException("Showcase is a presentation fixture; use navigation/benchmark separately.");
     var terrainPath = Path.Combine(Path.GetDirectoryName(path)!, "terrain.yaml");
     var locomotion = File.Exists(terrainPath) ? LocomotionCatalog.Load([new(terrainPath, File.ReadAllText(terrainPath))]) : null;
-    var catalog = UnitCatalog.Load([new ContentSource(path, File.ReadAllText(path))], locomotion);
+    var weaponPath = Path.Combine(Path.GetDirectoryName(path)!, "weapons.yaml");
+    var catalog = UnitCatalog.Load([new ContentSource(path, File.ReadAllText(path))], locomotion, File.Exists(weaponPath) ? WeaponCatalog.Load([new(weaponPath, File.ReadAllText(weaponPath))]) : null);
     Console.WriteLine("OPENRTS_CONTENT:" + JsonSerializer.Serialize(catalog.Summary));
     if (simulate)
     {

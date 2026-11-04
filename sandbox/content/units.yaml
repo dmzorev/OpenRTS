@@ -1,31 +1,38 @@
 ^unit:
   Movement: {Locomotor: infantry}
-  Health:
-    HP: 100
+  Health: {HP: 100, Armor: Living}
   Presentation:
     Animations: [idle, move, fire]
     States: [damaged]
 
 rifleman:
   Inherits: ^unit
-  Weapon: {Range: 4096, AcquireRange: 8192, Damage: 10, CooldownTicks: 12, WindupTicks: 2}
-  Presentation:
-    Model: infantry-rifle
-    Name: Пехотинец с автоматом
+  Armaments:
+    Mounts:
+      main: {Weapon: rifle}
+  Presentation: {Model: infantry-rifle, Name: Пехотинец с автоматом}
 
 rocketeer:
   Inherits: ^unit
-  Weapon: {Range: 6144, AcquireRange: 8192, Damage: 30, CooldownTicks: 35, WindupTicks: 5}
-  Presentation:
-    Model: infantry-rocket
-    Name: Пехотинец с ракетницей
+  Armaments:
+    Mounts:
+      main: {Weapon: missile}
+  Presentation: {Model: infantry-rocket, Name: Пехотинец с ракетницей}
+
+grenadier:
+  Inherits: ^unit
+  Armaments:
+    Mounts:
+      main: {Weapon: grenade}
+  Presentation: {Model: infantry-grenade, Name: Гранатомётчик}
 
 apc-mg:
   Inherits: ^unit
-  Weapon: {Range: 5120, AcquireRange: 8192, Damage: 8, CooldownTicks: 6, WindupTicks: 1}
+  Armaments:
+    Mounts:
+      main: {Weapon: rifle, FireWhileMoving: true}
   Movement: {Locomotor: amphibious}
-  Health:
-    HP: 250
+  Health: {HP: 250, Armor: Mechanical}
   Presentation:
     Model: apc-machinegun
     States: [damaged, swimming]
@@ -33,17 +40,52 @@ apc-mg:
 
 apc-rocket:
   Inherits: apc-mg
-  Weapon: {Range: 6144, Damage: 25, CooldownTicks: 30, WindupTicks: 4}
-  Presentation:
-    Model: apc-missiles
-    Name: БТР · ракеты
+  Armaments:
+    Mounts:
+      main: {Weapon: missile}
+  Presentation: {Model: apc-missiles, Name: БТР · ракеты}
 
 tank:
-  Inherits: ^unit
-  Weapon: {Range: 6144, AcquireRange: 8192, Damage: 40, CooldownTicks: 35, WindupTicks: 4}
+  Inherits: apc-mg
+  Armaments:
+    Mounts:
+      main: {Weapon: cannon}
   Movement: {Locomotor: tracked}
-  Health:
-    HP: 400
+  Health: {HP: 400}
+  Presentation: {Model: tank, Name: Танк}
+
+tank-mixed:
+  Inherits: tank
+  Armaments:
+    Mounts:
+      main: {Weapon: cannon, Animation: fire}
+      missiles: {Weapon: missile, Animation: missiles, FireWhileMoving: true}
   Presentation:
-    Model: tank
-    Name: Танк
+    Model: tank-mixed
+    Animations: [idle, move, fire, missiles]
+    Name: Танк · пушка и ракеты
+
+engineer:
+  Inherits: ^unit
+  Movement: {Locomotor: amphibious}
+  Health: {HP: 220, Armor: Mechanical}
+  Armaments:
+    Mounts:
+      main: {Weapon: repair, Animation: repair}
+  Presentation:
+    Model: engineer
+    Animations: [idle, move, repair]
+    States: [damaged, swimming]
+    Name: Инженерная машина
+
+bunker-cannon:
+  Inherits: tank
+  Movement: {Enabled: false}
+  Health: {HP: 700, Armor: Building}
+  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка}
+
+bunker-mixed:
+  Inherits: tank-mixed
+  Movement: {Enabled: false}
+  Health: {HP: 700, Armor: Building}
+  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты}

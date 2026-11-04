@@ -1,0 +1,126 @@
+namespace OpenRTS.Core;
+
+public sealed partial class SimulationWorld
+{
+    private struct ProjectileState
+    {
+        public long Id, BornTick;
+        public EntityId Source, Target;
+        public uint Owner;
+        public int UnitType, Mount, Remaining, InitialDistance;
+        public WorldPosition Previous, Position, Destination;
+        public WeaponDefinition Weapon;
+    }
+    private readonly List<ProjectileState> _projectiles = [];
+    private long _nextProjectileId = 1;
+    public int ProjectileCount => _projectiles.Count;
+    private void Launch(int source, int target, int mount, WeaponDefinition weapon)
+    {
+        ref var actor = ref _entities[source]; var destination = _entities[target].Position;
+        _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Id, Target = _entities[target].Id,
+            Owner = actor.Owner, UnitType = actor.UnitType, Mount = mount, Previous = actor.Position, Position = actor.Position,
+            Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
+            InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(actor.Position, destination))) });
+    }
+    private void UpdateProjectiles()
+    {
+        int write = 0;
+        for (int read = 0; read < _projectiles.Count; read++)
+        {
+            _stepCancellation.ThrowIfCancellationRequested();
+            var shot = _projectiles[read]; var weapon = shot.Weapon; shot.Previous = shot.Position;
+            if (shot.BornTick == Tick) { _projectiles[write++] = shot; continue; }
+            if (weapon.Projectile == ProjectileKind.Missile)
+            {
+                // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
+                if (!_indices.TryGetValue(shot.Target, out int target)) { Expire(shot); continue; }
+                shot.Destination = _entities[target].Position;
+            }
+            int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
+            var next = StepTowards(shot.Position, shot.Destination, budget);
+            int travel = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(shot.Position, next)));
+            // Round distance upwards so rounding cannot extend a missile's fuel budget.
+            if ((long)travel * travel < DistanceSquared(shot.Position, next)) travel++;
+            shot.Remaining -= travel;
+            // shortcut: wall effects use the segment start; calculate exact entry when impact placement matters.
+            if (_navigation is not null && !TerrainGeometry.Clear(_navigation.Grid, shot.Position, next, 0))
+            { Hit(shot, default, shot.Position); continue; }
+            EntityId hit = default; int fraction = 65537;
+            if (weapon.Projectile != ProjectileKind.Grenade)
+            {
+                (_motion ?? _combatIndex)!.Query(shot.Position, next, MotionIndex.BodyRadius, _combatCandidates);
+                foreach (int i in _combatCandidates)
+                {
+                    ref var body = ref _entities[i];
+                    if (body.Id == shot.Source || body.Owner == 0 || !weapon.FriendlyFire && body.Owner == shot.Owner) continue;
+                    int t = HitFraction(shot.Position, next, body.Previous, body.Position, MotionIndex.BodyRadius);
+                    if (t < fraction || t == fraction && (hit.Value == 0 || body.Id.Value < hit.Value)) { fraction = t; hit = body.Id; }
+                }
+            }
+            if (hit.Value != 0 && fraction <= 65536)
+            { Hit(shot, hit, Interpolate(shot.Position, next, fraction)); continue; }
+            shot.Position = next;
+            if (shot.Position == shot.Destination) { Hit(shot, default, shot.Position); continue; }
+            if (shot.Remaining <= 0) { Expire(shot); continue; }
+            _projectiles[write++] = shot;
+        }
+        if (write < _projectiles.Count) _projectiles.RemoveRange(write, _projectiles.Count - write);
+        void Hit(ProjectileState shot, EntityId target, WorldPosition point)
+        {
+            _events.Add(new(Tick, WorldEventKind.ProjectileImpact, shot.Source, point, shot.UnitType, TargetEntity: target,
+                Mount: shot.Mount, SourcePosition: shot.Previous, ProjectileId: shot.Id));
+            Impact(shot.Weapon, shot.Owner, target, point, shot.Source, shot.UnitType, shot.Mount);
+        }
+        void Expire(ProjectileState shot) => _events.Add(new(Tick, WorldEventKind.ProjectileExpired, shot.Source, shot.Position, shot.UnitType, Mount: shot.Mount, ProjectileId: shot.Id));
+    }
+    private static WorldPosition Interpolate(WorldPosition a, WorldPosition b, int fraction) =>
+        new(a.X + (int)(((long)b.X - a.X) * fraction / 65536), a.Y + (int)(((long)b.Y - a.Y) * fraction / 65536), a.Elevation);
+    private static int HitFraction(WorldPosition a0, WorldPosition a1, WorldPosition b0, WorldPosition b1, int radius)
+    {
+        long x = (long)a0.X - b0.X, y = (long)a0.Y - b0.Y;
+        long dx = (long)a1.X - a0.X - ((long)b1.X - b0.X), dy = (long)a1.Y - a0.Y - ((long)b1.Y - b0.Y);
+        Int128 length = (Int128)dx * dx + (Int128)dy * dy;
+        int closest = length == 0 ? 0 : (int)Int128.Clamp(-((Int128)x * dx + (Int128)y * dy) * 65536 / length, 0, 65536);
+        bool Inside(int t)
+        {
+            Int128 px = (Int128)x * 65536 + (Int128)dx * t, py = (Int128)y * 65536 + (Int128)dy * t;
+            return px * px + py * py <= (Int128)radius * radius * 65536 * 65536;
+        }
+        if (!Inside(closest)) return 65537;
+        int low = 0, high = closest;
+        while (low < high) { int mid = (low + high) / 2; if (Inside(mid)) high = mid; else low = mid + 1; }
+        return low;
+    }
+    public void CopyProjectilePoses(Span<ProjectilePose> destination)
+    {
+        if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
+        if (destination.Length < _projectiles.Count) throw new ArgumentException("Destination is too small.", nameof(destination));
+        for (int i = 0; i < _projectiles.Count; i++)
+        {
+            var shot = _projectiles[i]; var current = shot.Position; var previous = shot.Previous;
+            if (shot.Weapon.Projectile == ProjectileKind.Grenade)
+            {
+                current = Arc(current); previous = Arc(previous);
+                WorldPosition Arc(WorldPosition point)
+                {
+                    long remaining = (long)SquareRoot((ulong)DistanceSquared(point, shot.Destination));
+                    long distance = shot.InitialDistance; remaining = Math.Min(remaining, distance);
+                    return point with { Elevation = point.Elevation + (int)(4 * 1024 * remaining * (distance - remaining) / (distance * distance)) };
+                }
+            }
+            destination[i] = new(shot.Id, shot.UnitType, shot.Mount, previous, current,
+                new(shot.Destination.X - shot.Position.X, shot.Destination.Y - shot.Position.Y));
+        }
+    }
+    private void WriteProjectiles(BinaryWriter writer)
+    {
+        writer.Write(_nextProjectileId); writer.Write(_projectiles.Count);
+        foreach (var shot in _projectiles)
+        {
+            writer.Write(shot.Id); writer.Write(shot.BornTick); writer.Write(shot.Source.Value); writer.Write(shot.Target.Value); writer.Write(shot.Owner);
+            writer.Write(shot.UnitType); writer.Write(shot.Mount); writer.Write(shot.Remaining); writer.Write(shot.InitialDistance);
+            writer.Write(shot.Position.X); writer.Write(shot.Position.Y); writer.Write(shot.Position.Elevation);
+            writer.Write(shot.Destination.X); writer.Write(shot.Destination.Y); writer.Write(shot.Destination.Elevation);
+        }
+    }
+}
