@@ -50,7 +50,7 @@ public sealed class LocomotionCatalog
                     if (rule is null) throw node.Error(id + ".Locomotor.Terrain." + name, "A terrain rule must be a mapping.");
                     return new TerrainRule(rule.Traverse, rule.CanStop ?? rule.Traverse,
                         rule.Speed ?? (rule.Traverse ? 1024 : 0), rule.Cost ?? (rule.Traverse ? 1024 : 0));
-                })));
+                }), maximumSlope: profile.MaximumSlope, maximumStep: profile.MaximumStep, maximumDepth: profile.MaximumDepth));
             }
             catch (ArgumentException error) { throw node.Error(id + ".Locomotor", error.Message); }
         }
@@ -58,7 +58,13 @@ public sealed class LocomotionCatalog
         return new(names, result);
     }
     private sealed class TerrainOptions { public bool Default { get; set; } }
-    private sealed class LocomotorOptions { public Dictionary<string, RuleOptions> Terrain { get; set; } = new(); }
+    private sealed class LocomotorOptions
+    {
+        public Dictionary<string, RuleOptions> Terrain { get; set; } = new();
+        public int MaximumSlope { get; set; } = int.MaxValue;
+        public int MaximumStep { get; set; } = int.MaxValue;
+        public int MaximumDepth { get; set; } = int.MaxValue;
+    }
     private sealed class RuleOptions
     {
         public bool Traverse { get; set; } = true;

@@ -13,4 +13,4 @@ public readonly record struct AnimationPlayback(int Animation, long StartTick, i
 public readonly record struct EntityPresentation(uint Owner, FacingDirection PreviousBodyFacing, FacingDirection BodyFacing,
     FacingDirection PreviousWeaponFacing, FacingDirection WeaponFacing, AnimationPlayback Body, AnimationPlayback Weapon, uint States);
 public readonly record struct EntityPose(EntityId Id, int UnitType, WorldPosition Previous, WorldPosition Current,
-    EntityPresentation Presentation = default, OrderSnapshot Order = default, int Health = 0, int WeaponOffset = 0, int WeaponCount = 0);
+    EntityPresentation Presentation = default, OrderSnapshot Order = default, int Health = 0, int WeaponOffset = 0, int WeaponCount = 0, bool TerrainStranded = false);

@@ -42,19 +42,25 @@ public sealed partial class SimulationWorld
         }
         return compatible ?? best;
     }
-    private bool InWeaponRange(int index, int target, int range) =>
-        DistanceSquared(_entities[index].Position, _entities[target].Position) <= (long)range * range &&
-        (_navigation is null || TerrainGeometry.Clear(_navigation.Grid, _entities[index].Position, _entities[target].Position, 0));
+    private bool InWeaponRange(int index, int target, int range)
+    {
+        ref var source = ref _entities[index]; ref var other = ref _entities[target];
+        long distance = ObjectGeometry.DistanceSquared(_types[source.UnitType], source.Position, _types[other.UnitType], other.Position, out var from, out var to);
+        return distance <= (long)range * range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, from, to, 0));
+    }
+    private WorldPosition AimPoint(int source, int target) => ObjectGeometry.ClosestPoint(_types[_entities[target].UnitType], _entities[target].Position, _entities[source].Position);
 
     private int AcquireWeaponTarget(int index, WeaponDefinition weapon, int range = -1)
     {
         if (range < 0) range = weapon.Range;
-        var position = _entities[index].Position; (_motion ?? _combatIndex)!.Query(position, position, range, _combatCandidates);
+        var position = _entities[index].Position; var type = _types[_entities[index].UnitType];
+        int x = type.Footprint?.HalfWidth ?? type.Body.HalfWidth, y = type.Footprint?.HalfHeight ?? type.Body.HalfHeight;
+        (_motion ?? _combatIndex)!.Query(new(position.X - x, position.Y - y), new(position.X + x, position.Y + y), range, _combatCandidates);
         int best = -1; long distance = (long)range * range;
         foreach (int candidate in _combatCandidates)
         {
             if (!ValidTarget(index, _entities[candidate].Id, weapon, out _) || !InWeaponRange(index, candidate, range)) continue;
-            long d = DistanceSquared(position, _entities[candidate].Position);
+            long d = ObjectGeometry.DistanceSquared(type, position, _types[_entities[candidate].UnitType], _entities[candidate].Position, out _, out _);
             if (d < distance || d == distance && (best < 0 || _entities[candidate].Id.Value < _entities[best].Id.Value)) { best = candidate; distance = d; }
         }
         return best;
@@ -96,7 +102,7 @@ public sealed partial class SimulationWorld
                 else
                 {
                     state.Target = _entities[target].Id;
-                    state.Facing = new(_entities[target].Position.X - entity.Position.X, _entities[target].Position.Y - entity.Position.Y);
+                    var aim = AimPoint(i, target); state.Facing = new(aim.X - entity.Position.X, aim.Y - entity.Position.Y);
                     if (Tick >= state.ReadyTick)
                     {
                         if (state.ChargingTarget != state.Target)
@@ -108,9 +114,10 @@ public sealed partial class SimulationWorld
                             state.ChargingTarget = default; state.FireAtTick = 0;
                             state.Animation = new(type.AnimationIndex(mount.Animation), Tick, weapon.AnimationTicks);
                             entity.WeaponAnimation = state.Animation;
-                            _events.Add(new(Tick, WorldEventKind.WeaponFired, entity.Id, _entities[target].Position, entity.UnitType,
-                                state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: entity.Position));
-                            if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entity.Owner, state.Target, _entities[target].Position, entity.Id, entity.UnitType, mountIndex);
+                            ObjectGeometry.DistanceSquared(type, entity.Position, _types[_entities[target].UnitType], _entities[target].Position, out var muzzle, out var impactPoint);
+                            _events.Add(new(Tick, WorldEventKind.WeaponFired, entity.Id, impactPoint, entity.UnitType,
+                                state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle));
+                            if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entity.Owner, state.Target, impactPoint, entity.Id, entity.UnitType, mountIndex);
                             else Launch(i, target, mountIndex, weapon);
                         }
                     }
@@ -142,7 +149,7 @@ public sealed partial class SimulationWorld
         // shortcut: uniform splash ignores cover; add falloff/occlusion when a weapon requires them.
         (_motion ?? _combatIndex)!.Query(position, position, weapon.SplashRadius, _combatCandidates);
         foreach (int i in _combatCandidates)
-            if (DistanceSquared(position, _entities[i].Position) <= (long)weapon.SplashRadius * weapon.SplashRadius) ApplyEffect(_entities[i].Id);
+            if (ObjectGeometry.WithinRadius(_types[_entities[i].UnitType], _entities[i].Position, position, weapon.SplashRadius)) ApplyEffect(_entities[i].Id);
         void ApplyEffect(EntityId id)
         {
             if (!_indices.TryGetValue(id, out int i)) return;

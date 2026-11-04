@@ -45,7 +45,7 @@ public sealed partial class SimulationWorld
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove)
         { if (!SetTarget(index, order.Position)) return false; entity.GroupMember = order.Group; entity.OrderGroup = order.Cohort; }
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
-        { if (!SetTarget(index, entity.Position)) return false; }
+        { if (!_types[entity.UnitType].Movable) Halt(index); else if (!SetTarget(index, entity.Position)) return false; }
         else Halt(index);
         if (entity.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entity.HasAim = false; entity.AimEntity = default; }
@@ -69,6 +69,7 @@ public sealed partial class SimulationWorld
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
             int i = _movementOrder[orderIndex]; ref var entity = ref _entities[i];
+            if (entity.TerrainStranded) { entity.OrderPhase = OrderPhase.Waiting; continue; }
             if (entity.HasOrder && !entity.Moving && entity.CombatTarget.Value == 0 && entity.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entity.HasOrder = false;
             while (!entity.HasOrder && entity.PendingOrders is { Count: > 0 }) StartOrder(i, entity.PendingOrders.Dequeue());
@@ -97,12 +98,12 @@ public sealed partial class SimulationWorld
                 entity.CombatTarget = _entities[target].Id;
             }
             entity.HasAim = true; entity.AimEntity = entity.CombatTarget;
-            if (InWeaponRange(i, target, weapon.Range) && StopAllowed(entity.UnitType, entity.Position)) { Halt(i); entity.OrderPhase = OrderPhase.Engaging; }
+            if (InWeaponRange(i, target, weapon.Range) && (_types[entity.UnitType].Footprint is not null || StopAllowed(entity.UnitType, entity.Position))) { Halt(i); entity.OrderPhase = OrderPhase.Engaging; }
             else if ((aggressive || attack) && _types[entity.UnitType].Movable)
             {
                 if (!entity.Moving || (Tick + entity.Id.Value) % 4 == 0)
                 {
-                    var goal = _entities[target].Position;
+                    var goal = AimPoint(i, target);
                     if (entity.Target != goal) SetTarget(i, goal);
                 }
                 entity.OrderPhase = entity.Moving ? OrderPhase.Approaching : OrderPhase.Waiting;

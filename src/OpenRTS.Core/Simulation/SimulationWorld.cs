@@ -12,7 +12,7 @@ public sealed partial class SimulationWorld
         public EntityId Id;
         public int UnitType, Health;
         public WorldPosition Previous, Position, Target;
-        public bool Moving;
+        public bool Moving, TerrainStranded;
         public int GoalCell;
         public int MovementRemainder;
         public UnitOrder ActiveOrder;
@@ -100,17 +100,16 @@ public sealed partial class SimulationWorld
         if (navigationGrid is not null)
         {
             if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "The current local motion budget allows at most 1024 world units per tick.");
-            if (navigationGrid.CellSize < MotionIndex.BodyRadius * 2 + 2)
-                throw new ArgumentException("Terrain samples must leave clearance for the current body radius.", nameof(navigationGrid));
             if (width != (long)navigationGrid.Width * navigationGrid.CellSize || depth != (long)navigationGrid.Height * navigationGrid.CellSize)
                 throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
+            _baseGrid = navigationGrid;
             _navigation = new(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
             InitializeLocomotion(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
             _localPaths = new WorldPosition[checked(initialCapacity * LocalMotionSearch.PathCapacity)];
         }
-        if (_motion is null && _types.Any(t => t.Weapon is not null)) _combatIndex = new(speedPerTick);
+        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null)) _combatIndex = new(speedPerTick);
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
@@ -118,14 +117,17 @@ public sealed partial class SimulationWorld
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
-        if (!StopAllowed(unitType, position)) throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
-        if (_navigation is not null)
+        if (_types[unitType].Footprint is null && !StopAllowed(unitType, position)) throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
+        if (!PrepareFootprint(unitType, position, out var footprintGrid)) throw new ArgumentException("Footprint placement is out of bounds, misaligned or would trap an existing body.", nameof(position));
+        if (_navigation is not null && _types[unitType].Footprint is null)
         {
-            if (!_motion!.ClearPlacement(position, out _))
+            if (!_motion!.ClearPlacement(position, out _, _types[unitType].Body))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
         }
         if ((states & ~_types[unitType].AllowedStateMask) != 0) throw new ArgumentOutOfRangeException(nameof(states));
-        return Spawn(unitType, position, owner, states);
+        var id = Spawn(unitType, position, owner, states);
+        if (footprintGrid is not null) CommitGrid(footprintGrid);
+        return id;
     }
 
     public void Step(ReadOnlySpan<WorldCommand> commands = default, CancellationToken cancellationToken = default)
@@ -197,7 +199,7 @@ public sealed partial class SimulationWorld
             destination[i] = new(entity.Id, entity.UnitType, entity.Previous, entity.Position,
                 new(entity.Owner, entity.PreviousBodyFacing, entity.BodyFacing, entity.PreviousWeaponFacing, entity.WeaponFacing,
                     entity.BodyAnimation, entity.WeaponAnimation, entity.VisualStates),
-                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health, weaponOffset, entity.Weapons.Length);
+                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health, weaponOffset, entity.Weapons.Length, entity.TerrainStranded);
             weaponOffset += entity.Weapons.Length;
         }
     }
@@ -208,7 +210,7 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 5 : 9);
+            writer.Write(_navigation is null ? 6 : 10);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -222,7 +224,7 @@ public sealed partial class SimulationWorld
                 writer.Write(entity.Id.Value); writer.Write(entity.UnitType); writer.Write(entity.Health);
                 writer.Write(entity.Position.X); writer.Write(entity.Position.Y); writer.Write(entity.Position.Elevation);
                 writer.Write(entity.Target.X); writer.Write(entity.Target.Y); writer.Write(entity.Target.Elevation);
-                writer.Write(entity.Moving);
+                writer.Write(entity.Moving); writer.Write(entity.TerrainStranded);
                 writer.Write(entity.MovementRemainder);
                 WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity);
                 if (_navigation is not null)
@@ -238,6 +240,7 @@ public sealed partial class SimulationWorld
                 }
             }
             WriteProjectiles(writer);
+            writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
             _navigation?.WriteState(writer);
             writer.Write(_weighted is not null); _weighted?.WriteState(writer);
             if (_navigation is not null)
@@ -264,21 +267,16 @@ public sealed partial class SimulationWorld
         }
         if (command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell)
         {
-            int cell = _navigation!.Grid.CellAt(command.Position);
-            if (command.Kind == CommandKind.BlockCell && _motion!.OverlapsCell(_navigation.Grid, cell, Count, out var occupant))
-                _events.Add(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation.Grid.Center(cell)));
-            else
-            {
-                var previous = _navigation.Grid;
-                _navigation.SetBlocked(cell, command.Kind == CommandKind.BlockCell);
-                if (!ReferenceEquals(previous, _navigation.Grid)) _bulkAllowed = false;
-            }
+            SetBaseBlocked(_navigation!.Grid.CellAt(command.Position), command.Kind == CommandKind.BlockCell);
             return;
         }
         if (command.Kind == CommandKind.Spawn)
         {
-            bool terrain = StopAllowed(command.UnitType, command.Position);
-            bool free = _motion is null || _motion.ClearPlacement(command.Position, out _);
+            bool footprint = _types[command.UnitType].Footprint is not null;
+            bool terrain = footprint || StopAllowed(command.UnitType, command.Position);
+            bool free = footprint || _motion is null || _motion.ClearPlacement(command.Position, out _, _types[command.UnitType].Body);
+            bool stamp = PrepareFootprint(command.UnitType, command.Position, out var footprintGrid);
+            terrain &= stamp;
             if (!terrain || !free)
             {
                 _events.Add(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
@@ -288,6 +286,7 @@ public sealed partial class SimulationWorld
             if ((command.States & ~_types[command.UnitType].AllowedStateMask) != 0)
             { _events.Add(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
             var id = Spawn(command.UnitType, command.Position, command.Owner, command.States);
+            if (footprintGrid is not null) CommitGrid(footprintGrid);
             _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType));
             return;
         }
@@ -311,13 +310,13 @@ public sealed partial class SimulationWorld
         }
         if (command.Kind is CommandKind.PlayAnimation or CommandKind.SetVisualStates or CommandKind.ToggleVisualState or CommandKind.Aim or CommandKind.ClearAim)
         { ApplyPresentation(index, command); return; }
-        DestroyIndex(index); RebuildMotionIndex();
+        DestroyIndex(index, command.Kind != CommandKind.Remove); RebuildMotionIndex();
     }
 
-    private void DestroyIndex(int index)
+    private void DestroyIndex(int index, bool wreck = true)
     {
-        var id = _entities[index].Id;
-        _events.Add(new(Tick, WorldEventKind.Destroyed, id, _entities[index].Position, _entities[index].UnitType));
+        var id = _entities[index].Id; bool stamped = _footprints.Remove(id);
+        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Owner));
         _groupRoutes.Remove(id); _indices.Remove(id); _orderDirty = true; Count--;
         if (index != Count)
         {
@@ -326,6 +325,7 @@ public sealed partial class SimulationWorld
             _indices[_entities[index].Id] = index;
         }
         _entities[Count] = default;
+        if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
     }
 
     private bool SetTarget(int index, WorldPosition position)
@@ -346,7 +346,7 @@ public sealed partial class SimulationWorld
         entity.WaitTicks = entity.PathLength = entity.PathCursor = 0;
         entity.YieldFor = default; entity.YieldDeadline = 0; entity.LocalTarget = default;
         _groupRoutes.Remove(entity.Id);
-        entity.Target = position with { Elevation = entity.Position.Elevation };
+        entity.Target = GroundPosition(position, entity.Position.Elevation);
         if (_navigation is not null)
         {
             entity.GoalCell = _navigation.Grid.CellAt(position);
@@ -371,7 +371,9 @@ public sealed partial class SimulationWorld
             WeaponFacing = FacingDirection.North, PreviousWeaponFacing = FacingDirection.North,
             BodyAnimation = new(_types[unitType].IdleAnimation, Tick, 0), WeaponAnimation = AnimationPlayback.None,
             GoalCell = _navigation?.Grid.CellAt(position) ?? -1 };
-        (_motion ?? _combatIndex)?.Add(Count, id, position, owner);
+        var type = _types[unitType];
+        (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+        if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);
         _orderDirty = true;
         return id;

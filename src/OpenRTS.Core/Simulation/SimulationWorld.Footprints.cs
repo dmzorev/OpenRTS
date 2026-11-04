@@ -1,0 +1,96 @@
+namespace OpenRTS.Core;
+
+public sealed partial class SimulationWorld
+{
+    private NavigationGrid? _baseGrid;
+    // Derived index of immobile stamps; packed entity storage never defines their priority.
+    private readonly SortedSet<EntityId> _footprints = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
+    private readonly Dictionary<int, CellOverride> _cellOverrides = new();
+
+    private bool FootprintFits(FootprintDefinition footprint, WorldPosition position)
+    {
+        int left = position.X - footprint.HalfWidth, top = position.Y - footprint.HalfHeight;
+        if (left < 0 || top < 0 || position.X + footprint.HalfWidth > Width || position.Y + footprint.HalfHeight > Depth) return false;
+        return _baseGrid is null || left % _baseGrid.CellSize == 0 && top % _baseGrid.CellSize == 0 && footprint.CellSize % _baseGrid.CellSize == 0;
+    }
+    private NavigationGrid ComposeFootprints(NavigationGrid basis, FootprintDefinition? extra = null, WorldPosition position = default)
+    {
+        _cellOverrides.Clear();
+        foreach (var id in _footprints)
+        {
+            ref var entity = ref _entities[_indices[id]];
+            Stamp(_types[entity.UnitType].Footprint!, entity.Position);
+        }
+        if (extra is not null) Stamp(extra, position);
+        return basis.Compose(_cellOverrides, _navigation!.Grid);
+        void Stamp(FootprintDefinition footprint, WorldPosition center)
+        {
+            foreach (var cell in footprint.Cells)
+            {
+                var box = footprint.Bounds(cell, center); var next = cell.Navigation;
+                for (int y = box.MinY / basis.CellSize; y < box.MaxY / basis.CellSize; y++)
+                    for (int x = box.MinX / basis.CellSize; x < box.MaxX / basis.CellSize; x++)
+                    {
+                        int index = y * basis.Width + x; _cellOverrides.TryGetValue(index, out var lower);
+                        _cellOverrides[index] = new(next.Traverse ?? lower.Traverse, next.CanStop ?? lower.CanStop, next.Terrain ?? lower.Terrain);
+                    }
+            }
+        }
+    }
+    private bool SafeGrid(NavigationGrid candidate, out EntityId occupant)
+    {
+        occupant = default;
+        for (int i = 0; i < Count; i++)
+        {
+            ref var entity = ref _entities[i]; var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
+            bool clear = TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
+            bool newNoStop = !TerrainGeometry.CanStop(candidate, entity.Position, type.Body, type.Locomotor) &&
+                TerrainGeometry.CanStop(_navigation!.Grid, entity.Position, type.Body, type.Locomotor) && !entity.Moving;
+            if ((!clear || newNoStop) && (occupant.Value == 0 || entity.Id.Value < occupant.Value)) occupant = entity.Id;
+        }
+        return occupant.Value == 0;
+    }
+    private bool PrepareFootprint(int unitType, WorldPosition position, out NavigationGrid? candidate)
+    {
+        candidate = null; var footprint = _types[unitType].Footprint;
+        if (footprint is null) return true;
+        if (!FootprintFits(footprint, position)) return false;
+        if (_baseGrid is null) return true;
+        candidate = ComposeFootprints(_baseGrid, footprint, position);
+        return SafeGrid(candidate, out _);
+    }
+    private void CommitGrid(NavigationGrid candidate)
+    {
+        if (ReferenceEquals(candidate, _navigation!.Grid)) return;
+        _navigation.SetGrid(candidate); _weighted?.SetGrid(candidate); _plainResolver = null; _routeTree = null; _weightedTrees.Clear(); _bulkAllowed = false;
+        // Local paths and exact destinations are also invalidated, not only shared global fields.
+        for (int i = 0; i < Count; i++)
+        {
+            ref var entity = ref _entities[i]; entity.PathLength = entity.PathCursor = 0;
+            entity.YieldFor = default; entity.YieldDeadline = 0;
+            var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
+            bool wasStranded = entity.TerrainStranded;
+            entity.TerrainStranded = !TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
+            if (entity.TerrainStranded)
+            {
+                entity.Moving = false; entity.OrderPhase = OrderPhase.Waiting;
+                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entity.Id, entity.Position, entity.UnitType));
+            }
+            else if ((wasStranded || entity.Moving) && type.Movable)
+            {
+                var goal = entity.Target;
+                if (!StopAllowed(entity.UnitType, goal)) SetTarget(i, goal);
+                else entity.Moving = entity.Position != goal;
+            }
+        }
+    }
+    private void SetBaseBlocked(int cell, bool blocked)
+    {
+        var candidateBase = _baseGrid!.WithBlocked(cell, blocked);
+        if (ReferenceEquals(candidateBase, _baseGrid)) return;
+        var candidate = ComposeFootprints(candidateBase);
+        if (!SafeGrid(candidate, out var occupant))
+        { _events.Add(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation!.Grid.Center(cell))); return; }
+        _baseGrid = candidateBase; CommitGrid(candidate);
+    }
+}

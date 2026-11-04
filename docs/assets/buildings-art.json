@@ -1,0 +1,140 @@
+{
+  "tool": "built-in imagegen",
+  "assets": [
+    {
+      "name": "power-plant",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a compact power station, two circular cooling fans and a small turbine building, pipes and transformer bank; rectangular footprint",
+      "source": "docs/assets/sources/building-power-plant-source.png",
+      "source_sha256": "c6b0ea22863aed66a22908420690b8da5585aade33ae6fe80ff1a52d3a10c22c",
+      "asset": "sandbox/assets/buildings/power-plant.png",
+      "sha256": "d2b17d1622386bc9acc47d2eaf5335536bb0fa02df707e4a3e61d2a51ab9cade",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "barracks",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a compact military barracks, two joined olive-roof dormitory blocks, courtyard and a clearly visible entrance on the bottom edge; no people",
+      "source": "docs/assets/sources/building-barracks-source.png",
+      "source_sha256": "35e4330ee11189c683c1d0e7ef85164fc44e01a38ee20a8cd113426eda9673cf",
+      "asset": "sandbox/assets/buildings/barracks.png",
+      "sha256": "740844ec05f1452a363eea95fb818a90ceae1c89f42d28666c19949519ecff87",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "factory",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a vehicle factory with a broad assembly hall on the left, a drive-through open repair bay on the right with yellow service markings, entrance at the bottom; no vehicles",
+      "source": "docs/assets/sources/building-factory-source.png",
+      "source_sha256": "ee746d8bd87efb757d15f1c3baf7a7d0f4972f34482d7a94ba614202d030c937",
+      "asset": "sandbox/assets/buildings/factory.png",
+      "sha256": "153c7a368c332c104183fe8cfca5b4d8a8068659ee4dd37f7d48eb5e45f71114",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "headquarters",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a headquarters command building, angular olive armored roof, communication consoles and antenna bases, an EMPTY round radar mount centered on the upper right portion, no radar dish yet, rectangular concrete foundation",
+      "source": "docs/assets/sources/building-headquarters-source.png",
+      "source_sha256": "70835ca49bc50bdd576cde267fc9d76aee507f55435c6bb3a235c264c5a4cca8",
+      "asset": "sandbox/assets/buildings/headquarters.png",
+      "sha256": "a8869da6e8996af3b5c136ea52083bb94159fac3d6932e03ef150cb83e1426f2",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "construction-yard",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a construction yard / vehicle assembly facility, a low industrial workshop on left, an OPEN assembly pad on right with a small unfinished vehicle chassis, overhead yellow gantry crane, entrance/garage exit on bottom, compact rectangular foundation; the crane and garage can be animated with separate overlays later",
+      "source": "docs/assets/sources/building-construction-yard-source.png",
+      "source_sha256": "1e97946440c17e7bb06539e08f2678db89989a366be76e1dbad462321dc00b2d",
+      "asset": "sandbox/assets/buildings/construction-yard.png",
+      "sha256": "23dd46ca59f4f437118f8054713da0990a8baba547818c0151fc44fdaa9f74df",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "mine",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a compact mine head building with open dark shaft entrance on bottom, ore conveyor and bins of gray ore, olive industrial shed and winch, no text",
+      "source": "docs/assets/sources/building-mine-source.png",
+      "source_sha256": "edce8abbbc88a446732e5a2d14f3918274450f63426955ac9fd6260289ec8595",
+      "asset": "sandbox/assets/buildings/mine.png",
+      "sha256": "f1f2b99f77946084e365bc226df7bb8a1b918621927fead80b066595d08bdd3b",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "oil-derrick",
+      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a compact oil extraction derrick with pumpjack and pipes, olive steel frame and small cylindrical storage tanks on concrete pad, yellow safety markings, no text",
+      "source": "docs/assets/sources/building-oil-derrick-source.png",
+      "source_sha256": "473d495d787ac7357ddd365bd4ff51b1f6defe5c7f09aa7331f70f5ff2f310f1",
+      "asset": "sandbox/assets/buildings/oil-derrick.png",
+      "sha256": "241344dca6fe4b8b0bb662ea55dd243b79d7f8bcbc3aa406f793b1e898bd5d88",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "radar",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: single detachable radar antenna seen strictly from directly above, long olive and silver rectangular slotted antenna bar centered on a round pivot; no building or foundation. Small magenta panels. Will rotate as a sprite.",
+      "source": "docs/assets/sources/building-radar-source.png",
+      "source_sha256": "865f2b71520faf40fcaacdbc1edc49b9ad0a2fb22481a183ce14f8c882f7abd8",
+      "asset": "sandbox/assets/buildings/radar.png",
+      "sha256": "83de5cfe3467a2ec6a8394dcb5cdd44e58793663b23097d7e0bec6d41cd5261f",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "building-ruins",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: single pile of destroyed industrial building remains, collapsed concrete slabs, dark charred metal beams, broken olive roof panels, a few small magenta scraps; irregular compact rectangular silhouette, no standing building, no fire, no people.",
+      "source": "docs/assets/sources/building-building-ruins-source.png",
+      "source_sha256": "e9d460426df2527336f62436ac5f0fee789ea32f9d3aa97942ed04bd0d1ca27e",
+      "asset": "sandbox/assets/buildings/building-ruins.png",
+      "sha256": "cc1112d3df5be69fc8897497da65b80bf8f08f2d9834a724d259a2ebe983f9f0",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "trees",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: a small dense cluster of six leafy deciduous trees seen directly from overhead, varied lush and dark green canopies, tiny gaps of transparency between leaves, no soil or square ground tile, organic uneven silhouette.",
+      "source": "docs/assets/sources/building-trees-source.png",
+      "source_sha256": "53fa087c1109be7865846fbddfb5aa48dc2572bfe85bb2f274af7f5a69e0cf7e",
+      "asset": "sandbox/assets/buildings/trees.png",
+      "sha256": "e579c9332c402a18e036f250fb0dfffac04f145fa3f3e0759825487f2b4eb132",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "rocks",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: a natural heap of medium and small weathered gray stones seen directly from overhead, irregular organic mound, no foundation, no vegetation, no team colors.",
+      "source": "docs/assets/sources/building-rocks-source.png",
+      "source_sha256": "24e265ee0be8da25f14058bd0005094c8bffe75e9845e3389fc8213de0e6b20e",
+      "asset": "sandbox/assets/buildings/rocks.png",
+      "sha256": "8f006d5a64bfcbc0566517f912e160d8f492250879c3d81188839632f949e32c",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "cliff",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: a large jagged gray granite rock outcrop / low cliff seen directly from overhead, chunky craggy contours, shadows within rock only, no surrounding ground, no team colors.",
+      "source": "docs/assets/sources/building-cliff-source.png",
+      "source_sha256": "c2da2cb95a098d515067a3bb82f461483c4acc908d4e156dfce828951e4c6922",
+      "asset": "sandbox/assets/buildings/cliff.png",
+      "sha256": "be01ed28fdfca2cfb8510c78628946c927d17359cd01decec96709e325e5ce98",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "debris",
+      "prompt": "Use case: stylized-concept. Transparent top-down RTS game sprite, strict orthographic overhead, not isometric. Crisp hand-painted game art, readable when small, centered complete object with generous transparent margin. Genuinely transparent alpha background, no scenery, text or logos. Subject: an irregular pile of abandoned industrial scrap and rubble seen directly from overhead: rusty broken vehicle panels, steel beams, barrels, concrete chunks. No intact vehicle, no ground, no team markings.",
+      "source": "docs/assets/sources/building-debris-source.png",
+      "source_sha256": "1fe3df5e8f9fb78bf7c732a4e13644eaeed83466e6c88dd2af09bad66bf1be91",
+      "asset": "sandbox/assets/buildings/debris.png",
+      "sha256": "865cf181b2f878a15a4114b378084c1d040afb19a9a07abae677bb7b3678940a",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+    },
+    {
+      "name": "door-strip",
+      "prompt": "A horizontal animation strip with EXACTLY THREE equal square cells in one row, aspect ratio3:1. Same wide olive industrial sliding garage gate in all cells, crisp RTS painted metal. Frame1 gate closed, frame2 two panels half slid apart, frame3 panels fully retracted at sides with a transparent empty opening. Fixed identical gate frame, anchor, scale, palette and lighting in every cell. Only detachable gate panels and slim header/side frame, no building, no background or black fill in the opening. Directly overhead game overlay, bottom entrance orientation. Magenta team panels on side jambs, yellow safety stripes. Transparent alpha behind/between panels.",
+      "source": "docs/assets/sources/building-door-strip-source.png",
+      "source_sha256": "b9e75df3aeab9636400634f5b9ed812cc2861bf8a144df4955401a9d0aa29bb6",
+      "asset": "sandbox/assets/buildings/door-strip.png",
+      "sha256": "0762efd299f673abefd55fb1cdc8f0377ec12fb8239fe9e3f1475b6f88a71d4e",
+      "normalization": "three equal cells; uniform resize512, shared canvas and anchor; RGBA preserved"
+    },
+    {
+      "name": "work-strip",
+      "prompt": "A horizontal animation strip with EXACTLY THREE equal square cells in one row, aspect ratio3:1. Small industrial welding sparks / electric arc game effect, same center and scale. Frame1 small cyan spark cluster, frame2 bright white cyan star burst with a few orange sparks, frame3 fading sparse cyan sparks. Crisp painted RTS game effect, isolated transparent alpha everywhere else. No building, person, tool, text, borders, scenery or solid background. Will overlay a vehicle assembly pad.",
+      "source": "docs/assets/sources/building-work-strip-source.png",
+      "source_sha256": "1ca8c56bf03b2fc60e26f52e8c2a940d517213a2bc417f1fbae4ceb20e6dc796",
+      "asset": "sandbox/assets/buildings/work-strip.png",
+      "sha256": "234d1650ea5d15a3c13e61ff14f2d24ccbe1ce57e32b9b44d33555221ccadcea",
+      "normalization": "three equal cells; uniform resize512, shared canvas and anchor; RGBA preserved"
+    }
+  ]
+}

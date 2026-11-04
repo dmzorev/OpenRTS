@@ -1,116 +1,93 @@
 namespace OpenRTS.Core.Navigation;
 
-/// <summary>Reusable broad phase in world units; navigation cells have no exclusive owner.</summary>
+/// <summary>Multi-bin spatial index; broad extents and physical collision shapes are independent.</summary>
 internal sealed class MotionIndex(int maximumStep)
 {
     internal const int BodyRadius = 256;
     private const int BinSize = 1024;
-    private struct Body { internal EntityId Id; internal WorldPosition Start, End; internal int Next; internal uint Owner; }
+    private struct Body { internal EntityId Id; internal WorldPosition Start, End; internal BodyShape Shape; }
+    private readonly record struct Entry(int Body, int Next);
     private Body[] _bodies = [];
+    private Entry[] _entries = [];
+    private int[] _seen = [];
+    private int _entryCount, _stamp;
     private readonly Dictionary<long, int> _heads = new();
+    private readonly List<int> _candidates = [];
 
     internal void Clear(int capacity)
     {
-        _heads.Clear();
-        _heads.EnsureCapacity(capacity);
-        if (_bodies.Length < capacity) Array.Resize(ref _bodies, Math.Max(capacity, 16));
+        _heads.Clear(); _heads.EnsureCapacity(capacity); _entryCount = 0;
+        if (_bodies.Length < capacity) { Array.Resize(ref _bodies, Math.Max(capacity, 16)); Array.Resize(ref _seen, _bodies.Length); }
     }
-
-    internal void Add(int index, EntityId id, WorldPosition position, uint owner = 0)
+    internal void Add(int index, EntityId id, WorldPosition position, uint owner = 0, BodyShape? shape = null, int broadX = -1, int broadY = -1)
     {
-        if (index >= _bodies.Length) Array.Resize(ref _bodies, Math.Max(index + 1, _bodies.Length * 2));
-        long key = Key(position.X / BinSize, position.Y / BinSize);
-        int next = _heads.TryGetValue(key, out int head) ? head : -1;
-        _bodies[index] = new() { Id = id, Start = position, End = position, Next = next, Owner = owner };
-        _heads[key] = index;
+        if (index >= _bodies.Length) { Array.Resize(ref _bodies, Math.Max(index + 1, _bodies.Length * 2)); Array.Resize(ref _seen, _bodies.Length); }
+        var body = shape ?? BodyShape.Default;
+        if (broadX < 0) broadX = body.HalfWidth; if (broadY < 0) broadY = body.HalfHeight;
+        _bodies[index] = new() { Id = id, Start = position, End = position, Shape = body };
+        for (int y = Floor(position.Y - broadY); y <= Floor(position.Y + broadY); y++)
+            for (int x = Floor(position.X - broadX); x <= Floor(position.X + broadX); x++)
+            {
+                if (_entries.Length == _entryCount) Array.Resize(ref _entries, Math.Max(64, _entries.Length * 2));
+                long key = Key(x, y); int next = _heads.TryGetValue(key, out int head) ? head : -1;
+                _entries[_entryCount] = new(index, next); _heads[key] = _entryCount++;
+            }
     }
-
     internal void SetEnd(int index, WorldPosition position) => _bodies[index].End = position;
-
+    internal BodyShape Shape(int index) => _bodies[index].Shape;
     internal void Query(WorldPosition from, WorldPosition to, int radius, List<int> result)
     {
         result.Clear(); int padding = radius + maximumStep;
+        if (_stamp == int.MaxValue) { Array.Clear(_seen); _stamp = 0; } _stamp++;
         for (int y = Floor(Math.Min(from.Y, to.Y) - padding); y <= Floor(Math.Max(from.Y, to.Y) + padding); y++)
             for (int x = Floor(Math.Min(from.X, to.X) - padding); x <= Floor(Math.Max(from.X, to.X) + padding); x++)
             {
                 if (!_heads.TryGetValue(Key(x, y), out int next)) continue;
-                for (; next >= 0; next = _bodies[next].Next) result.Add(next);
+                for (; next >= 0; next = _entries[next].Next)
+                {
+                    int index = _entries[next].Body;
+                    if (_seen[index] == _stamp) continue;
+                    _seen[index] = _stamp; result.Add(index);
+                }
             }
     }
-
     internal bool ClearSegment(int index, WorldPosition from, WorldPosition to)
     {
-        int padding = BodyRadius * 2 + maximumStep;
-        for (int y = Floor(Math.Min(from.Y, to.Y) - padding); y <= Floor(Math.Max(from.Y, to.Y) + padding); y++)
-            for (int x = Floor(Math.Min(from.X, to.X) - padding); x <= Floor(Math.Max(from.X, to.X) + padding); x++)
-            {
-                if (!_heads.TryGetValue(Key(x, y), out int current)) continue;
-                for (; current >= 0; current = _bodies[current].Next)
-                    if (current != index && Overlap(from, to, _bodies[current].End, _bodies[current].End)) return false;
-            }
+        var shape = _bodies[index].Shape; Query(from, to, Math.Max(shape.HalfWidth, shape.HalfHeight), _candidates);
+        foreach (int other in _candidates)
+            if (other != index && BodyGeometry.Overlap(from, to, shape, _bodies[other].End, _bodies[other].End, _bodies[other].Shape)) return false;
         return true;
     }
-
     internal bool ClearMove(int index, WorldPosition destination, out int blocker, bool[]? cohort = null)
     {
-        var start = _bodies[index].Start;
-        int padding = BodyRadius * 2 + maximumStep;
-        int minX = Floor(Math.Min(start.X, destination.X) - padding), maxX = Floor(Math.Max(start.X, destination.X) + padding);
-        int minY = Floor(Math.Min(start.Y, destination.Y) - padding), maxY = Floor(Math.Max(start.Y, destination.Y) + padding);
-        blocker = -1;
-        for (int y = minY; y <= maxY; y++) for (int x = minX; x <= maxX; x++)
+        var actor = _bodies[index]; Query(actor.Start, destination, Math.Max(actor.Shape.HalfWidth, actor.Shape.HalfHeight), _candidates); blocker = -1;
+        foreach (int other in _candidates)
         {
-            if (!_heads.TryGetValue(Key(x, y), out int current)) continue;
-            for (; current >= 0; current = _bodies[current].Next)
-            {
-                if (current == index || cohort is not null && cohort[current]) continue;
-                ref var other = ref _bodies[current];
-                if (!Overlap(start, destination, other.Start, other.End)) continue;
-                if (blocker < 0 || other.Id.Value < _bodies[blocker].Id.Value) blocker = current;
-            }
+            if (other == index || cohort is not null && cohort[other]) continue;
+            ref var body = ref _bodies[other];
+            if (BodyGeometry.Overlap(actor.Start, destination, actor.Shape, body.Start, body.End, body.Shape) &&
+                (blocker < 0 || body.Id.Value < _bodies[blocker].Id.Value)) blocker = other;
         }
         return blocker < 0;
     }
-
-    internal bool ClearPlacement(WorldPosition position, out int blocker)
+    internal bool ClearPlacement(WorldPosition position, out int blocker, BodyShape? shape = null)
     {
-        blocker = -1;
-        int padding = BodyRadius * 2 + maximumStep;
-        for (int y = Floor(position.Y - padding); y <= Floor(position.Y + padding); y++)
-            for (int x = Floor(position.X - padding); x <= Floor(position.X + padding); x++)
-            {
-                if (!_heads.TryGetValue(Key(x, y), out int current)) continue;
-                for (; current >= 0; current = _bodies[current].Next)
-                    if (Overlap(position, position, _bodies[current].End, _bodies[current].End) &&
-                        (blocker < 0 || _bodies[current].Id.Value < _bodies[blocker].Id.Value)) blocker = current;
-            }
+        var actor = shape ?? BodyShape.Default;
+        Query(position, position, Math.Max(actor.HalfWidth, actor.HalfHeight), _candidates); blocker = -1;
+        foreach (int other in _candidates)
+            if (BodyGeometry.Overlap(position, position, actor, _bodies[other].End, _bodies[other].End, _bodies[other].Shape) &&
+                (blocker < 0 || _bodies[other].Id.Value < _bodies[blocker].Id.Value)) blocker = other;
         return blocker < 0;
     }
-
     internal bool OverlapsCell(NavigationGrid grid, int cell, int count, out EntityId occupant)
     {
-        // Terrain edits are rare; test exact bodies instead of treating a route cell as occupied.
-        int x = cell % grid.Width * grid.CellSize, y = cell / grid.Width * grid.CellSize;
-        occupant = default;
-        for (int i = 0; i < count; i++)
-            if (TerrainGeometry.IntersectsBox(_bodies[i].End, _bodies[i].End,
-                x - BodyRadius, y - BodyRadius, x + grid.CellSize + BodyRadius, y + grid.CellSize + BodyRadius) &&
+        int x = cell % grid.Width * grid.CellSize, y = cell / grid.Width * grid.CellSize; var box = new WorldBox(x, y, x + grid.CellSize, y + grid.CellSize);
+        Query(new(x, y), new(x + grid.CellSize, y + grid.CellSize), 0, _candidates); occupant = default;
+        foreach (int i in _candidates)
+            if (_bodies[i].Shape.Kind != BodyKind.None && BodyGeometry.SweptBox(_bodies[i].End, _bodies[i].End, box, _bodies[i].Shape) &&
                 (occupant.Value == 0 || _bodies[i].Id.Value < occupant.Value)) occupant = _bodies[i].Id;
         return occupant.Value != 0;
     }
-
-    private static bool Overlap(WorldPosition a0, WorldPosition a1, WorldPosition b0, WorldPosition b1)
-    {
-        long x = (long)a0.X - b0.X, y = (long)a0.Y - b0.Y;
-        long dx = ((long)a1.X - a0.X) - ((long)b1.X - b0.X), dy = ((long)a1.Y - a0.Y) - ((long)b1.Y - b0.Y);
-        Int128 length = (Int128)dx * dx + (Int128)dy * dy;
-        Int128 dot = -((Int128)x * dx + (Int128)y * dy);
-        const long diameterSquared = BodyRadius * 2L * BodyRadius * 2L;
-        if (dot <= 0 || length == 0) return (Int128)x * x + (Int128)y * y < diameterSquared;
-        if (dot >= length) return (Int128)(x + dx) * (x + dx) + (Int128)(y + dy) * (y + dy) < diameterSquared;
-        return ((Int128)x * x + (Int128)y * y - diameterSquared) * length < dot * dot;
-    }
-
     private static int Floor(int value) => value >= 0 ? value / BinSize : (value - BinSize + 1) / BinSize;
     private static long Key(int x, int y) => ((long)x << 32) | (uint)y;
 }

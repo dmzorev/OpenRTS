@@ -3,12 +3,14 @@ namespace OpenRTS.Core.Navigation;
 /// <summary>Physical adapter for the current full-cell terrain, not a route cost or occupancy map.</summary>
 internal static class TerrainGeometry
 {
-    internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, int radius, Locomotor? locomotor = null)
+    internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, int radius, Locomotor? locomotor = null) =>
+        Clear(grid, from, to, radius == 0 ? BodyShape.None : BodyShape.Circle(radius), locomotor);
+    internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, BodyShape body, Locomotor? locomotor = null)
     {
         int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize;
-        if (Math.Min(from.X, to.X) < radius || Math.Min(from.Y, to.Y) < radius ||
-            Math.Max(from.X, to.X) > width - radius || Math.Max(from.Y, to.Y) > height - radius) return false;
-        int size = grid.CellSize, reach = (radius + size - 1) / size;
+        if (Math.Min(from.X, to.X) < body.HalfWidth || Math.Min(from.Y, to.Y) < body.HalfHeight ||
+            Math.Max(from.X, to.X) > width - body.HalfWidth || Math.Max(from.Y, to.Y) > height - body.HalfHeight) return false;
+        int size = grid.CellSize, reachX = (body.HalfWidth + size - 1) / size, reachY = (body.HalfHeight + size - 1) / size;
         int x = Math.Min(from.X / size, grid.Width - 1), y = Math.Min(from.Y / size, grid.Height - 1);
         int endX = Math.Min(to.X / size, grid.Width - 1), endY = Math.Min(to.Y / size, grid.Height - 1);
         long dx = (long)to.X - from.X, dy = (long)to.Y - from.Y;
@@ -16,19 +18,36 @@ internal static class TerrainGeometry
         long ax = Math.Abs(dx), ay = Math.Abs(dy);
         long tx = sx > 0 ? (long)(x + 1) * size - from.X : from.X - (long)x * size;
         long ty = sy > 0 ? (long)(y + 1) * size - from.Y : from.Y - (long)y * size;
+        int previous = y * grid.Width + x;
         while (true)
         {
-            for (int cy = Math.Max(0, y - reach); cy <= Math.Min(grid.Height - 1, y + reach); cy++)
-                for (int cx = Math.Max(0, x - reach); cx <= Math.Min(grid.Width - 1, x + reach); cx++)
-                    if ((grid.IsBlocked(cy * grid.Width + cx) || locomotor is not null && !locomotor.At(grid, cy * grid.Width + cx).Traverse) && IntersectsBox(from, to,
-                        cx * size - radius, cy * size - radius, (cx + 1) * size + radius, (cy + 1) * size + radius)) return false;
+            int current = y * grid.Width + x;
+            if (locomotor is not null && Math.Abs((long)grid.SurfaceAt(current).Elevation - grid.SurfaceAt(previous).Elevation) > locomotor.MaximumStep) return false;
+            previous = current;
+            for (int cy = Math.Max(0, y - reachY); cy <= Math.Min(grid.Height - 1, y + reachY); cy++)
+                for (int cx = Math.Max(0, x - reachX); cx <= Math.Min(grid.Width - 1, x + reachX); cx++)
+                {
+                    int cell = cy * grid.Width + cx;
+                    if ((grid.IsBlocked(cell) || locomotor is not null && (!locomotor.At(grid, cell).Traverse || Math.Abs((long)grid.SurfaceAt(cell).Elevation - grid.SurfaceAt(current).Elevation) > locomotor.MaximumStep)) &&
+                        BodyGeometry.SweptBox(from, to, new(cx * size, cy * size, (cx + 1) * size, (cy + 1) * size), body)) return false;
+                    foreach (int obstacle in grid.ObstaclesAt(cell)) if (BodyGeometry.SweptBox(from, to, grid.Obstacle(obstacle), body)) return false;
+                }
             if (x == endX && y == endY) return true;
             if (x != endX && (y == endY || tx * ay <= ty * ax)) { x += sx; tx += size; }
             else { y += sy; ty += size; }
         }
     }
 
-    // Conservative square dilation of terrain. Rounded obstacle corners can be introduced with shape geometry.
+    internal static bool CanStop(NavigationGrid grid, WorldPosition point, BodyShape body, Locomotor profile)
+    {
+        if (!Clear(grid, point, point, body, profile)) return false;
+        int size = grid.CellSize;
+        for (int y = Math.Max(0, (point.Y - body.HalfHeight) / size); y <= Math.Min(grid.Height - 1, (point.Y + body.HalfHeight) / size); y++)
+            for (int x = Math.Max(0, (point.X - body.HalfWidth) / size); x <= Math.Min(grid.Width - 1, (point.X + body.HalfWidth) / size); x++)
+                if (!profile.At(grid, y * grid.Width + x).CanStop && BodyGeometry.SweptBox(point, point, new(x * size, y * size, (x + 1) * size, (y + 1) * size), body)) return false;
+        return true;
+    }
+
     internal static bool IntersectsBox(WorldPosition a, WorldPosition b, int minX, int minY, int maxX, int maxY)
     {
         if (Math.Max(a.X, b.X) < minX || Math.Min(a.X, b.X) > maxX ||

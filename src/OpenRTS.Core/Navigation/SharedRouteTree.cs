@@ -10,25 +10,27 @@ internal sealed class SharedRouteTree
     internal int Depth(int cell) => _depth[cell];
     private readonly int[] _parent, _depth;
     private readonly Locomotor? _profile;
+    private readonly RouteGeometry _geometry;
     private readonly List<int> _forward = [], _backward = [];
 
-    internal SharedRouteTree(NavigationGrid grid, int root, CancellationToken token, Locomotor? profile = null)
+    internal SharedRouteTree(NavigationGrid grid, int root, CancellationToken token, Locomotor? profile = null, RouteGeometry? geometry = null)
     {
-        Grid = grid; _profile = profile;
-        _parent = new int[grid.CellCount]; _depth = new int[grid.CellCount];
+        Grid = grid; _profile = profile; _geometry = geometry ?? new(grid, profile ?? Locomotor.Default);
+        var nodes = _geometry.Nodes;
+        _parent = new int[nodes.CellCount]; _depth = new int[nodes.CellCount];
         Array.Fill(_depth, -1);
-        int[] queue = ArrayPool<int>.Shared.Rent(grid.CellCount);
-        long[]? costs = profile is null ? null : ArrayPool<long>.Shared.Rent(grid.CellCount);
-        if (costs is not null) Array.Fill(costs, long.MaxValue, 0, grid.CellCount);
+        int[] queue = ArrayPool<int>.Shared.Rent(nodes.CellCount);
+        long[]? costs = profile is null ? null : ArrayPool<long>.Shared.Rent(nodes.CellCount);
+        if (costs is not null) Array.Fill(costs, long.MaxValue, 0, nodes.CellCount);
         try
         {
             Flood(root);
-            for (int cell = 0; cell < grid.CellCount; cell++)
+            for (int cell = 0; cell < nodes.CellCount; cell++)
             {
                 if ((cell & 4095) == 0) token.ThrowIfCancellationRequested();
                 if (_depth[cell] < 0 && !Blocked(cell)) Flood(cell);
             }
-            bool Blocked(int cell) => grid.IsBlocked(cell) || profile is not null && !profile.At(grid, cell).Traverse;
+            bool Blocked(int cell) => !_geometry.Open(cell, token);
             void FloodWeighted(int seed)
             {
                 var pending = new PriorityQueue<int, (long Cost, int Cell)>();
@@ -40,9 +42,9 @@ internal sealed class SharedRouteTree
                     _depth[cell] = _parent[cell] < 0 ? 0 : _depth[_parent[cell]] + 1; VisitedCells++;
                     for (int d = 0; d < 4; d++)
                     {
-                        int next = GridNeighbors.Neighbor(grid, cell, d);
-                        if (next < 0 || Blocked(next)) continue;
-                        long cost = priority.Cost + TerrainCost.Edge(grid, profile!, cell, next);
+                        int next = _geometry.Neighbor(cell, d);
+                        if (next < 0 || !_geometry.Edge(cell, next, token)) continue;
+                        long cost = priority.Cost + _geometry.Cost(cell, next);
                         if (cost >= costs[next]) continue;
                         costs[next] = cost; _parent[next] = cell; pending.Enqueue(next, (cost, next));
                     }
@@ -59,8 +61,8 @@ internal sealed class SharedRouteTree
                     int cell = queue[head++];
                     for (int direction = 0; direction < 4; direction++)
                     {
-                        int next = GridNeighbors.Neighbor(grid, cell, direction);
-                        if (next < 0 || _depth[next] >= 0 || Blocked(next)) continue;
+                        int next = _geometry.Neighbor(cell, direction);
+                        if (next < 0 || _depth[next] >= 0 || !_geometry.Edge(cell, next, token)) continue;
                         _depth[next] = _depth[cell] + 1; _parent[next] = cell; queue[tail++] = next;
                     }
                 }
@@ -72,12 +74,12 @@ internal sealed class SharedRouteTree
 
     internal int[]? Route(int start, int goal, CancellationToken token)
     {
-        if (Grid.IsBlocked(start) || Grid.IsBlocked(goal) || _profile is not null && (!_profile.At(Grid, start).Traverse || !_profile.At(Grid, goal).Traverse)) return null;
+        if (!_geometry.Open(start, token) || !_geometry.Open(goal, token)) return null;
         if (start == goal) return [];
-        int sx = start % Grid.Width, sy = start / Grid.Width, gx = goal % Grid.Width, gy = goal / Grid.Width;
-        int turn = sy * Grid.Width + gx;
+        int sx = start % _geometry.Nodes.Width, sy = start / _geometry.Nodes.Width, gx = goal % _geometry.Nodes.Width, gy = goal / _geometry.Nodes.Width;
+        int turn = sy * _geometry.Nodes.Width + gx;
         if (_profile is null && Clear(start, turn) && Clear(turn, goal)) return turn == start || turn == goal ? [goal] : [turn, goal];
-        turn = gy * Grid.Width + sx;
+        turn = gy * _geometry.Nodes.Width + sx;
         if (_profile is null && Clear(start, turn) && Clear(turn, goal)) return turn == start || turn == goal ? [goal] : [turn, goal];
         _forward.Clear(); _backward.Clear();
         int a = start, b = goal, visited = 0;

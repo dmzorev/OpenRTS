@@ -9,6 +9,10 @@ public sealed class WeightedNavigator
 {
     private sealed class Field { internal RouteRequest Key = new(-1, -1); internal long[] Costs = []; public int Visited; }
     private readonly Locomotor[] _profiles;
+    private readonly bool _exact;
+    internal RouteGeometry Geometry(int profile) => Resolver(profile).Geometry;
+    internal WorldPosition Point(int cell) => _exact ? new WorldPosition(cell % _routeWidth * RouteGeometry.ExactStep + RouteGeometry.ExactStep / 2, cell / _routeWidth * RouteGeometry.ExactStep + RouteGeometry.ExactStep / 2) : Grid.Center(cell);
+    private readonly int _routeCount, _routeWidth;
     private readonly Field[] _fields;
     private readonly Dictionary<RouteRequest, int> _cached = new();
     private readonly Dictionary<int, DestinationResolver> _components = new();
@@ -24,7 +28,7 @@ public sealed class WeightedNavigator
     public int Visited { get; private set; }
     public double Milliseconds { get; private set; }
 
-    public WeightedNavigator(NavigationGrid grid, Locomotor[] profiles, int workers, int budget, int cache, bool reverse)
+    public WeightedNavigator(NavigationGrid grid, Locomotor[] profiles, int workers, int budget, int cache, bool reverse, bool exactGeometry = false)
     {
         ArgumentNullException.ThrowIfNull(grid); ArgumentNullException.ThrowIfNull(profiles);
         if (workers is < 1 or > 64 || budget is < 1 or > 64 || cache is < 1 or > 64)
@@ -32,10 +36,12 @@ public sealed class WeightedNavigator
         if (profiles.Length is < 1 or > 16 || profiles.Any(p => p is null || p.Rules.Count <= grid.MaximumTerrain))
             throw new ArgumentException("Provide 1..16 profiles covering every terrain.", nameof(profiles));
         // Components together are bounded to 64 MiB; fields to 128 MiB, except one maximum-size field.
-        if ((long)grid.CellCount * profiles.Length > NavigationGrid.MaximumCells)
+        _exact = exactGeometry;
+        var nodes = new RouteGeometry(grid, profiles[0], exactGeometry).Nodes; _routeCount = nodes.CellCount; _routeWidth = nodes.Width;
+        if ((long)_routeCount * profiles.Length > NavigationGrid.MaximumCells)
             throw new ArgumentException("N1 terrain/profile combination exceeds its component memory budget.");
         Grid = grid; _profiles = profiles.ToArray(); _workers = workers; _reverse = reverse;
-        int capacity = Math.Min(cache, Math.Max(1, NavigationGrid.MaximumCells / grid.CellCount));
+        int capacity = Math.Min(cache, Math.Max(1, NavigationGrid.MaximumCells / _routeCount));
         _fields = Enumerable.Range(0, capacity).Select(_ => new Field()).ToArray();
         _jobs = new RouteRequest[Math.Min(budget, capacity)]; _slots = new int[_jobs.Length];
     }
@@ -54,7 +60,7 @@ public sealed class WeightedNavigator
     {
         if ((uint)profile >= (uint)_profiles.Length) throw new ArgumentOutOfRangeException(nameof(profile));
         if (!_components.TryGetValue(profile, out var resolver))
-        { resolver = new(Grid, _profiles[profile]); _components.Add(profile, resolver); }
+        { resolver = new(Grid, _profiles[profile], _exact); _components.Add(profile, resolver); }
         return resolver;
     }
     public bool CanReach(int profile, int a, int b, CancellationToken token = default)
@@ -84,13 +90,14 @@ public sealed class WeightedNavigator
             _slots[j] = _replacement; _replacement = (_replacement + 1) % _fields.Length;
             var field = _fields[_slots[j]];
             _cached.Remove(field.Key); field.Key = new(-1, -1);
-            if (field.Costs.Length == 0) field.Costs = new long[Grid.CellCount];
+            if (field.Costs.Length == 0) field.Costs = new long[_routeCount];
         }
+        for (int j = 0; j < Builds; j++) Geometry(_jobs[j].Profile).Prepare(token);
         long start = Stopwatch.GetTimestamp();
         void Run(int job)
         {
             int j = _reverse ? Builds - job - 1 : job;
-            _fields[_slots[j]].Visited = Build(Grid, _profiles[_jobs[j].Profile], _jobs[j].Goal, _fields[_slots[j]].Costs, token);
+            _fields[_slots[j]].Visited = Build(Geometry(_jobs[j].Profile), _jobs[j].Goal, _fields[_slots[j]].Costs, token);
         }
         if (_workers == 1) for (int j = 0; j < Builds; j++) Run(j);
         else Parallel.For(0, Builds, new ParallelOptions { MaxDegreeOfParallelism = _workers, CancellationToken = token }, Run);
@@ -112,15 +119,15 @@ public sealed class WeightedNavigator
     internal int[] Path(RouteRequest key, int start, CancellationToken token)
     {
         var turns = new List<int> { start }; int cell = start, direction = 0, length = 0;
-        var costs = _fields[_cached[key]].Costs; var profile = _profiles[key.Profile];
+        var costs = _fields[_cached[key]].Costs; var graph = Geometry(key.Profile);
         while (cell != key.Goal)
         {
             if ((length++ & 1023) == 0) token.ThrowIfCancellationRequested();
             int next = -1;
             for (int d = 0; d < 4; d++)
             {
-                int n = GridNeighbors.Neighbor(Grid, cell, d);
-                if (n >= 0 && costs[n] != long.MaxValue && costs[n] + TerrainCost.Edge(Grid, profile, cell, n) == costs[cell] && (next < 0 || n < next)) next = n;
+                int n = graph.Neighbor(cell, d);
+                if (n >= 0 && costs[n] != long.MaxValue && costs[n] + graph.Cost(cell, n) == costs[cell] && (next < 0 || n < next)) next = n;
             }
             if (next < 0) throw new InvalidOperationException("Weighted field has no descending edge.");
             if (cell != start && next - cell != direction) turns.Add(cell);
@@ -130,9 +137,11 @@ public sealed class WeightedNavigator
     }
 
     internal static int Build(NavigationGrid grid, Locomotor profile, int goal, long[] costs, CancellationToken token)
+    => Build(new RouteGeometry(grid, profile), goal, costs, token);
+    private static int Build(RouteGeometry graph, int goal, long[] costs, CancellationToken token)
     {
         Array.Fill(costs, long.MaxValue); token.ThrowIfCancellationRequested();
-        if (grid.IsBlocked(goal) || !profile.At(grid, goal).Traverse) return 0;
+        if (!graph.Open(goal, token)) return 0;
         var queue = new PriorityQueue<int, (long Cost, int Cell)>();
         costs[goal] = 0; queue.Enqueue(goal, (0, goal)); int visited = 0;
         while (queue.TryDequeue(out int cell, out var priority))
@@ -142,9 +151,9 @@ public sealed class WeightedNavigator
             visited++;
             for (int d = 0; d < 4; d++)
             {
-                int next = GridNeighbors.Neighbor(grid, cell, d);
-                if (next < 0 || grid.IsBlocked(next) || !profile.At(grid, next).Traverse) continue;
-                long cost = priority.Cost + TerrainCost.Edge(grid, profile, cell, next);
+                int next = graph.Neighbor(cell, d);
+                if (next < 0 || !graph.Edge(cell, next, token)) continue;
+                long cost = priority.Cost + graph.Cost(cell, next);
                 if (cost >= costs[next]) continue;
                 costs[next] = cost; queue.Enqueue(next, (cost, next));
             }
@@ -152,7 +161,7 @@ public sealed class WeightedNavigator
         return visited;
     }
     private void ValidateCell(int cell)
-    { if ((uint)cell >= (uint)Grid.CellCount) throw new ArgumentOutOfRangeException(nameof(cell)); }
+    { if ((uint)cell >= (uint)_routeCount) throw new ArgumentOutOfRangeException(nameof(cell)); }
     private void Validate(RouteRequest key)
     { ValidateCell(key.Goal); if ((uint)key.Profile >= (uint)_profiles.Length) throw new ArgumentOutOfRangeException(nameof(key)); }
     internal void WriteState(BinaryWriter writer)

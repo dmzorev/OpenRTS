@@ -120,7 +120,7 @@ public partial class Sandbox : Node3D
         if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _pointerDown = false; }
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
-        _combatEffects?.Clear();
+        _combatEffects?.Clear(); _sprites?.ClearWrecks();
         _session = new SimulationSession(() => _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
             _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
@@ -143,7 +143,6 @@ public partial class Sandbox : Node3D
             if (frame is null) return;
             float alpha = completed ? 1 : _session.GetInterpolationAlpha(frame.Tick);
             _view?.Apply(frame.Poses, alpha);
-            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
             if (_showcase)
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
@@ -155,7 +154,7 @@ public partial class Sandbox : Node3D
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             while (_session.TryReadEvent(out var value))
             {
-                _combatEffects?.Accept(value);
+                _combatEffects?.Accept(value); _sprites?.Accept(value);
                 _notice = value.Kind switch
                 {
                     WorldEventKind.DestinationAdjusted => "Цель скорректирована к ближайшему достижимому месту.",
@@ -167,6 +166,7 @@ public partial class Sandbox : Node3D
                     _ => _notice
                 };
             }
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick);
             else if (_label is not null)

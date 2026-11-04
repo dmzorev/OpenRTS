@@ -1,0 +1,150 @@
+{
+  "retrieved": "2026-11-04",
+  "scope": "Selective primary-source architecture inspection; no source code imported into OpenRTS",
+  "version_note": "Pinned snapshots; 0ad/0ad is an archived mirror, not a claim about latest upstream",
+  "sources": [
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/Buildings/Building.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/Buildings/Building.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/Buildings/Building.cs",
+      "bytes": 11482,
+      "sha256": "a6e511ea2fe4e83f45c4b8640ceb25bfb27486b9b949509cda0c72fb9cdcb406",
+      "id": "S01",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/ChangesTerrain.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/ChangesTerrain.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/ChangesTerrain.cs",
+      "bytes": 2066,
+      "sha256": "ee384901ae3d2c20e9b22c02a81a773dac63c89353b2ac8329d0287aaebfd81f",
+      "id": "S02",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/World/ActorMap.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/World/ActorMap.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/World/ActorMap.cs",
+      "bytes": 19052,
+      "sha256": "7b0fd4d34c5688a549c11848eee74bd946c31982704ceed6e3e6b4382ac2cf34",
+      "id": "S03",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Traits/World/Locomotor.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/World/Locomotor.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Traits/World/Locomotor.cs",
+      "bytes": 17451,
+      "sha256": "4afb22c946f80efd8819de188a16f8c7ea7cda4c1a6b33ac9da9cf77805f3806",
+      "id": "S04",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Warheads/SpreadDamageWarhead.cs",
+      "bytes": 4971,
+      "sha256": "dec78f237d58485c217ab799c79f9093a02fd12273155dd75e878280e6ed9c57",
+      "id": "S05",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "OpenRA/OpenRA",
+      "commit": "9636b63eaee62fcb60ef2e896e7985bdf2f1ee68",
+      "path": "OpenRA.Mods.Common/HitShapes/Rectangle.cs",
+      "url": "https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/HitShapes/Rectangle.cs",
+      "raw_url": "https://raw.githubusercontent.com/OpenRA/OpenRA/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/HitShapes/Rectangle.cs",
+      "bytes": 5129,
+      "sha256": "d98d36021a0be9357179b5a141455988c967a40270ab6141d08a83c087010325",
+      "id": "S06",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "source/simulation2/components/CCmpObstruction.cpp",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpObstruction.cpp",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpObstruction.cpp",
+      "bytes": 28735,
+      "sha256": "343e39bbf882a102a8cc37bdb58bbd27e6f830efe845bac2805409933af4b2a2",
+      "id": "S07",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "source/simulation2/components/CCmpObstructionManager.cpp",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpObstructionManager.cpp",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpObstructionManager.cpp",
+      "bytes": 51330,
+      "sha256": "26d8680e1a969925ebef70c079a4788d1c1cbb4a952032a3f15ddbfb56c66d2a",
+      "id": "S08",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "source/simulation2/components/CCmpPathfinder.cpp",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpPathfinder.cpp",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpPathfinder.cpp",
+      "bytes": 31933,
+      "sha256": "526ed503a944f60a3a6cbdad530543abdf8a92f37c8b53deeb3a9dfc94439f70",
+      "id": "S09",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/components/Foundation.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/Foundation.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/Foundation.js",
+      "bytes": 13589,
+      "sha256": "4f28b68ca20df15439f64416c83a9d829486fcfb1aee006630604e57fe40479d",
+      "id": "S10",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/components/Health.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/Health.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/components/Health.js",
+      "bytes": 16307,
+      "sha256": "d2e528c019c7207908e12ae76af0752cbee0d460d3d9f790f7fd6ae79d6abf5b",
+      "id": "S11",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "source/simulation2/components/CCmpRangeManager.cpp",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpRangeManager.cpp",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/source/simulation2/components/CCmpRangeManager.cpp",
+      "bytes": 82736,
+      "sha256": "523b59d0412e6cefa1399b1ea19d5a0103f7725a533c3d700cfc3e3911722ba7",
+      "id": "S12",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    },
+    {
+      "repository": "0ad/0ad",
+      "commit": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+      "path": "binaries/data/mods/public/simulation/helpers/Position.js",
+      "url": "https://github.com/0ad/0ad/blob/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/helpers/Position.js",
+      "raw_url": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/simulation/helpers/Position.js",
+      "bytes": 6604,
+      "sha256": "25f184d7ed9fdf9dc920688ab61a3489eb7a8ff7e8245e673a49c7501e4151a2",
+      "id": "S13",
+      "retrieval": "HTTP 200 raw source, SHA-256 recorded; manually inspected selected sections"
+    }
+  ]
+}

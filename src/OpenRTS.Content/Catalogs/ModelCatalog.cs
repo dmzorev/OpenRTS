@@ -6,11 +6,12 @@ namespace OpenRTS.Content;
 
 public enum ModelFacing { Body, Weapon }
 public sealed record ModelPart(string Id, int Parent, string Resource, ModelFacing Facing,
-    double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer, string? Mount = null);
-public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash);
-public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity);
+    double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer, string? Mount = null, ReadOnlyCollection<string>? VisibleWhen = null, ReadOnlyCollection<string>? HiddenWhen = null,
+    double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null);
+public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0);
+public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity, double Pulse = 0);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
-    ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States);
+    ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null);
 
 /// <summary>Adapter declarations, loaded separately from UnitCatalog; never used by World.Step.</summary>
 public sealed class ModelCatalog
@@ -41,7 +42,7 @@ public sealed class ModelCatalog
                     int parent = part.Parent is null ? -1 : ordered.FindIndex(p => p.Id == part.Parent);
                     if (part.Parent is not null && parent < 0) continue;
                     ValidateVector(part.Size, 0.01, 32, "Size"); ValidateVector(part.Pivot, 0, 1, "Pivot"); ValidateVector(part.Offset, -32, 32, "Offset");
-                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount));
+                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount, Array.AsReadOnly(part.VisibleWhen), Array.AsReadOnly(part.HiddenWhen), part.Spin, part.SpinWhen, part.LoopWhen, part.LoopAnimation));
                     pending.RemoveAt(i--); progress = true;
                 }
                 if (!progress) throw node.Error(id + ".Model.Parts", "Part parent cycle.");
@@ -51,16 +52,17 @@ public sealed class ModelCatalog
             {
                 if (string.IsNullOrWhiteSpace(name) || animation.Parts.Length == 0 || animation.Parts.Distinct().Count() != animation.Parts.Length ||
                     animation.Parts.Any(p => !options.Parts.ContainsKey(p))) throw node.Error(id + ".Model.Animations." + name, "Animation references missing or duplicate parts.");
-                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash));
+                if (animation.Slide.Length != 2 || animation.Slide.Any(v => !double.IsFinite(v) || Math.Abs(v) > 16)) throw node.Error(id + ".Model.Animations." + name, "Slide requires two finite values in -16..16.");
+                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash, animation.ScaleFrom, animation.OpacityFrom, animation.Slide[0], animation.Slide[1]));
             }
             var states = new Dictionary<string, ModelState>(StringComparer.Ordinal);
             foreach (var (name, state) in options.States)
             {
                 if (string.IsNullOrWhiteSpace(name) || state.Tint.Length != 3 || state.Tint.Any(v => v < 0 || v > 2))
                     throw node.Error(id + ".Model.States." + name, "State tint requires three values in 0..2.");
-                states.Add(name, new(state.Tint[0], state.Tint[1], state.Tint[2], state.Scale, state.Opacity));
+                states.Add(name, new(state.Tint[0], state.Tint[1], state.Tint[2], state.Scale, state.Opacity, state.Pulse));
             }
-            models.Add(id, new(id, Array.AsReadOnly(ordered.ToArray()), new(animations), new(states)));
+            models.Add(id, new(id, Array.AsReadOnly(ordered.ToArray()), new(animations), new(states), options.DamagedState, options.DestroyedState));
             void ValidateVector(double[] value, double min, double max, string name)
             {
                 if (value.Length != 2 || value.Any(v => v < min || v > max)) throw node.Error(id + ".Model.Parts." + name, $"Requires two values in {min}..{max}.");
@@ -76,7 +78,12 @@ public sealed class ModelCatalog
             var binding = units.Presentations[i]; if (binding.Model is null) continue;
             if (!Models.TryGetValue(binding.Model, out var model)) throw new ArgumentException($"Unit {binding.UnitId}: unknown model {binding.Model}.");
             foreach (var part in model.Parts)
+            {
+                foreach (var state in (part.VisibleWhen ?? []).Concat(part.HiddenWhen ?? []).Concat(new[] { part.SpinWhen, part.LoopWhen, model.DamagedState, model.DestroyedState }.OfType<string>()))
+                    if (!units.Units[i].States.Contains(state)) throw new ArgumentException($"Unit {binding.UnitId}: unknown part/lifecycle state {state}.");
+                if (part.LoopAnimation is not null && units.Units[i].AnimationIndex(part.LoopAnimation) < 0) throw new ArgumentException($"Unit {binding.UnitId}: unknown loop animation {part.LoopAnimation}.");
                 if (part.Mount is not null && !units.Units[i].Weapons.Any(m => m.Id == part.Mount)) throw new ArgumentException($"Unit {binding.UnitId}: unknown mount {part.Mount}.");
+            }
             foreach (string animation in units.Units[i].Animations)
                 if (!model.Animations.ContainsKey(animation)) throw new ArgumentException($"Unit {binding.UnitId}: model lacks animation {animation}.");
             foreach (string state in units.Units[i].States)
@@ -86,6 +93,8 @@ public sealed class ModelCatalog
 
     private sealed class ModelOptions
     {
+        public string? DamagedState { get; set; }
+        public string? DestroyedState { get; set; }
         public string Kind { get; set; } = "Sprite";
         public Dictionary<string, PartOptions> Parts { get; set; } = new();
         public Dictionary<string, AnimationOptions> Animations { get; set; } = new();
@@ -96,6 +105,12 @@ public sealed class ModelCatalog
         [Required] public string Resource { get; set; } = "";
         public string? Parent { get; set; }
         public string? Mount { get; set; }
+        public string[] VisibleWhen { get; set; } = [];
+        public string[] HiddenWhen { get; set; } = [];
+        [Range(-720.0, 720.0)] public double Spin { get; set; }
+        public string? SpinWhen { get; set; }
+        public string? LoopWhen { get; set; }
+        public string? LoopAnimation { get; set; }
         public ModelFacing Facing { get; set; }
         public double[] Size { get; set; } = [1, 1];
         public double[] Pivot { get; set; } = [0.5, 0.5];
@@ -109,11 +124,15 @@ public sealed class ModelCatalog
         [Range(0.0, 1.0)] public double Bob { get; set; }
         [Range(0.0, 1.0)] public double Recoil { get; set; }
         [Range(0.0, 1.0)] public double Flash { get; set; }
+        [Range(0.01, 2.0)] public double ScaleFrom { get; set; } = 1;
+        [Range(0.0, 1.0)] public double OpacityFrom { get; set; } = 1;
+        public double[] Slide { get; set; } = [0, 0];
     }
     private sealed class StateOptions
     {
         public double[] Tint { get; set; } = [1, 1, 1];
         [Range(0.1, 2.0)] public double Scale { get; set; } = 1;
         [Range(0.0, 1.0)] public double Opacity { get; set; } = 1;
+        [Range(0.0, 1.0)] public double Pulse { get; set; }
     }
 }

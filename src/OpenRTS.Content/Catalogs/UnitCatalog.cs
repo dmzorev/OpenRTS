@@ -28,7 +28,7 @@ public sealed class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(5); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(6); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -46,6 +46,8 @@ public sealed class UnitCatalog
         var registry = new TraitRegistry<string>()
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
             .Register<MovementOptions>("Movement", (_, _, options) => options)
+            .Register<BodyOptions>("Body", (_, _, options) => options)
+            .Register<FootprintOptions>("Footprint", (_, _, options) => options)
             .Register<ArmamentOptions>("Armaments", (_, _, options) => options)
             .Register<PresentationOptions>("Presentation", (_, _, options) => options);
         registry.ValidateTemplates(definitions);
@@ -57,7 +59,7 @@ public sealed class UnitCatalog
             var (id, definition) = entries[i]; var traits = registry.Compile(id, definition).Create(id);
             var health = traits.Single<HealthOptions>(); var visual = traits.All<PresentationOptions>().SingleOrDefault();
             var movement = traits.All<MovementOptions>().SingleOrDefault(); Locomotor? profile = null;
-            if (movement is not null && (locomotion is null || !locomotion.Profiles.TryGetValue(movement.Locomotor, out profile)))
+            if (movement is not null && (movement.Enabled || movement.Locomotor.Length > 0) && (locomotion is null || !locomotion.Profiles.TryGetValue(movement.Locomotor, out profile)))
                 throw definition.Error(id + ".Movement.Locomotor", "Unknown locomotor: " + movement.Locomotor);
             var armaments = traits.All<ArmamentOptions>().SingleOrDefault();
             var mounts = new List<WeaponMountDefinition>();
@@ -66,7 +68,26 @@ public sealed class UnitCatalog
                 if (weapons is null || !weapons.Weapons.TryGetValue(mount.Weapon, out var weapon)) throw definition.Error(id + ".Armaments." + name, "Unknown weapon: " + mount.Weapon);
                 mounts.Add(new(name, weapon, mount.Animation, mount.FireWhileMoving));
             }
-            try { units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? true); }
+            var body = traits.All<BodyOptions>().SingleOrDefault(); var footprint = traits.All<FootprintOptions>().SingleOrDefault();
+            try
+            {
+                BodyShape? shape = body is null ? null : body.Kind switch { BodyKind.Circle => BodyShape.Circle(body.Radius), BodyKind.Box when body.HalfSize.Length == 2 => BodyShape.Box(body.HalfSize[0], body.HalfSize[1]), _ => throw new ArgumentException("Body requires Circle/Box and valid dimensions.") };
+                FootprintDefinition? stamp = null;
+                if (footprint is not null)
+                {
+                    if (footprint.Rows.Length == 0 || footprint.Rows[0].Length == 0 || footprint.Rows.Any(r => r.Length != footprint.Rows[0].Length) || footprint.Types.Keys.Any(k => k.Length != 1 || k == ".")) throw new ArgumentException("Footprint requires equal-width rows, single-character types and '.' for absent cells.");
+                    var cells = new List<FootprintCell>();
+                    for (int y = 0; y < footprint.Rows.Length; y++) for (int x = 0; x < footprint.Rows[y].Length; x++)
+                    {
+                        string key = footprint.Rows[y][x].ToString(); if (key == ".") continue;
+                        if (!footprint.Types.TryGetValue(key, out var cell)) throw new ArgumentException("Undefined footprint symbol: " + key);
+                        byte? terrain = cell.Terrain is null ? null : locomotion?.TerrainIndex(cell.Terrain) ?? throw new ArgumentException("Footprint terrain needs a locomotion catalog.");
+                        cells.Add(new(x, y, new(cell.Traverse, cell.CanStop, terrain), cell.Targetable));
+                    }
+                    stamp = new(footprint.Rows[0].Length, footprint.Rows.Length, cells, footprint.CellSize);
+                }
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp);
+            }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
             bindings[i] = new(id, visual?.Model, visual?.Name ?? id);
         }
@@ -88,6 +109,20 @@ public sealed class UnitCatalog
         [Required, Range(1, int.MaxValue)] public int HP { get; set; }
         public ArmorKind Armor { get; set; }
     }
+    private sealed class BodyOptions { public BodyKind Kind { get; set; } = BodyKind.Circle; public int Radius { get; set; } = 256; public int[] HalfSize { get; set; } = [256, 256]; }
+    private sealed class FootprintOptions
+    {
+        public int CellSize { get; set; } = 1024;
+        public string[] Rows { get; set; } = [];
+        public Dictionary<string, CellOptions> Types { get; set; } = new();
+    }
+    private sealed class CellOptions
+    {
+        public bool? Traverse { get; set; }
+        public bool? CanStop { get; set; }
+        public string? Terrain { get; set; }
+        public bool Targetable { get; set; } = true;
+    }
     private sealed class ArmamentOptions { public Dictionary<string, MountOptions> Mounts { get; set; } = new(); }
     private sealed class MountOptions
     {
@@ -95,5 +130,5 @@ public sealed class UnitCatalog
         public string Animation { get; set; } = "fire";
         public bool FireWhileMoving { get; set; }
     }
-    private sealed class MovementOptions { [Required] public string Locomotor { get; set; } = ""; public bool Enabled { get; set; } = true; }
+    private sealed class MovementOptions { public string Locomotor { get; set; } = ""; public bool Enabled { get; set; } = true; }
 }

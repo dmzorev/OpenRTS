@@ -4,9 +4,9 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private sealed class GroupRoute(int[] cells, int revision)
+    private sealed class GroupRoute(WorldPosition[] points, int revision)
     {
-        public readonly int[] Cells = cells;
+        public readonly WorldPosition[] Points = points;
         public readonly int Revision = revision;
         public int Cursor;
         public WorldPosition Waypoint;
@@ -27,6 +27,16 @@ public sealed partial class SimulationWorld
     public int NavigationQueueWaitingCount { get; private set; }
     public int GroupSlotCount => _groupSlots.Length;
 
+    private static WorldPosition[] RoutePoints(int[] cells, NavigationGrid grid, WorldPosition goal)
+    {
+        if (cells.Length == 0) return [goal];
+        var points = cells.Select(c => grid.Center(c, goal.Elevation)).ToArray(); points[^1] = goal; return points;
+    }
+    private WorldPosition[] WeightedPoints(int[] cells, WorldPosition goal)
+    {
+        if (cells.Length == 0) return [goal];
+        var points = cells.Select(c => _weighted!.Point(c) with { Elevation = goal.Elevation }).ToArray(); points[^1] = goal; return points;
+    }
     private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
     {
         bool Eligible(int i) => _types[_entities[i].UnitType].Movable && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
@@ -38,10 +48,11 @@ public sealed partial class SimulationWorld
         WorldPosition[]? slots;
         if (queued && members.Any(i => _entities[i].HasOrder))
         {
+            int pitch = Math.Max(1024, members.Max(i => Math.Max(_types[_entities[i].UnitType].Body.HalfWidth, _types[_entities[i].UnitType].Body.HalfHeight)) * 2 + 2);
             int columns = (int)Math.Ceiling(Math.Sqrt(members.Length));
             slots = Enumerable.Range(0, members.Length).Select(i => new WorldPosition(
-                Math.Clamp(position.X + (i % columns - (columns - 1) / 2) * 1024, 0, Width),
-                Math.Clamp(position.Y + (i / columns - ((members.Length + columns - 1) / columns - 1) / 2) * 1024, 0, Depth))).ToArray();
+                Math.Clamp(position.X + (i % columns - (columns - 1) / 2) * pitch, 0, Width),
+                Math.Clamp(position.Y + (i / columns - ((members.Length + columns - 1) / columns - 1) / 2) * pitch, 0, Depth))).ToArray();
             long cohort = checked(++_orderGroupSequence);
             GroupDestinations.Assign(assignments, slots, (index, goal) => IssueOrder(index, new(action, goal, Group: true, Cohort: cohort), true));
             return;
@@ -50,11 +61,11 @@ public sealed partial class SimulationWorld
         foreach (int i in members)
         {
             var profile = _types[_entities[i].UnitType].Locomotor; var resolver = Resolver(_entities[i].UnitType);
-            int component = resolver.Component(grid.CellAt(_entities[i].Position), _stepCancellation);
+            int component = resolver.ComponentAt(_entities[i].Position, _stepCancellation);
             if (component == 0 || components.TryGetValue(profile, out var prior) && prior.Component != component) { SplitOrReject(); return; }
             components[profile] = (resolver, component);
         }
-        bool Valid(WorldPosition p) => components.Values.All(c => c.Resolver.CanStop(p) && c.Resolver.Component(grid.CellAt(p), _stepCancellation) == c.Component);
+        bool Valid(WorldPosition p) => components.Values.All(c => c.Resolver.CanStop(p) && c.Resolver.ComponentAt(p, _stepCancellation) == c.Component);
         var anchor = Valid(position) ? position : DestinationResolver.Nearest(grid, position, Valid, _stepCancellation);
         if (anchor is not { } destination) { SplitOrReject(); return; }
         slots = GroupDestinations.Slots(grid, destination, members.Length, components.Keys.ToArray(), Valid);
@@ -128,7 +139,7 @@ public sealed partial class SimulationWorld
             if (!entity.GroupMember || !entity.Moving || _groupRoutes.TryGetValue(entity.Id, out var existing) && existing.Revision == grid.Revision) continue;
             if (!TerrainGeometry.Clear(grid, entity.Target, entity.Target, MotionIndex.BodyRadius)) { RejectRoute(ref entity); continue; }
             if (TerrainGeometry.Clear(grid, entity.Position, entity.Target, MotionIndex.BodyRadius))
-                _groupRoutes[entity.Id] = new([entity.GoalCell], grid.Revision);
+                _groupRoutes[entity.Id] = new([entity.Target], grid.Revision);
             else
             {
                 if (_routeTree is null || !ReferenceEquals(_routeTree.Grid, grid))
@@ -138,7 +149,7 @@ public sealed partial class SimulationWorld
                 }
                 var route = _routeTree.Route(grid.CellAt(entity.Position), entity.GoalCell, token);
                 if (route is null) RejectRoute(ref entity);
-                else _groupRoutes[entity.Id] = new(route.Length == 0 ? [entity.GoalCell] : route, grid.Revision);
+                else _groupRoutes[entity.Id] = new(RoutePoints(route, grid, entity.Target), grid.Revision);
             }
         }
         GroupRouteBuildMilliseconds += Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -177,8 +188,8 @@ public sealed partial class SimulationWorld
         {
             if (_groupRoutes.TryGetValue(entity.Id, out var route))
             {
-                writer.Write(route.Revision); writer.Write(route.Cells.Length - route.Cursor);
-                foreach (int cell in route.Cells.AsSpan(route.Cursor)) writer.Write(cell);
+                writer.Write(route.Revision); writer.Write(route.Points.Length - route.Cursor);
+                foreach (var point in route.Points.AsSpan(route.Cursor)) { writer.Write(point.X); writer.Write(point.Y); }
                 writer.Write(route.HasWaypoint); writer.Write(route.Waypoint.X); writer.Write(route.Waypoint.Y);
             }
             else writer.Write(-1);

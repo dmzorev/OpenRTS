@@ -7,24 +7,27 @@ public sealed class DestinationResolver
 {
     public NavigationGrid Grid { get; }
     public Locomotor Profile { get; }
+    internal RouteGeometry Geometry { get; }
+    public int NodeAt(WorldPosition point, CancellationToken token = default) => Geometry.Anchor(point, token);
+    public int ComponentAt(WorldPosition point, CancellationToken token = default) { int n = NodeAt(point, token); return n < 0 ? 0 : Component(n, token); }
     private int[]? _components;
     private bool[] _stoppable = [];
     private readonly Dictionary<(int Component, int X, int Y), WorldPosition?> _cache = new();
     private readonly Queue<(int Component, int X, int Y)> _cacheOrder = new();
-    public DestinationResolver(NavigationGrid grid, Locomotor profile)
+    public DestinationResolver(NavigationGrid grid, Locomotor profile, bool exactGeometry = false)
     {
         ArgumentNullException.ThrowIfNull(grid); ArgumentNullException.ThrowIfNull(profile);
         if (profile.Rules.Count <= grid.MaximumTerrain) throw new ArgumentException("Profile does not cover this terrain.");
-        Grid = grid; Profile = profile;
+        Grid = grid; Profile = profile; Geometry = new(grid, profile, exactGeometry);
     }
     public int Component(int cell, CancellationToken token = default)
     {
-        if ((uint)cell >= Grid.CellCount) throw new ArgumentOutOfRangeException(nameof(cell));
+        if ((uint)cell >= Geometry.Nodes.CellCount) throw new ArgumentOutOfRangeException(nameof(cell));
         token.ThrowIfCancellationRequested();
         if (_components is null)
         {
-            var labels = new int[Grid.CellCount]; int component = 0; var stoppable = new List<bool> { false };
-            int[] queue = ArrayPool<int>.Shared.Rent(Grid.CellCount);
+            var labels = new int[Geometry.Nodes.CellCount]; int component = 0; var stoppable = new List<bool> { false };
+            int[] queue = ArrayPool<int>.Shared.Rent(Geometry.Nodes.CellCount);
             try
             {
                 for (int seed = 0; seed < labels.Length; seed++)
@@ -37,11 +40,11 @@ public sealed class DestinationResolver
                     {
                         if ((head & 4095) == 0) token.ThrowIfCancellationRequested();
                         int current = queue[head++];
-                        hasStop |= Profile.At(Grid, current).CanStop;
+                        hasStop |= Geometry.Stop(current);
                         for (int d = 0; d < 4; d++)
                         {
-                            int next = GridNeighbors.Neighbor(Grid, current, d);
-                            if (next < 0 || labels[next] != 0 || Blocked(next)) continue;
+                            int next = Geometry.Neighbor(current, d);
+                            if (next < 0 || labels[next] != 0 || !Geometry.Edge(current, next, token)) continue;
                             labels[next] = component; queue[tail++] = next;
                         }
                     }
@@ -52,37 +55,38 @@ public sealed class DestinationResolver
             _stoppable = stoppable.ToArray(); _components = labels;
         }
         return _components[cell];
-        bool Blocked(int c) => Grid.IsBlocked(c) || !Profile.At(Grid, c).Traverse;
+        bool Blocked(int c) => !Geometry.Open(c, token);
     }
-    public bool CanStop(WorldPosition point) => Profile.At(Grid, Grid.CellAt(point)).CanStop &&
-        TerrainGeometry.Clear(Grid, point, point, MotionIndex.BodyRadius, Profile);
+    public bool CanStop(WorldPosition point) => TerrainGeometry.CanStop(Grid, point, Profile.Body, Profile);
     public bool CanReach(WorldPosition source, WorldPosition destination, CancellationToken token = default)
     {
-        int component = Component(Grid.CellAt(source), token);
-        return component > 0 && component == Component(Grid.CellAt(destination), token);
+        if (TerrainGeometry.Clear(Grid, source, destination, Profile.Body, Profile)) return true;
+        int component = ComponentAt(source, token);
+        return component > 0 && component == ComponentAt(destination, token);
     }
     public bool HasStoppingTerrain(WorldPosition source, CancellationToken token = default)
-    { int component = Component(Grid.CellAt(source), token); return _stoppable[component]; }
+    { int component = ComponentAt(source, token); return _stoppable[component]; }
     public bool Resolve(WorldPosition source, WorldPosition requested, out WorldPosition result, CancellationToken token = default)
     {
-        int component = Component(Grid.CellAt(source), token);
         result = default;
+        if (CanStop(requested) && TerrainGeometry.Clear(Grid, source, requested, Profile.Body, Profile)) { result = requested; return true; }
+        int component = ComponentAt(source, token);
         if (component == 0 || !_stoppable[component]) return false;
-        if (CanStop(requested) && Component(Grid.CellAt(requested), token) == component) { result = requested; return true; }
+        if (CanStop(requested) && ComponentAt(requested, token) == component) { result = requested; return true; }
         var key = (component, requested.X, requested.Y);
         if (!_cache.TryGetValue(key, out var cached))
         {
-            cached = Nearest(Grid, requested, p => Component(Grid.CellAt(p), token) == component && CanStop(p), token);
+            cached = Nearest(Grid, requested, p => CanStop(p) && ComponentAt(p, token) == component, token);
             if (_cacheOrder.Count == 128) _cache.Remove(_cacheOrder.Dequeue());
             _cacheOrder.Enqueue(key); _cache.Add(key, cached);
         }
         if (cached is not { } point) return false;
         result = point with { Elevation = requested.Elevation }; return true;
     }
-    internal static WorldPosition? Nearest(NavigationGrid grid, WorldPosition requested, Func<WorldPosition, bool> valid, CancellationToken token)
+    internal static WorldPosition? Nearest(NavigationGrid grid, WorldPosition requested, Func<WorldPosition, bool> valid, CancellationToken token, BodyShape? body = null)
     {
         WorldPosition? best = null; long distance = long.MaxValue;
-        int size = grid.CellSize, inset = MotionIndex.BodyRadius + 1;
+        int size = grid.CellSize, inset = Math.Min(size / 2, Math.Max((body ?? BodyShape.Default).HalfWidth, (body ?? BodyShape.Default).HalfHeight) + 1);
         Span<int> xs = stackalloc int[3], ys = stackalloc int[3];
         for (int cell = 0; cell < grid.CellCount; cell++)
         {

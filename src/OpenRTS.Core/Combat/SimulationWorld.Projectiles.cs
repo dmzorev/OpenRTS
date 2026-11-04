@@ -16,11 +16,12 @@ public sealed partial class SimulationWorld
     public int ProjectileCount => _projectiles.Count;
     private void Launch(int source, int target, int mount, WeaponDefinition weapon)
     {
-        ref var actor = ref _entities[source]; var destination = _entities[target].Position;
+        ref var actor = ref _entities[source];
+        ObjectGeometry.DistanceSquared(_types[actor.UnitType], actor.Position, _types[_entities[target].UnitType], _entities[target].Position, out var muzzle, out var destination);
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Id, Target = _entities[target].Id,
-            Owner = actor.Owner, UnitType = actor.UnitType, Mount = mount, Previous = actor.Position, Position = actor.Position,
+            Owner = actor.Owner, UnitType = actor.UnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
-            InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(actor.Position, destination))) });
+            InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
     private void UpdateProjectiles()
     {
@@ -34,7 +35,7 @@ public sealed partial class SimulationWorld
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
                 if (!_indices.TryGetValue(shot.Target, out int target)) { Expire(shot); continue; }
-                shot.Destination = _entities[target].Position;
+                shot.Destination = ObjectGeometry.ClosestPoint(_types[_entities[target].UnitType], _entities[target].Position, shot.Position);
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
             var next = StepTowards(shot.Position, shot.Destination, budget);
@@ -43,17 +44,26 @@ public sealed partial class SimulationWorld
             if ((long)travel * travel < DistanceSquared(shot.Position, next)) travel++;
             shot.Remaining -= travel;
             // shortcut: wall effects use the segment start; calculate exact entry when impact placement matters.
-            if (_navigation is not null && !TerrainGeometry.Clear(_navigation.Grid, shot.Position, next, 0))
+            if (_baseGrid is not null && !TerrainGeometry.Clear(_baseGrid, shot.Position, next, 0))
             { Hit(shot, default, shot.Position); continue; }
             EntityId hit = default; int fraction = 65537;
             if (weapon.Projectile != ProjectileKind.Grenade)
             {
-                (_motion ?? _combatIndex)!.Query(shot.Position, next, MotionIndex.BodyRadius, _combatCandidates);
+                (_motion ?? _combatIndex)!.Query(shot.Position, next, 0, _combatCandidates);
                 foreach (int i in _combatCandidates)
                 {
                     ref var body = ref _entities[i];
-                    if (body.Id == shot.Source || body.Owner == 0 || !weapon.FriendlyFire && body.Owner == shot.Owner) continue;
-                    int t = HitFraction(shot.Position, next, body.Previous, body.Position, MotionIndex.BodyRadius);
+                    if (body.Id == shot.Source || !weapon.FriendlyFire && body.Owner == shot.Owner) continue;
+                    int t;
+                    var type = _types[body.UnitType];
+                    if (type.Footprint is { } footprint)
+                    {
+                        t = 65537;
+                        for (int f = 0; f < footprint.TargetBounds.Count; f++) t = Math.Min(t, BodyGeometry.HitBoxFraction(shot.Position, next, footprint.TargetBounds[f].Translate(body.Position)));
+                    }
+                    else if (type.Body.Kind == BodyKind.Box)
+                        t = BodyGeometry.HitBoxFraction(new(shot.Position.X - body.Previous.X, shot.Position.Y - body.Previous.Y), new(next.X - body.Position.X, next.Y - body.Position.Y), ObjectGeometry.Box(type.Body, default));
+                    else t = HitFraction(shot.Position, next, body.Previous, body.Position, type.Body.HalfWidth);
                     if (t < fraction || t == fraction && (hit.Value == 0 || body.Id.Value < hit.Value)) { fraction = t; hit = body.Id; }
                 }
             }

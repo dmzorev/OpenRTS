@@ -16,13 +16,17 @@ public sealed record UnitDefinition
     public WeaponDefinition? Weapon => Weapons.Count == 0 ? null : Weapons[0].Weapon;
     public ArmorKind Armor { get; }
     public bool Movable { get; }
+    public BodyShape Body => Locomotor.Body;
+    public FootprintDefinition? Footprint { get; }
 
-    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null, WeaponDefinition? weapon = null, IEnumerable<WeaponMountDefinition>? weapons = null, ArmorKind armor = ArmorKind.Living, bool movable = true)
+    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null, WeaponDefinition? weapon = null, IEnumerable<WeaponMountDefinition>? weapons = null, ArmorKind armor = ArmorKind.Living, bool movable = true, BodyShape? body = null, FootprintDefinition? footprint = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxHealth);
         Id = id; MaxHealth = maxHealth;
-        Locomotor = locomotor ?? Locomotor.Default;
+        if (footprint is not null && movable) throw new ArgumentException("Footprints belong to immobile objects.", nameof(footprint));
+        Footprint = footprint;
+        Locomotor = (locomotor ?? Locomotor.Default).WithBody(footprint is not null ? BodyShape.None : body ?? locomotor?.Body ?? BodyShape.Default);
         if (weapon is not null && weapons is not null) throw new ArgumentException("Use either a single weapon or mounts.");
         var mounts = weapons?.ToArray() ?? (weapon is null ? [] : [new WeaponMountDefinition("main", weapon)]);
         if (mounts.Length > 8 || mounts.Any(m => m is null || m.Weapon is null || string.IsNullOrWhiteSpace(m.Id)) || mounts.Select(m => m.Id).Distinct(StringComparer.Ordinal).Count() != mounts.Length || !Enum.IsDefined(armor))
@@ -31,6 +35,7 @@ public sealed record UnitDefinition
         Animations = Names(animations ?? ["idle", "move"], 64);
         States = Names(states ?? [], 32);
         IdleAnimation = AnimationIndex("idle"); MoveAnimation = AnimationIndex("move");
+        if (!movable && MoveAnimation < 0) MoveAnimation = IdleAnimation;
         if (IdleAnimation < 0 || MoveAnimation < 0) throw new ArgumentException("Units require idle and move semantic animations.", nameof(animations));
         if (Weapons.Any(m => AnimationIndex(m.Animation) < 0)) throw new ArgumentException("Weapon mounts must reference declared semantic animations.", nameof(animations));
     }
@@ -38,6 +43,7 @@ public sealed record UnitDefinition
     public void WriteState(BinaryWriter writer)
     {
         writer.Write(Id); writer.Write(MaxHealth); Locomotor.WriteState(writer); writer.Write((int)Armor); writer.Write(Movable);
+        writer.Write(Footprint is not null); Footprint?.WriteState(writer);
         writer.Write(Weapons.Count);
         foreach (var mount in Weapons) { writer.Write(mount.Id); writer.Write(mount.Animation); writer.Write(mount.FireWhileMoving); mount.Weapon.WriteState(writer); }
         writer.Write(Animations.Count); foreach (var name in Animations) writer.Write(name);

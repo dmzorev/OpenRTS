@@ -49,6 +49,13 @@ public sealed class GridNavigator
     {
         var next = Grid.WithBlocked(cell, blocked);
         if (ReferenceEquals(next, Grid)) return;
+        SetGrid(next);
+    }
+
+    public void SetGrid(NavigationGrid next)
+    {
+        if (ReferenceEquals(next, Grid)) return;
+        if (next.Width != Grid.Width || next.Height != Grid.Height || next.CellSize != Grid.CellSize) throw new ArgumentException("Replacement dimensions differ.");
         Grid = next;
         _cached.Clear();
         foreach (var field in _fields) field.Goal = -1;

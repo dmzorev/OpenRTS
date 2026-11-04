@@ -4,16 +4,17 @@ internal static class GroupDestinations
 {
     internal readonly record struct Member(EntityId Id, WorldPosition Position, int Index);
     // Destination packing is in world units too; increasing terrain CellSize must not spread a crowd out.
-    private const int Pitch = WorldPosition.UnitsPerCell;
+
 
     internal static WorldPosition[]? Slots(NavigationGrid grid, WorldPosition anchor, int count, IReadOnlyList<Locomotor>? profiles = null, Func<WorldPosition, bool>? allowed = null)
     {
         if (count == 0) return [];
+        int Pitch = Math.Max(1024, (profiles?.Max(p => Math.Max(p.Body.HalfWidth, p.Body.HalfHeight)) ?? 256) * 2 + 2);
         bool Clear(WorldPosition a, WorldPosition b) => profiles is null ? TerrainGeometry.Clear(grid, a, b, MotionIndex.BodyRadius) :
-            profiles.All(p => TerrainGeometry.Clear(grid, a, b, MotionIndex.BodyRadius, p));
+            profiles.All(p => TerrainGeometry.Clear(grid, a, b, p.Body, p));
         bool Stop(WorldPosition p) => (profiles is null || profiles.All(profile => profile.At(grid, grid.CellAt(p)).CanStop)) && (allowed is null || allowed(p));
         if (!Clear(anchor, anchor) || !Stop(anchor)) return null;
-        int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize, radius = MotionIndex.BodyRadius;
+        int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize, radius = profiles?.Max(p => Math.Max(p.Body.HalfWidth, p.Body.HalfHeight)) ?? MotionIndex.BodyRadius;
         int maxColumns = (width - radius * 2) / Pitch + 1, maxRows = (height - radius * 2) / Pitch + 1;
         int columns = Math.Min(maxColumns, (int)Math.Ceiling(Math.Sqrt(count)));
         int rows = (count + columns - 1) / columns;
