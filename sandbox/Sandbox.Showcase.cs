@@ -44,6 +44,7 @@ public partial class Sandbox
         var picked = Pick(point);
         if (click.ButtonIndex == MouseButton.Left) { _selected = picked?.Id ?? default; return; }
         if (Selected() is not { } unit) return;
+        _notice = "";
         if (click.ShiftPressed || picked is { } target && target.Id != unit.Id && target.Presentation.Owner != unit.Presentation.Owner)
             _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default);
         else
@@ -74,10 +75,18 @@ public partial class Sandbox
         {
             selection = (pose.Presentation.Owner == 1 ? "Синяя команда" : "Красная команда") + " · " + _catalog!.Presentations[pose.UnitType].Name;
             var type = _catalog.Units[pose.UnitType];
+            if (_displayGrid is { } grid && _catalog.Locomotion is { } locomotion)
+            {
+                int terrain = grid.TerrainAt(grid.CellAt(pose.Current));
+                string ground = locomotion.Terrains[terrain] switch
+                { "road" => "бетон", "grass" => "трава", "mud" => "грязь", "water" => "вода", "forest" => "лес", "swamp" => "болото", _ => "горы" };
+                selection += $"\nГрунт: {ground} · скорость {type.Locomotor.Rules[terrain].Speed * 100.0 / 1024:0.#}%";
+            }
             for (int i = 0; i < type.States.Count; i++) if ((pose.Presentation.States & (1u << i)) != 0)
                 selection += type.States[i] == "damaged" ? " · повреждён" : " · в воде";
         }
-        return $"OPENRTS  /  ПОЛИГОН\n\n{selection}\n{_count} юнитов · тик {tick} · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}";
+        return $"OPENRTS  /  ПОЛИГОН\n\n{selection}\n{_count} юнитов · тик {tick} · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}" +
+            (_notice.Length == 0 ? "" : "\n" + _notice);
     }
     private void AddShowcaseFooter()
     {

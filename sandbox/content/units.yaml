@@ -1,4 +1,5 @@
 ^unit:
+  Movement: {Locomotor: infantry}
   Health:
     HP: 100
   Presentation:
@@ -19,6 +20,7 @@ rocketeer:
 
 apc-mg:
   Inherits: ^unit
+  Movement: {Locomotor: amphibious}
   Health:
     HP: 250
   Presentation:
@@ -34,6 +36,7 @@ apc-rocket:
 
 tank:
   Inherits: ^unit
+  Movement: {Locomotor: tracked}
   Health:
     HP: 400
   Presentation:

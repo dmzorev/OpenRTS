@@ -7,13 +7,17 @@ public sealed class NavigationGrid
 {
     public const int MaximumCells = 16 * 1024 * 1024;
     private readonly uint[] _blocked;
+    private readonly byte[]? _terrain;
+    public bool HasTerrain => _terrain is not null;
+    public int MaximumTerrain { get; }
     public int Width { get; }
     public int Height { get; }
     public int CellSize { get; }
     public int CellCount => Width * Height;
     public int Revision { get; }
 
-    public NavigationGrid(int width, int height, IEnumerable<GridCell>? blocked = null, int cellSize = WorldPosition.UnitsPerCell)
+    public NavigationGrid(int width, int height, IEnumerable<GridCell>? blocked = null, int cellSize = WorldPosition.UnitsPerCell,
+        IEnumerable<byte>? terrain = null)
     {
         if (cellSize < 1 || cellSize > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(cellSize));
         if (width < 1 || width > WorldPosition.MaximumExtent / cellSize) throw new ArgumentOutOfRangeException(nameof(width));
@@ -23,6 +27,12 @@ public sealed class NavigationGrid
         Height = height;
         CellSize = cellSize;
         _blocked = new uint[(CellCount + 31) / 32];
+        if (terrain is not null)
+        {
+            _terrain = terrain.ToArray();
+            if (_terrain.Length != CellCount) throw new ArgumentException("Terrain count must match the grid.", nameof(terrain));
+            MaximumTerrain = _terrain.Max();
+        }
         foreach (var cell in blocked ?? [])
         {
             int index = Index(cell);
@@ -36,6 +46,7 @@ public sealed class NavigationGrid
         Height = previous.Height;
         CellSize = previous.CellSize;
         Revision = checked(previous.Revision + 1);
+        _terrain = previous._terrain; MaximumTerrain = previous.MaximumTerrain;
         _blocked = (uint[])previous._blocked.Clone();
         uint bit = 1u << (cell & 31);
         if (blocked) _blocked[cell >> 5] |= bit;
@@ -67,6 +78,12 @@ public sealed class NavigationGrid
         return (_blocked[index >> 5] & (1u << (index & 31))) != 0;
     }
 
+    public byte TerrainAt(int index)
+    {
+        if ((uint)index >= (uint)CellCount) throw new ArgumentOutOfRangeException(nameof(index));
+        return _terrain?[index] ?? 0;
+    }
+
     public NavigationGrid WithBlocked(int index, bool blocked)
     {
         if (IsBlocked(index) == blocked) return this;
@@ -96,5 +113,7 @@ public sealed class NavigationGrid
     {
         writer.Write(Width); writer.Write(Height); writer.Write(CellSize); writer.Write(Revision);
         foreach (uint bits in _blocked) writer.Write(bits);
+        writer.Write(HasTerrain);
+        if (_terrain is not null) writer.Write(_terrain);
     }
 }

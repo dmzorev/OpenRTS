@@ -72,6 +72,19 @@ public partial class Sandbox
     }
     private void VerifyInfantryWalking()
     {
+        using (var atlas = Image.LoadFromFile(ProjectSettings.GlobalizePath("res://assets/units/rocketeer-walk.png")))
+        {
+            var luminance = new double[4];
+            for (int frame = 0; frame < 4; frame++)
+                for (int y = 200; y < 350; y++) for (int x = 205; x < 305; x++)
+                {
+                    var color = atlas.GetPixel(frame * 512 + x, y);
+                    luminance[frame] += (color.R * 0.299 + color.G * 0.587 + color.B * 0.114) / 15000;
+                }
+            double spread = (luminance.Max() - luminance.Min()) / luminance.Average();
+            if (spread > 0.07) throw new InvalidOperationException($"Rocketeer walking exposure flickers: torso spread={spread:P2}.");
+            GD.Print($"OPENRTS_WALK_EXPOSURE:PASS torso luminance spread={spread:P2}");
+        }
         var models = ModelCatalog.Load([new("models", File.ReadAllText(ProjectSettings.GlobalizePath("res://content/models.yaml")))]);
         var probe = new OpenRTS.Godot.SpriteWorldView(_catalog!, models); AddChild(probe.Node);
         foreach (string id in new[] { "rifleman", "rocketeer" })

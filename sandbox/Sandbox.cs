@@ -64,7 +64,10 @@ public partial class Sandbox : Node3D
             if ((verify ? 1 : 0) + (_verifySimulation ? 1 : 0) + (_verifyControls ? 1 : 0) > 1) throw new ArgumentException("Выберите один режим проверки.");
             using var file = Godot.FileAccess.Open("res://content/units.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть content/units.yaml: " + Godot.FileAccess.GetOpenError());
-            _catalog = UnitCatalog.Load([new ContentSource("content/units.yaml", file.GetAsText())]);
+            using var terrain = Godot.FileAccess.Open("res://content/terrain.yaml", Godot.FileAccess.ModeFlags.Read)
+                ?? throw new InvalidOperationException("Не удалось открыть terrain.yaml.");
+            _catalog = UnitCatalog.Load([new ContentSource("content/units.yaml", file.GetAsText())],
+                LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]));
             if (verify)
             {
                 var preview = PreviewRenderer.Create(_catalog.Units[0], _count);
@@ -140,7 +143,7 @@ public partial class Sandbox : Node3D
             while (_session.TryReadEvent(out var value))
                 _notice = value.Kind switch
                 {
-                    WorldEventKind.NoRoute => "Нет маршрута или недостаточно связного места для группы.",
+                    WorldEventKind.NoRoute => "Маршрут или место остановки недоступны.",
                     WorldEventKind.CellOccupied => "Изменение отклонено: область пересекает тело юнита.",
                     WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
                     _ => _notice
@@ -326,7 +329,7 @@ public partial class Sandbox : Node3D
         Vector2 groundSize = new(side, side);
         if (_navigation || _showcase)
         {
-            var grid = _showcase ? ShowcaseScenario.Grid() : NavigationScenario.Grid(count);
+            var grid = _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
             float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
             side = Math.Max(grid.Width, grid.Height) * sample;
             center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);

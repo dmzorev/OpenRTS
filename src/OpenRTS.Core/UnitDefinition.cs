@@ -11,12 +11,14 @@ public sealed record UnitDefinition
     public ReadOnlyCollection<string> States { get; }
     public int IdleAnimation { get; }
     public int MoveAnimation { get; }
+    public Locomotor Locomotor { get; }
 
-    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null)
+    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxHealth);
         Id = id; MaxHealth = maxHealth;
+        Locomotor = locomotor ?? Locomotor.Default;
         Animations = Names(animations ?? ["idle", "move"], 64);
         States = Names(states ?? [], 32);
         IdleAnimation = AnimationIndex("idle"); MoveAnimation = AnimationIndex("move");

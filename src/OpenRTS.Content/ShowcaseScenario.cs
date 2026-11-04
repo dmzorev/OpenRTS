@@ -17,13 +17,15 @@ public static class ShowcaseScenario
         if (x >= 2 && x <= 4 && y >= 6) return "mud";
         return "grass";
     }
-    public static NavigationGrid Grid() => new(Width, Height,
+    public static NavigationGrid Grid(LocomotionCatalog? locomotion = null) => new(Width, Height,
         from y in Enumerable.Range(0, Height) from x in Enumerable.Range(0, Width)
-        where TerrainAt(x / TileSize, y / TileSize) == "mountains" select new GridCell(x, y));
+        where TerrainAt(x / TileSize, y / TileSize) == "mountains" select new GridCell(x, y), terrain: locomotion is null ? null :
+            from y in Enumerable.Range(0, Height) from x in Enumerable.Range(0, Width)
+            select locomotion.TerrainIndex(TerrainAt(x / TileSize, y / TileSize)));
     public static SimulationWorld Create(UnitCatalog catalog)
     {
         var world = new SimulationWorld(catalog.Units, Width * 1024, Height * 1024,
-            initialCapacity: UnitCount, navigationGrid: Grid());
+            initialCapacity: UnitCount, navigationGrid: Grid(catalog.Locomotion));
         string[] order = ["rifleman", "rocketeer", "apc-mg", "apc-rocket", "tank"];
         for (int team = 0; team < 2; team++) for (int i = 0; i < order.Length; i++)
         {

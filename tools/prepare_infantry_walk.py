@@ -8,12 +8,7 @@ SOURCES = ROOT / "docs/assets/sources"
 
 
 def prepare(name):
-    sheet = Image.open(SOURCES / f"{name}-walk-generated.png").convert("RGBA")
-    if name == "rocketeer":
-        correction = Image.open(SOURCES / "rocketeer-walk-stride-correction.png").convert("RGBA")
-        assert correction.size == sheet.size
-        # Retain the approved first, second and fourth poses from the full-strip pass.
-        sheet.paste(correction.crop((1086, 0, 1629, 724)), (1086, 0))
+    sheet = Image.open(SOURCES / ("rocketeer-walk-exposure-final.png" if name == "rocketeer" else f"{name}-walk-generated.png")).convert("RGBA")
     assert sheet.size == (2172, 724) and sheet.getpixel((0, 0))[3] == 0
     contents = []
     for n in range(4):

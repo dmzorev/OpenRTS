@@ -109,7 +109,8 @@ internal static class PresentationChecks
         });
         test("Layered model content validates references, cycles, dimensions and semantics", () =>
         {
-            var units = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))]);
+            var units = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))],
+                LocomotionCatalog.Load([new("terrain", File.ReadAllText("sandbox/content/terrain.yaml"))]));
             var models = ModelCatalog.Load([new("models", File.ReadAllText("sandbox/content/models.yaml"))]); models.ValidateUnits(units);
             NavigationChecks.Check(units.Units.Count == 5 && models.Models.Count == 5 && models.Models["tank"].Parts[1].Parent == 0, "Showcase declarations are incomplete");
             ModelCatalog Load(string value) => ModelCatalog.Load([new("invalid-model", value)]);

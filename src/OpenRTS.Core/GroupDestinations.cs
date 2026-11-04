@@ -6,10 +6,13 @@ internal static class GroupDestinations
     // Destination packing is in world units too; increasing terrain CellSize must not spread a crowd out.
     private const int Pitch = WorldPosition.UnitsPerCell;
 
-    internal static WorldPosition[]? Slots(NavigationGrid grid, WorldPosition anchor, int count)
+    internal static WorldPosition[]? Slots(NavigationGrid grid, WorldPosition anchor, int count, IReadOnlyList<Locomotor>? profiles = null)
     {
         if (count == 0) return [];
-        if (!TerrainGeometry.Clear(grid, anchor, anchor, MotionIndex.BodyRadius)) return null;
+        bool Clear(WorldPosition a, WorldPosition b) => profiles is null ? TerrainGeometry.Clear(grid, a, b, MotionIndex.BodyRadius) :
+            profiles.All(p => TerrainGeometry.Clear(grid, a, b, MotionIndex.BodyRadius, p));
+        bool Stop(WorldPosition p) => profiles is null || profiles.All(profile => profile.At(grid, grid.CellAt(p)).CanStop);
+        if (!Clear(anchor, anchor) || !Stop(anchor)) return null;
         int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize, radius = MotionIndex.BodyRadius;
         int maxColumns = (width - radius * 2) / Pitch + 1, maxRows = (height - radius * 2) / Pitch + 1;
         int columns = Math.Min(maxColumns, (int)Math.Ceiling(Math.Sqrt(count)));
@@ -22,7 +25,7 @@ internal static class GroupDestinations
         for (int i = 0; i < count; i++)
         {
             slots[i] = new(left + i % columns * Pitch, top + i / columns * Pitch);
-            clear &= TerrainGeometry.Clear(grid, slots[i], slots[i], radius);
+            clear &= Clear(slots[i], slots[i]) && Stop(slots[i]);
         }
         if (clear) return slots;
         // Deform only the destination area near terrain, not the physical shape of the units.
@@ -31,12 +34,12 @@ internal static class GroupDestinations
         int filled = 0;
         while (queue.Count > 0 && filled < count)
         {
-            var point = queue.Dequeue(); slots[filled++] = point;
+            var point = queue.Dequeue(); if (Stop(point)) slots[filled++] = point;
             for (int direction = 0; direction < 4; direction++)
             {
                 var next = new WorldPosition(point.X + (direction == 1 ? -Pitch : direction == 2 ? Pitch : 0),
                     point.Y + (direction == 0 ? -Pitch : direction == 3 ? Pitch : 0));
-                if (!visited.Add(next) || !TerrainGeometry.Clear(grid, point, next, radius)) continue;
+                if (!visited.Add(next) || !Clear(point, next)) continue;
                 queue.Enqueue(next);
             }
         }

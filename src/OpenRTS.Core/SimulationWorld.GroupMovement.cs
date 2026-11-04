@@ -11,6 +11,7 @@ public sealed partial class SimulationWorld
         public int Cursor;
         public WorldPosition Waypoint;
         public bool HasWaypoint;
+        public long[]? CostPrefix;
     }
     private readonly Dictionary<EntityId, GroupRoute> _groupRoutes = new();
     private SharedRouteTree? _routeTree;
@@ -30,11 +31,11 @@ public sealed partial class SimulationWorld
     {
         var grid = _navigation!.Grid;
         if (Count == 0) { _groupSlots = []; _bulkAllowed = false; return; }
-        var slots = GroupDestinations.Slots(grid, position, Count);
+        var slots = GroupDestinations.Slots(grid, position, Count, _weighted is null ? null : _entities.Take(Count).Select(e => _types[e.UnitType].Locomotor).Distinct().ToArray());
         if (slots is null) { Reject(); return; }
         var members = new GroupDestinations.Member[Count];
         for (int i = 0; i < Count; i++) members[i] = new(_entities[i].Id, _entities[i].Position, i);
-        _groupRoutes.Clear(); _routeTree = null; _bulkAllowed = true;
+        _groupRoutes.Clear(); _routeTree = null; _weightedTrees.Clear(); _bulkAllowed = _weighted is null;
         _treeRoot = grid.CellAt(slots.OrderBy(point => DistanceSquared(point, position)).ThenBy(point => point.Y).ThenBy(point => point.X).First());
         GroupDestinations.Assign(members, slots, (index, goal) =>
         {
@@ -121,8 +122,8 @@ public sealed partial class SimulationWorld
         if (!requester.GroupMember || !blocker.GroupMember || blocker.YieldFor.Value != 0 || requester.WaitTicks < 16) return false;
         long oldCost = DistanceSquared(requester.Position, requester.Target) + DistanceSquared(blocker.Position, blocker.Target);
         long newCost = DistanceSquared(requester.Position, blocker.Target) + DistanceSquared(blocker.Position, requester.Target);
-        if (newCost >= oldCost || !TerrainGeometry.Clear(grid, requester.Position, blocker.Target, MotionIndex.BodyRadius) ||
-            !TerrainGeometry.Clear(grid, blocker.Position, requester.Target, MotionIndex.BodyRadius)) return false;
+        if (newCost >= oldCost || !StopAllowed(requester.UnitType, blocker.Target) || !ClearTerrain(requesterIndex, requester.Position, blocker.Target) ||
+            !StopAllowed(blocker.UnitType, requester.Target) || !ClearTerrain(blockerIndex, blocker.Position, requester.Target)) return false;
         var oldTarget = requester.Target;
         requester.Target = blocker.Target with { Elevation = requester.Position.Elevation };
         blocker.Target = oldTarget with { Elevation = blocker.Position.Elevation };
@@ -139,6 +140,8 @@ public sealed partial class SimulationWorld
     {
         writer.Write(MotionIndex.BodyRadius); writer.Write(_bulkAllowed);
         writer.Write(_treeRoot); writer.Write(_routeTree?.Grid.Revision ?? -1);
+        writer.Write(_weightedTrees.Count);
+        foreach (var pair in _weightedTrees.OrderBy(p => p.Key)) { writer.Write(pair.Key); writer.Write(pair.Value.Grid.Revision); }
         foreach (var entity in _entities.AsSpan(0, Count).ToArray().OrderBy(e => e.Id.Value))
         {
             if (_groupRoutes.TryGetValue(entity.Id, out var route))

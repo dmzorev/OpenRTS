@@ -2,6 +2,23 @@
   "date": "2026-11-04",
   "generator": "Built-in image_gen",
   "mode": "edit",
+  "latest_revision": {
+    "date": "2026-11-04",
+    "reason": "Walking exposure flicker reported by user; third rocket frame had a brighter uniform.",
+    "generator": "Built-in image_gen",
+    "prompts": [
+      "Use case: lighting-weather. Edit target: this transparent four-frame top-down game character walking atlas. Fix ONLY inconsistent brightness/lighting between animation frames: match all four figures' olive uniform, backpack, boots, launcher, helmet and magenta panels to the SECOND figure's neutral exposure, color balance, texture contrast and highlights. The THIRD figure in particular is overly bright/contrasty. Keep exactly the same four poses, alternating boots, silhouette, proportions, positions, helmet anchors, orientation UP, transparent margins, single-row four equal slots and entire canvas composition. Do not add objects, shadows or effects, do not redraw the poses. Make the upper body look identical in all four frames while preserving distinct stepping legs. Production animation frame consistency. Real RGBA transparency: empty pixels alpha zero. No white backdrop, no text.",
+      "Use case: precise-object-edit. Fix animation flicker in this four-frame transparent sprite atlas. The THIRD character (second from right) is still brighter than all the others. Make its entire upper body, helmet, hands, shoulders, backpack and launcher IDENTICAL to those in the SECOND character: same pixel colors, neutral dark exposure, no bright highlights. Preserve ONLY its alternating leg pose below the backpack; darken the third frame's pants and boots to match the dark pants and boots of frames 1,2,4. Keep every figure's anchor, scale, pose, orientation, silhouette and spacing unchanged. Do NOT change the other three characters. No new design or details. No background, alpha zero outside figures. Four equal-width frames in a single horizontal row. Matching exposure between frames is more important than adding any detail."
+    ],
+    "inputs": [
+      "sandbox/assets/units/rocketeer-walk.png (original four-frame atlas, preserved in Git history)"
+    ],
+    "outputs": [
+      "docs/assets/sources/rocketeer-walk-exposure.png",
+      "docs/assets/sources/rocketeer-walk-exposure-final.png"
+    ],
+    "normalization": "tools/prepare_infantry_walk.py now uses the complete corrected exposure sheet for rocketeer; original sources remain preserved."
+  },
   "input_sprites": [
     "sandbox/assets/units/rifleman.png",
     "sandbox/assets/units/rocketeer.png"
@@ -31,7 +48,7 @@
     "anchor": "Magenta helmet centroid at (256,232), shared across the four frames; excludes shoulders",
     "idle_frame": 1,
     "walk_fps": 8,
-    "rocketeer_correction": "Only the third cell from the corrected strip is used; other cells retain the original full-strip result.",
+    "rocketeer_correction": "Full exposure-corrected sheet rocketeer-walk-exposure-final.png; historical generated/stride-correction sheets retained.",
     "originals_retained": true
   },
   "files": [
@@ -76,12 +93,33 @@
     },
     {
       "path": "sandbox/assets/units/rocketeer-walk.png",
-      "sha256": "73869292da64ef703ebac9c4302089d0458ebf11a3a7284a267c1f47faea6800",
+      "sha256": "656f36e64fe35250c64172c9648cc8dac490c9b766b3e0b73eb190416b99abe9",
       "size": [
         2048,
         512
       ],
-      "mode": "RGBA"
+      "mode": "RGBA",
+      "previous_sha256": "73869292da64ef703ebac9c4302089d0458ebf11a3a7284a267c1f47faea6800"
+    },
+    {
+      "path": "docs/assets/sources/rocketeer-walk-exposure.png",
+      "sha256": "418ae1d7d792add65dbe191903a97bd061468df2a5a490f684ae38a60d9f0697",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "origin_file": "/Users/dmzorev/.codex/generated_images/01a1a0ad-b9b8-7900-a24e-7410eb4fa255/exec-cb9512b8-704e-40a4-9aaa-d3d966d6b40d.png"
+    },
+    {
+      "path": "docs/assets/sources/rocketeer-walk-exposure-final.png",
+      "sha256": "71a9a7fa4c68055d635c0142c5c648517f5f7b372be04f59c651a4688ec65a95",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "origin_file": "/Users/dmzorev/.codex/generated_images/01a1a0ad-b9b8-7900-a24e-7410eb4fa255/exec-e2c8fde5-6413-44ab-9d6a-cae4d32b68a6.png"
     }
   ]
 }

@@ -32,8 +32,8 @@ public sealed partial class SimulationWorld
         NavigationWaitingCount = NavigationLocalSearches = NavigationYields = NavigationGoalExchanges = NavigationQueueWaitingCount = 0;
         GroupRouteBuilds = GroupRouteVisitedCells = 0; GroupRouteBuildMilliseconds = 0; GroupTranslating = false;
         TryBulkStep();
-        PrepareGroupRoutes(token);
-        PreparePointRoutes(token);
+        if (_weighted is not null) PrepareWeightedRoutes(token);
+        else { PrepareGroupRoutes(token); PreparePointRoutes(token); }
         for (int order = 0; order < Count; order++)
         {
             token.ThrowIfCancellationRequested();
@@ -67,8 +67,9 @@ public sealed partial class SimulationWorld
                 if (!TryWaypoint(index, out waypoint)) { NavigationWaitingCount++; continue; }
                 if (entity.PathCursor < entity.PathLength) waypoint = Path(index)[entity.PathCursor];
             }
-            var next = StepTowards(entity.Position, waypoint);
-            bool terrain = TerrainGeometry.Clear(grid, entity.Position, next, MotionIndex.BodyRadius);
+            var next = TerrainStep(index, waypoint);
+            if (next == entity.Position) continue;
+            bool terrain = ClearTerrain(index, entity.Position, next);
             int blocker = -1;
             if (terrain && _motion!.ClearMove(index, next, out blocker))
             {
@@ -100,7 +101,7 @@ public sealed partial class SimulationWorld
             {
                 NavigationLocalSearches++;
                 var horizon = StepTowards(entity.Position, waypoint, 2048);
-                entity.PathLength = _localSearch.Find(grid, _motion!, index, entity.Position, horizon, Path(index)); entity.PathCursor = 0;
+                entity.PathLength = _localSearch.Find(grid, _motion!, index, entity.Position, horizon, Path(index), locomotor: PhysicalProfile(index)); entity.PathCursor = 0;
                 if (entity.PathLength == 0 && blocker >= 0 && NavigationLocalSearches < LocalSearchBudget) TryYield(index, blocker);
             }
             if (!terrain && entity.YieldFor.Value == 0)
@@ -166,15 +167,28 @@ public sealed partial class SimulationWorld
         if (!_groupRoutes.TryGetValue(entity.Id, out var route) || route.Revision != grid.Revision) return false;
         if (route.HasWaypoint && entity.Position != route.Waypoint) { waypoint = route.Waypoint; return true; }
         if (route.HasWaypoint) route.Cursor++;
+        if (_weighted is not null)
+        {
+            route.CostPrefix ??= new long[route.Cells.Length];
+            var previous = entity.Position; long cost = 0;
+            for (int p = route.Cursor; p < route.Cells.Length; p++)
+            {
+                var point = route.Cells[p] == entity.GoalCell ? entity.Target : grid.Center(route.Cells[p], entity.Position.Elevation);
+                long segment = TerrainCost.Segment(grid, PhysicalProfile(index)!, previous, point);
+                cost = segment == long.MaxValue || cost > long.MaxValue - segment ? long.MaxValue : cost + segment;
+                route.CostPrefix[p] = cost; previous = point;
+            }
+        }
         for (int i = route.Cells.Length - 1; i >= route.Cursor; i--)
         {
             var target = route.Cells[i] == entity.GoalCell ? entity.Target : grid.Center(route.Cells[i], entity.Position.Elevation);
-            if (!TerrainGeometry.Clear(grid, entity.Position, target, MotionIndex.BodyRadius)) continue;
+            if (!ClearTerrain(index, entity.Position, target)) continue;
+            if (_weighted is not null && TerrainCost.Segment(grid, PhysicalProfile(index)!, entity.Position, target) > route.CostPrefix![i]) continue;
             route.Cursor = i; route.Waypoint = waypoint = target; route.HasWaypoint = true; return true;
         }
         // A conservative start-cell center is also a useful recovery after a local detour.
         var center = grid.Center(grid.CellAt(entity.Position), entity.Position.Elevation);
-        if (entity.Position != center && TerrainGeometry.Clear(grid, entity.Position, center, MotionIndex.BodyRadius))
+        if (entity.Position != center && ClearTerrain(index, entity.Position, center))
         { route.Waypoint = waypoint = center; route.HasWaypoint = false; return true; }
         _groupRoutes.Remove(entity.Id);
         return false;
@@ -206,7 +220,7 @@ public sealed partial class SimulationWorld
         if (blocker.Moving && blocker.Id.Value < requester.Id.Value) return;
         NavigationLocalSearches++;
         int length = _localSearch.Find(_navigation!.Grid, _motion!, blockerIndex, blocker.Position, blocker.Target,
-            Path(blockerIndex), requester.Position);
+            Path(blockerIndex), requester.Position, PhysicalProfile(blockerIndex));
         if (length == 0) return;
         blocker.YieldFor = requester.Id; blocker.YieldDeadline = Tick + 128;
         blocker.PathLength = length; blocker.PathCursor = 0; blocker.LocalTarget = Path(blockerIndex)[length - 1];

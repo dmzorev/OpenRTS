@@ -1,0 +1,39 @@
+# Diagnostic balance: speed / 1024; cost is an independent route price.
+road: {Terrain: {Default: true}}
+grass: {Terrain: {}}
+mud: {Terrain: {}}
+water: {Terrain: {}}
+forest: {Terrain: {}}
+swamp: {Terrain: {}}
+mountains: {Terrain: {}}
+
+infantry:
+  Locomotor:
+    Terrain:
+      road: {Speed: 1024, Cost: 1024}
+      grass: {Speed: 768, Cost: 1366}
+      mud: {Speed: 512, Cost: 2048}
+      water: {Traverse: false}
+      forest: {Speed: 640, Cost: 1639}
+      swamp: {Speed: 384, Cost: 2731}
+      mountains: {Traverse: false}
+amphibious:
+  Locomotor:
+    Terrain:
+      road: {Speed: 1024, Cost: 1024}
+      grass: {Speed: 768, Cost: 1366}
+      mud: {Speed: 512, Cost: 2048}
+      water: {Speed: 640, Cost: 1639}
+      forest: {Traverse: false}
+      swamp: {Speed: 512, Cost: 2048}
+      mountains: {Traverse: false}
+tracked:
+  Locomotor:
+    Terrain:
+      road: {Speed: 1024, Cost: 1024}
+      grass: {Speed: 1024, Cost: 1024}
+      mud: {Speed: 640, Cost: 1639}
+      water: {Traverse: false}
+      forest: {Traverse: false}
+      swamp: {Traverse: false}
+      mountains: {Traverse: false}

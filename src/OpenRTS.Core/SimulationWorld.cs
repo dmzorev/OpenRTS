@@ -14,6 +14,7 @@ public sealed partial class SimulationWorld
         public WorldPosition Previous, Position, Target;
         public bool Moving;
         public int GoalCell;
+        public int MovementRemainder;
         public bool GroupMember;
         public int WaitTicks, PathLength, PathCursor;
         public EntityId YieldFor;
@@ -50,9 +51,9 @@ public sealed partial class SimulationWorld
     public int Count { get; private set; }
     public NavigationGrid? NavigationGrid => _navigation?.Grid;
     public int NavigationWaitingCount { get; private set; }
-    public int NavigationBuiltFields => _navigation?.LastBuildCount ?? 0;
-    public int NavigationVisitedCells => _navigation?.LastVisitedCells ?? 0;
-    public double NavigationBuildMilliseconds => _navigation?.LastBuildMilliseconds ?? 0;
+    public int NavigationBuiltFields => _weighted?.Builds ?? _navigation?.LastBuildCount ?? 0;
+    public int NavigationVisitedCells => _weighted?.Visited ?? _navigation?.LastVisitedCells ?? 0;
+    public double NavigationBuildMilliseconds => _weighted?.Milliseconds ?? _navigation?.LastBuildMilliseconds ?? 0;
     public int MovingCount
     {
         get
@@ -94,6 +95,7 @@ public sealed partial class SimulationWorld
             if (width != (long)navigationGrid.Width * navigationGrid.CellSize || depth != (long)navigationGrid.Height * navigationGrid.CellSize)
                 throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
             _navigation = new(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
+            InitializeLocomotion(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
             _localPaths = new WorldPosition[checked(initialCapacity * LocalMotionSearch.PathCapacity)];
@@ -105,9 +107,10 @@ public sealed partial class SimulationWorld
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
+        if (!StopAllowed(unitType, position)) throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
         if (_navigation is not null)
         {
-            if (!TerrainGeometry.Clear(_navigation.Grid, position, position, MotionIndex.BodyRadius) || !_motion!.ClearPlacement(position, out _))
+            if (!_motion!.ClearPlacement(position, out _))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
         }
         if ((states & ~_types[unitType].AllowedStateMask) != 0) throw new ArgumentOutOfRangeException(nameof(states));
@@ -182,13 +185,13 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 2 : 6);
+            writer.Write(_navigation is null ? 3 : 7);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
             foreach (var type in _types)
             {
-                writer.Write(type.Id); writer.Write(type.MaxHealth);
+                writer.Write(type.Id); writer.Write(type.MaxHealth); type.Locomotor.WriteState(writer);
                 writer.Write(type.Animations.Count); foreach (var name in type.Animations) writer.Write(name);
                 writer.Write(type.States.Count); foreach (var name in type.States) writer.Write(name);
             }
@@ -199,6 +202,7 @@ public sealed partial class SimulationWorld
                 writer.Write(entity.Position.X); writer.Write(entity.Position.Y); writer.Write(entity.Position.Elevation);
                 writer.Write(entity.Target.X); writer.Write(entity.Target.Y); writer.Write(entity.Target.Elevation);
                 writer.Write(entity.Moving);
+                writer.Write(entity.MovementRemainder);
                 WritePresentation(writer, entity);
                 if (_navigation is not null)
                 {
@@ -213,6 +217,7 @@ public sealed partial class SimulationWorld
                 }
             }
             _navigation?.WriteState(writer);
+            writer.Write(_weighted is not null); _weighted?.WriteState(writer);
             if (_navigation is not null)
             {
                 writer.Write(_groupSlots.Length);
@@ -241,16 +246,13 @@ public sealed partial class SimulationWorld
         }
         if (command.Kind == CommandKind.Spawn)
         {
-            if (_navigation is not null)
+            bool terrain = StopAllowed(command.UnitType, command.Position);
+            bool free = _motion is null || _motion.ClearPlacement(command.Position, out _);
+            if (!terrain || !free)
             {
-                bool terrain = TerrainGeometry.Clear(_navigation.Grid, command.Position, command.Position, MotionIndex.BodyRadius);
-                bool free = _motion!.ClearPlacement(command.Position, out _);
-                if (!terrain || !free)
-                {
-                    _events.Add(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
-                        default, command.Position, command.UnitType));
-                    return;
-                }
+                _events.Add(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
+                    default, command.Position, command.UnitType));
+                return;
             }
             if ((command.States & ~_types[command.UnitType].AllowedStateMask) != 0)
             { _events.Add(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
@@ -303,7 +305,9 @@ public sealed partial class SimulationWorld
     private void SetTarget(int index, WorldPosition position)
     {
         ref var entity = ref _entities[index];
-        entity.GroupMember = false;
+        if (!StopAllowed(entity.UnitType, position))
+        { _events.Add(new(Tick, WorldEventKind.NoRoute, entity.Id, position, entity.UnitType)); return; }
+        entity.GroupMember = false; entity.MovementRemainder = 0;
         entity.WaitTicks = entity.PathLength = entity.PathCursor = 0;
         entity.YieldFor = default; entity.YieldDeadline = 0; entity.LocalTarget = default;
         _groupRoutes.Remove(entity.Id);
@@ -338,7 +342,14 @@ public sealed partial class SimulationWorld
 
     private bool Advance(ref EntityState entity, WorldPosition target)
     {
-        entity.Position = StepTowards(entity.Position, target);
+        int factor = _types[entity.UnitType].Locomotor.Rules[0].Speed;
+        if (factor == 1024) entity.Position = StepTowards(entity.Position, target);
+        else
+        {
+            int budget = SpeedPerTick * factor + entity.MovementRemainder;
+            entity.MovementRemainder = budget % 1024;
+            if (budget >= 1024) entity.Position = StepTowards(entity.Position, target, budget / 1024);
+        }
         return entity.Position == target;
     }
 
@@ -371,7 +382,7 @@ public sealed partial class SimulationWorld
             throw new ArgumentOutOfRangeException(nameof(position), "Position is outside world bounds.");
     }
 
-    private static ulong SquareRoot(ulong value)
+    internal static ulong SquareRoot(ulong value)
     {
         ulong result = 0, bit = 1UL << 62;
         while (bit > value) bit >>= 2;

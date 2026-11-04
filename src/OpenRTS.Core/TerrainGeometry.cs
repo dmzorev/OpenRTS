@@ -3,7 +3,7 @@ namespace OpenRTS.Core;
 /// <summary>Physical adapter for the current full-cell terrain, not a route cost or occupancy map.</summary>
 internal static class TerrainGeometry
 {
-    internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, int radius)
+    internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, int radius, Locomotor? locomotor = null)
     {
         int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize;
         if (Math.Min(from.X, to.X) < radius || Math.Min(from.Y, to.Y) < radius ||
@@ -20,7 +20,7 @@ internal static class TerrainGeometry
         {
             for (int cy = Math.Max(0, y - reach); cy <= Math.Min(grid.Height - 1, y + reach); cy++)
                 for (int cx = Math.Max(0, x - reach); cx <= Math.Min(grid.Width - 1, x + reach); cx++)
-                    if (grid.IsBlocked(cy * grid.Width + cx) && IntersectsBox(from, to,
+                    if ((grid.IsBlocked(cy * grid.Width + cx) || locomotor is not null && !locomotor.At(grid, cy * grid.Width + cx).Traverse) && IntersectsBox(from, to,
                         cx * size - radius, cy * size - radius, (cx + 1) * size + radius, (cy + 1) * size + radius)) return false;
             if (x == endX && y == endY) return true;
             if (x != endX && (y == endY || tx * ay <= ty * ax)) { x += sx; tx += size; }

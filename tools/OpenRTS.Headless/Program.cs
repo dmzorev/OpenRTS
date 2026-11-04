@@ -23,7 +23,9 @@ try
         else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--showcase] [--navigation] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
     if (showcase && (navigation || benchmark)) throw new ArgumentException("Showcase is a presentation fixture; use navigation/benchmark separately.");
-    var catalog = UnitCatalog.Load([new ContentSource(path, File.ReadAllText(path))]);
+    var terrainPath = Path.Combine(Path.GetDirectoryName(path)!, "terrain.yaml");
+    var locomotion = File.Exists(terrainPath) ? LocomotionCatalog.Load([new(terrainPath, File.ReadAllText(terrainPath))]) : null;
+    var catalog = UnitCatalog.Load([new ContentSource(path, File.ReadAllText(path))], locomotion);
     Console.WriteLine("OPENRTS_CONTENT:" + JsonSerializer.Serialize(catalog.Summary));
     if (simulate)
     {

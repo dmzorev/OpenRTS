@@ -20,6 +20,8 @@
 - [Семантика представления и модели](docs/decisions/007-presentation.md)
 - [Полигон, управление и проверки спрайтов](docs/verification/008-presentation.md)
 - [Ходьба пехоты и предпросмотр](docs/verification/009-infantry-walking.md)
+- [N1: грунт, Locomotor и стоимость маршрута](docs/decisions/009-terrain-locomotors.md)
+- [Проверки N1 и исправленная анимация](docs/verification/010-terrain-locomotors.md)
 - [Сгенерированные спрайты и тайлы](docs/assets/README.md)
 - [Проверки точного движения](docs/verification/007-exact-movement.md)
 - [Лицензия MIT](LICENSE)

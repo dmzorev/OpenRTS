@@ -17,20 +17,27 @@ public sealed class UnitCatalog
     public ReadOnlyCollection<UnitDefinition> Units { get; }
     public CatalogSummary Summary { get; }
     public ReadOnlyCollection<UnitPresentationBinding> Presentations { get; }
+    public LocomotionCatalog? Locomotion { get; }
 
-    private UnitCatalog(UnitDefinition[] units, UnitPresentationBinding[] presentations)
+    private UnitCatalog(UnitDefinition[] units, UnitPresentationBinding[] presentations, LocomotionCatalog? locomotion)
     {
         Units = Array.AsReadOnly(units);
+        Locomotion = locomotion;
         Presentations = Array.AsReadOnly(presentations);
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(2); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(3); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(locomotion?.Terrains.Count ?? 0);
+            if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
             foreach (var unit in units)
             {
                 writer.Write(unit.Id);
                 writer.Write(unit.MaxHealth);
+                writer.Write(unit.Locomotor.Id); writer.Write(unit.Locomotor.Rules.Count);
+                foreach (var rule in unit.Locomotor.Rules)
+                { writer.Write(rule.Traverse); writer.Write(rule.CanStop); writer.Write(rule.Speed); writer.Write(rule.Cost); }
                 writer.Write(unit.Animations.Count); foreach (var name in unit.Animations) writer.Write(name);
                 writer.Write(unit.States.Count); foreach (var name in unit.States) writer.Write(name);
             }
@@ -38,11 +45,12 @@ public sealed class UnitCatalog
         Summary = new(units.Length, Convert.ToHexString(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length))));
     }
 
-    public static UnitCatalog Load(IEnumerable<ContentSource> sources)
+    public static UnitCatalog Load(IEnumerable<ContentSource> sources, LocomotionCatalog? locomotion = null)
     {
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>()
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
+            .Register<MovementOptions>("Movement", (_, _, options) => options)
             .Register<PresentationOptions>("Presentation", (_, _, options) => options);
         registry.ValidateTemplates(definitions);
         var entries = definitions.Concrete.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
@@ -52,13 +60,16 @@ public sealed class UnitCatalog
         {
             var (id, definition) = entries[i]; var traits = registry.Compile(id, definition).Create(id);
             var health = traits.Single<HealthOptions>(); var visual = traits.All<PresentationOptions>().SingleOrDefault();
-            try { units[i] = new(id, health.HP, visual?.Animations, visual?.States); }
+            var movement = traits.All<MovementOptions>().SingleOrDefault(); Locomotor? profile = null;
+            if (movement is not null && (locomotion is null || !locomotion.Profiles.TryGetValue(movement.Locomotor, out profile)))
+                throw definition.Error(id + ".Movement.Locomotor", "Unknown locomotor: " + movement.Locomotor);
+            try { units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile); }
             catch (ArgumentException error) { throw definition.Error(id + ".Presentation", error.Message); }
             bindings[i] = new(id, visual?.Model, visual?.Name ?? id);
         }
         if (units.Length == 0)
             throw new ArgumentException("Каталог должен содержать хотя бы одно конкретное определение юнита.", nameof(sources));
-        return new(units, bindings);
+        return new(units, bindings, locomotion);
     }
 
     private sealed class PresentationOptions
@@ -73,4 +84,5 @@ public sealed class UnitCatalog
     {
         [Required, Range(1, int.MaxValue)] public int HP { get; set; }
     }
+    private sealed class MovementOptions { [Required] public string Locomotor { get; set; } = ""; }
 }
