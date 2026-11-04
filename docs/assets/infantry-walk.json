@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-04",
+  "generator": "Built-in image_gen",
+  "mode": "edit",
+  "input_sprites": [
+    "sandbox/assets/units/rifleman.png",
+    "sandbox/assets/units/rocketeer.png"
+  ],
+  "prompts": {
+    "rifleman": "Use case: precise-object-edit. Asset type: game animation sprite sheet.\nEdit target image 1 is a transparent reference canvas with the approved overhead infantry sprite in slot one. Image 2 is its detailed original reference. Create a COMPLETE FOUR-FRAME WALK CYCLE of that same character, one horizontal row of four equally spaced square slots. Transparent RGBA background. Forward points exactly UP in ALL frames, fixed overhead orthographic camera.\nKeep identical olive uniform, backpack, magenta helmet/shoulder panels and held equipment. Preserve character scale, helmet position, upper torso, arms, equipment, details, palette and lighting across all four frames; ONLY animate alternating knees and boots below backpack. Frame1: left leg forward and right back. Frame2: legs pass in neutral. Frame3: right leg forward and left back. Frame4: legs pass in neutral again. Clearly different leg silhouettes with realistic small stepping range, seamless loop 1-2-3-4. No sideways turning, no rotation, no different facing directions. Do NOT arrange as a character turnaround. Each slot has the same helmet anchor at (50%,50%) and same torso position. Production RTS game sprites, same detailed painted style as input. No ground, shadows on ground, scenery, text, labels or grid lines. Exact four complete figures in a single horizontal row, all fully contained within equal-width slots with transparent margins.",
+    "rifleman_alpha": "Use case: background-extraction. Edit this four-frame walk-cycle sprite sheet. Remove the white backdrop completely. Output a truly transparent RGBA PNG: empty canvas pixels alpha 0, painted sprite interior alpha 255. Keep EXACTLY the same four sprites, pixel positions, sizes, spacing, colors and poses. No changes to the artwork, no new backdrop, no white glow, no shadows. This is a production game sprite sheet requiring real transparent cutout around each figure.",
+    "rocketeer": "Use case: precise-object-edit. Asset type: game animation sprite sheet.\nEdit target image 1 is a transparent reference canvas with the approved overhead rocket infantry sprite in slot one. Image 2 is its detailed original reference. This character carries the same shoulder rocket launcher in every frame. Create a COMPLETE FOUR-FRAME WALK CYCLE of that same character, one horizontal row of four equally spaced square slots. Truly transparent RGBA cutout background, EMPTY PIXELS ALPHA ZERO, character interiors opaque. No white background. Forward points exactly UP in ALL frames, fixed overhead orthographic camera.\nKeep identical olive uniform, backpack, magenta helmet/shoulder panels and held equipment. Preserve character scale, helmet position, upper torso, arms, equipment, details, palette and lighting across all four frames; ONLY animate alternating knees and boots below backpack. Frame1: left leg forward and right back. Frame2: legs pass in neutral. Frame3: right leg forward and left back. Frame4: legs pass in neutral again. Clearly different leg silhouettes with realistic small stepping range, seamless loop 1-2-3-4. No sideways turning, no rotation, no different facing directions. Do NOT arrange as a character turnaround. Each slot has the same helmet anchor at (50%,50%) and same torso position. Production RTS game sprites, same detailed painted style as input. No ground, shadows on ground, scenery, text, labels or grid lines. Exact four complete figures in a single horizontal row, all fully contained within equal-width slots with transparent margins.",
+    "rocketeer_stride_corrections": [
+      "Use case: precise-object-edit. Edit this transparent four-frame overhead infantry walking sprite sheet. Change ONLY the legs in the THIRD sprite from the left: it currently repeats the FIRST sprite's LEFT boot forward pose. The THIRD sprite must instead have its RIGHT leg and boot extended DOWN toward the bottom edge, and its LEFT knee and boot pulled UP toward the backpack. This is the opposite stride to sprite one, forming a left-neutral-right-neutral loop. Keep the upper body, head, backpack, arms, launcher, magenta panels, scale, all anchor positions identical to the input. Do not modify sprites one, two or four. Exact same canvas and four-slot layout. Preserve real RGBA transparency, empty pixel alpha zero. No background, no labels.",
+      "Use case: precise-object-edit. Fix ONLY the third figure (second from right) on this four-frame transparent sprite sheet. Use SCREEN coordinates: on that THIRD figure, the boot on the LEFT side OF THE IMAGE must be the LOWEST point of the figure, extended down fully. The boot on the RIGHT side OF THE IMAGE must be much HIGHER, bent up close to backpack. Opposite silhouette from the first figure, which has the image-right boot lowest. This correction is essential for alternating feet in a walk animation. Preserve all other pixels and sprites as closely as possible, especially upper bodies. True transparent RGBA background, alpha zero outside figures. No text or scenery."
+    ]
+  },
+  "normalization": {
+    "tool": "tools/prepare_infantry_walk.py",
+    "dependency": "Pillow 13.0.0 (offline tooling only)",
+    "frame_count": 4,
+    "canvas": [
+      512,
+      512
+    ],
+    "atlas": [
+      2048,
+      512
+    ],
+    "shared_scale": "480 / maximum cropped content extent of all four frames; no individual rescaling",
+    "anchor": "Magenta helmet centroid at (256,232), shared across the four frames; excludes shoulders",
+    "idle_frame": 1,
+    "walk_fps": 8,
+    "rocketeer_correction": "Only the third cell from the corrected strip is used; other cells retain the original full-strip result.",
+    "originals_retained": true
+  },
+  "files": [
+    {
+      "path": "docs/assets/sources/rifleman-walk-generated.png",
+      "sha256": "3e934c07b5704955d1e247e18844c0800bde55833286b2a245f24042f6791ae8",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "origin_file": "/Users/dmzorev/.codex/generated_images/01a1a0ad-b9b8-7900-a24e-7410eb4fa255/exec-16b4e91d-35c2-4d13-b68d-270d67973327.png"
+    },
+    {
+      "path": "docs/assets/sources/rocketeer-walk-generated.png",
+      "sha256": "28508cf8ec419a7e7a9e29bab0e982a71d6002391c84b765ecef57a18bab1173",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "origin_file": "/Users/dmzorev/.codex/generated_images/01a1a0ad-b9b8-7900-a24e-7410eb4fa255/exec-f158823e-04b4-4257-8544-cda5d5425862.png"
+    },
+    {
+      "path": "docs/assets/sources/rocketeer-walk-stride-correction.png",
+      "sha256": "8e75256dbbed5425d2c451ff3e8e3de60c869921187575c4324a7032363217e9",
+      "size": [
+        2172,
+        724
+      ],
+      "mode": "RGBA",
+      "origin_file": "/Users/dmzorev/.codex/generated_images/01a1a0ad-b9b8-7900-a24e-7410eb4fa255/exec-4d99166e-d7b7-4d0f-beec-bedca793ba40.png"
+    },
+    {
+      "path": "sandbox/assets/units/rifleman-walk.png",
+      "sha256": "e73d377dba9b15f4d0f53d17d9155e735f057ffdc58c51912bd52167e52dec15",
+      "size": [
+        2048,
+        512
+      ],
+      "mode": "RGBA"
+    },
+    {
+      "path": "sandbox/assets/units/rocketeer-walk.png",
+      "sha256": "73869292da64ef703ebac9c4302089d0458ebf11a3a7284a267c1f47faea6800",
+      "size": [
+        2048,
+        512
+      ],
+      "mode": "RGBA"
+    }
+  ]
+}

@@ -22,8 +22,8 @@ public partial class Sandbox
             if (tick != 12 || apc.Presentation.States != expected || !apc.Presentation.Weapon.IsActive(tick) ||
                 apc.Presentation.Body.Animation != type.MoveAnimation || apc.Presentation.BodyFacing == apc.Presentation.WeaponFacing)
                 throw new InvalidOperationException("Concurrent movement, aim, fire and states were not published.");
-            if (sprites.BatchCount != 7 || sprites.SpriteCount != 16)
-                throw new InvalidOperationException($"Expected seven textures and sixteen sprite layers; got {sprites.BatchCount}/{sprites.SpriteCount}.");
+            if (sprites.BatchCount != 13 || sprites.SpriteCount != 16)
+                throw new InvalidOperationException($"Expected thirteen frame batches and sixteen sprite layers; got {sprites.BatchCount}/{sprites.SpriteCount}.");
             int capacity = sprites.Capacity;
             sprites.Apply(ReadOnlySpan<EntityPose>.Empty, 1, tick, tickRate);
             if (sprites.SpriteCount != 0 || sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Any(n => n.Multimesh.VisibleInstanceCount != 0))
@@ -31,6 +31,7 @@ public partial class Sandbox
             sprites.Apply(poses, 1, tick, tickRate);
             if (sprites.Capacity != capacity) throw new InvalidOperationException("Stable frame failed to reuse buffers.");
             VerifyAnimationSequences();
+            VerifyInfantryWalking();
             var stress = new EntityPose[10000];
             for (int i = 0; i < stress.Length; i++)
             {
@@ -39,7 +40,7 @@ public partial class Sandbox
                 stress[i] = template with { Id = new((uint)i + 1), Previous = position, Current = position };
             }
             sprites.Apply(stress, 1, tick, tickRate);
-            if (sprites.BatchCount != 7 || sprites.SpriteCount != 16000 || sprites.Node.GetChildCount() != 7)
+            if (sprites.BatchCount != 13 || sprites.SpriteCount != 16000 || sprites.Node.GetChildCount() != 13)
                 throw new InvalidOperationException("Sprite scene size grew with entity count.");
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             sprites.Apply(poses, 1, tick, tickRate);
@@ -61,12 +62,65 @@ public partial class Sandbox
                 if (blue < 8 || red < 8) throw new InvalidOperationException($"Team recoloring is missing: blue={blue}, red={red}.");
                 var path = Path.GetFullPath(_capturePath); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 if (screenshot.SavePng(path) != Error.Ok) throw new IOException("Failed to save presentation screenshot.");
+                await CaptureWalking(poses, tickRate);
             }
-            GD.Print("OPENRTS_PRESENTATION:PASS seven alpha sprites, layered turret, concurrent states, weighted/pingpong timing, 10000-unit buffers and terrain resources");
+            GD.Print("OPENRTS_PRESENTATION:PASS alpha sprites and four-frame infantry walking, layered turret, concurrent states, weighted/pingpong timing, 10000-unit buffers and terrain resources");
             GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(report));
             GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
+    }
+    private void VerifyInfantryWalking()
+    {
+        var models = ModelCatalog.Load([new("models", File.ReadAllText(ProjectSettings.GlobalizePath("res://content/models.yaml")))]);
+        var probe = new OpenRTS.Godot.SpriteWorldView(_catalog!, models); AddChild(probe.Node);
+        foreach (string id in new[] { "rifleman", "rocketeer" })
+        {
+            int unit = _catalog!.Units.ToList().FindIndex(u => u.Id == id); var type = _catalog.Units[unit];
+            foreach (bool moving in new[] { false, true })
+                foreach (int tick in new[] { 0, 4, 7, 10, 13 })
+                {
+                    var facing = FacingDirection.North;
+                    var presentation = new EntityPresentation(1, facing, facing, facing, facing,
+                        new(moving ? type.MoveAnimation : type.IdleAnimation, 0, 0), AnimationPlayback.None, 0);
+                    probe.Apply([new(new(1), unit, new(1024, 1024), new(1024, 1024), presentation)], 0, tick, 25);
+                    var node = probe.Node.GetChildren().OfType<MultiMeshInstance3D>().Single(n => n.Multimesh.VisibleInstanceCount == 1);
+                    var material = (ShaderMaterial)node.Multimesh.Mesh.SurfaceGetMaterial(0);
+                    var uv = material.GetShaderParameter("uv_rect").AsVector4();
+                    int expected = moving ? (int)(tick * 8.0 / 25) % 4 : 1;
+                    if (!Mathf.IsEqualApprox(uv.X, expected / 4f) || !Mathf.IsEqualApprox(uv.Z, 0.25f))
+                        throw new InvalidOperationException($"{id}: wrong walking/idle atlas frame at tick {tick}: {uv}.");
+                }
+        }
+        probe.Node.Visible = false; probe.Node.QueueFree();
+    }
+    private async System.Threading.Tasks.Task CaptureWalking(EntityPose[] poses, int tickRate)
+    {
+        var walkers = poses.Where(p => p.Id.Value is 1 or 7).ToArray();
+        for (int i = 0; i < walkers.Length; i++)
+        {
+            var pose = walkers[i]; var type = _catalog!.Units[pose.UnitType];
+            var position = new WorldPosition((16 + i * 2) * 1024, 16 * 1024);
+            var facing = FacingDirection.North;
+            walkers[i] = pose with { Previous = position, Current = position, Presentation = pose.Presentation with
+            { PreviousBodyFacing = facing, BodyFacing = facing, PreviousWeaponFacing = facing, WeaponFacing = facing,
+                Body = new(type.MoveAnimation, 1, 0), Weapon = AnimationPlayback.None } };
+        }
+        _camera!.Size = 4; _camera.Position = new(17, 40, 15.8f);
+        _selectionRing!.Visible = false;
+        _label!.Text = "OPENRTS / WALK CYCLE\n\n4 frames · 8 FPS · simulation time";
+        string path = Path.GetFullPath(_capturePath!);
+        for (int i = 0; i < 4; i++)
+        {
+            double time = 1 + i * tickRate / 8.0;
+            long tick = (long)time;
+            _sprites!.Apply(walkers, (float)(time - tick), tick, tickRate);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            using var image = GetViewport().GetTexture().GetImage();
+            if (image.SavePng(Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + $"-walk-{i}.png")) != Error.Ok)
+                throw new IOException("Failed to capture walking preview.");
+        }
     }
     private void VerifyAnimationSequences()
     {

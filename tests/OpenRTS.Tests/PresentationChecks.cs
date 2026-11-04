@@ -8,6 +8,22 @@ internal static class PresentationChecks
     private static UnitDefinition Unit() => new("unit", 100, ["idle", "move", "fire", "deploy"], ["damaged", "swimming"]);
     public static void Run(Action<string, Action> test)
     {
+        test("Walking follows actual displacement and stops on arrival or blocked orders", () =>
+        {
+            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
+            world.AddInitialUnit(0, new(1000, 1000));
+            world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1256, 1000))]);
+            NavigationChecks.Check(Poses(world)[0].Presentation.Body.Animation == type.MoveAnimation, "Moving unit did not walk");
+            world.Step(); world.Step();
+            var idle = Poses(world)[0];
+            NavigationChecks.Check(idle.Previous == idle.Current && idle.Presentation.Body.Animation == type.IdleAnimation, "Arrival left the walking cycle active");
+            var grid = new NavigationGrid(5, 5, Enumerable.Range(0, 5).Select(y => new GridCell(2, y)));
+            var blocked = new SimulationWorld([type], 5120, 5120, navigationGrid: grid);
+            blocked.AddInitialUnit(0, grid.Center(grid.Index(new(1, 2))));
+            blocked.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(grid.Index(new(3, 2))))]);
+            var waiting = Poses(blocked)[0];
+            NavigationChecks.Check(waiting.Previous == waiting.Current && waiting.Presentation.Body.Animation == type.IdleAnimation, "Stationary unit walked because it had a move order");
+        });
         test("Presentation capabilities are immutable, canonical and bounded", () =>
         {
             string[] names = ["move", "fire", "idle"];

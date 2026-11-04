@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-04",
+  "godot": "4.7.2.stable.mono.official.ed1daf0bf",
+  "dotnet_sdk": "10.0.105",
+  "platform": "Apple M3 Max / OpenGL Metal Compatibility",
+  "checks": {
+    "declarative_content": 20,
+    "openrts": 84,
+    "full_verify": true,
+    "native_godot_presentation": true,
+    "headless_godot_presentation": true,
+    "normalization_reproducible": true
+  },
+  "state_hash_tick_12": "D48EF1A4652124CD8A1E6734C1E33EB2FC63A3670BADC07A8AA89908084F3A0D",
+  "sprite_batches": 13,
+  "stress_poses": 10000,
+  "stress_layers": 16000,
+  "source_sha256": {
+    "sandbox/Sandbox.PresentationVerification.cs": "d3aec8c36751a6923ff15face18c62b7d47d147c667c700cb6862b96c0a72c7c",
+    "sandbox/content/models.yaml": "fe4ccc0c43136749eebb08a7cc2194cb8fae150a08a274c7b2881d57703f5319",
+    "sandbox/resources/units/rifleman.tres": "c75ecca6093cb218da999ef66e63a74c93c51421ab8f2d05a707532d7a72c889",
+    "sandbox/resources/units/rocketeer.tres": "3ad4db59aad0f1163e9b5cc03703677cf9edf728738c0793e26e88abeb5c794a",
+    "src/OpenRTS.Godot/SpriteWorldView.cs": "813c62c68ce8b2094598791f3d47c217ccd07ee8c0da928f799ef05b26c1daa7",
+    "tests/OpenRTS.Tests/PresentationChecks.cs": "0089275c984910796a1eba7d2d86163469de3c7789355d204e3507b63de3552c",
+    "tools/prepare_infantry_walk.py": "8902123a96f874451af84033895e3931334ce000ae04c43671d81787dbca26cb",
+    "docs/verification/infantry-walk-native.gif": "9c53a1dcf5148549425fb81579ef6d5e4a1caf5710a479402b38b17c7696a39c",
+    "docs/verification/infantry-walk-overview.png": "da9177005319fa42c52abe97087f7ad57957b6a3461fbc74c81cdddff24f9d29"
+  },
+  "limits": [
+    "No FPS benchmark of mass animated infantry",
+    "No long manual playtest",
+    "Native GIF shows sampled phases at a fixed position, not a recorded route"
+  ]
+}

@@ -19,6 +19,7 @@
 - [Сетка поиска и точное движение](docs/decisions/006-exact-movement.md)
 - [Семантика представления и модели](docs/decisions/007-presentation.md)
 - [Полигон, управление и проверки спрайтов](docs/verification/008-presentation.md)
+- [Ходьба пехоты и предпросмотр](docs/verification/009-infantry-walking.md)
 - [Сгенерированные спрайты и тайлы](docs/assets/README.md)
 - [Проверки точного движения](docs/verification/007-exact-movement.md)
 - [Лицензия MIT](LICENSE)

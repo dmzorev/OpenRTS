@@ -114,7 +114,6 @@ public sealed class SpriteWorldView
                     view.Weapon.IsActive(tick) && runtime.Sequences[view.Weapon.Animation] is not null)
                 { playback = view.Weapon; animation = playback.Animation; }
                 var effect = runtime.Animations[animation]!;
-                // shortcut: the demo has one image per clip; replace SpriteFrames art for gait/reload frame sequences.
                 float progress = playback.DurationTicks > 0 ? (float)Math.Clamp((time - playback.StartTick) / playback.DurationTicks, 0, 1) : 0;
                 float pulse = playback.DurationTicks > 0 ? MathF.Sin(MathF.PI * Math.Clamp(progress * 3, 0, 1)) : 0;
                 float bob = (float)effect.Bob * MathF.Sin((float)(time - playback.StartTick) * MathF.Tau * 3 / tickRate);
