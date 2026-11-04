@@ -20,6 +20,12 @@ public sealed partial class SimulationWorld
         public long YieldDeadline;
         public long LastProgressTick;
         public WorldPosition LocalTarget;
+        public uint Owner, VisualStates;
+        public FacingDirection BodyFacing, PreviousBodyFacing, WeaponFacing, PreviousWeaponFacing;
+        public AnimationPlayback BodyAnimation, WeaponAnimation;
+        public bool BodyAnimationOverride, HasAim;
+        public WorldPosition AimPoint;
+        public EntityId AimEntity;
     }
 
     private readonly UnitDefinition[] _types;
@@ -94,7 +100,7 @@ public sealed partial class SimulationWorld
         }
     }
 
-    public EntityId AddInitialUnit(int unitType, WorldPosition position)
+    public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
     {
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
@@ -104,7 +110,8 @@ public sealed partial class SimulationWorld
             if (!TerrainGeometry.Clear(_navigation.Grid, position, position, MotionIndex.BodyRadius) || !_motion!.ClearPlacement(position, out _))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
         }
-        return Spawn(unitType, position);
+        if ((states & ~_types[unitType].AllowedStateMask) != 0) throw new ArgumentOutOfRangeException(nameof(states));
+        return Spawn(unitType, position, owner, states);
     }
 
     public void Step(ReadOnlySpan<WorldCommand> commands = default, CancellationToken cancellationToken = default)
@@ -122,11 +129,14 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
             if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
                 throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell)
+            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim)
                 ValidatePosition(command.Position);
             if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
                 throw new ArgumentException("Scatter area must have positive extents.", nameof(commands));
             if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
+            if (command.Kind == CommandKind.PlayAnimation && (command.Animation < 0 || command.DurationTicks < 1 ||
+                command.DurationTicks > 1000000 || !Enum.IsDefined(command.Track)))
+                throw new ArgumentException("Animation commands require a valid track, nonnegative ID and duration in 1..1000000 ticks.", nameof(commands));
             if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.MoveGroup) && _navigation is null)
                 throw new ArgumentException("This world has no navigation layer.", nameof(commands));
         }
@@ -137,7 +147,12 @@ public sealed partial class SimulationWorld
         Tick = nextTick;
         foreach (var command in AppliedCommands) Apply(command);
 
-        for (int i = 0; i < Count; i++) _entities[i].Previous = _entities[i].Position;
+        for (int i = 0; i < Count; i++)
+        {
+            ref var entity = ref _entities[i];
+            entity.Previous = entity.Position;
+            entity.PreviousBodyFacing = entity.BodyFacing; entity.PreviousWeaponFacing = entity.WeaponFacing;
+        }
         if (_navigation is not null)
         {
             try { UpdateNavigation(cancellationToken); }
@@ -145,6 +160,7 @@ public sealed partial class SimulationWorld
         }
         else for (int i = 0; i < Count; i++)
             if (_entities[i].Moving && Advance(ref _entities[i], _entities[i].Target)) _entities[i].Moving = false;
+        UpdatePresentation();
     }
 
     public void CopyPoses(Span<EntityPose> destination)
@@ -154,7 +170,9 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i];
-            destination[i] = new(entity.Id, entity.UnitType, entity.Previous, entity.Position);
+            destination[i] = new(entity.Id, entity.UnitType, entity.Previous, entity.Position,
+                new(entity.Owner, entity.PreviousBodyFacing, entity.BodyFacing, entity.PreviousWeaponFacing, entity.WeaponFacing,
+                    entity.BodyAnimation, entity.WeaponAnimation, entity.VisualStates));
         }
     }
 
@@ -164,11 +182,16 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 1 : 5);
+            writer.Write(_navigation is null ? 2 : 6);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
-            foreach (var type in _types) { writer.Write(type.Id); writer.Write(type.MaxHealth); }
+            foreach (var type in _types)
+            {
+                writer.Write(type.Id); writer.Write(type.MaxHealth);
+                writer.Write(type.Animations.Count); foreach (var name in type.Animations) writer.Write(name);
+                writer.Write(type.States.Count); foreach (var name in type.States) writer.Write(name);
+            }
             writer.Write(Count);
             foreach (var entity in _entities.AsSpan(0, Count).ToArray().OrderBy(e => e.Id.Value))
             {
@@ -176,6 +199,7 @@ public sealed partial class SimulationWorld
                 writer.Write(entity.Position.X); writer.Write(entity.Position.Y); writer.Write(entity.Position.Elevation);
                 writer.Write(entity.Target.X); writer.Write(entity.Target.Y); writer.Write(entity.Target.Elevation);
                 writer.Write(entity.Moving);
+                WritePresentation(writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entity.GoalCell); writer.Write(entity.GroupMember); writer.Write(entity.WaitTicks);
@@ -228,7 +252,9 @@ public sealed partial class SimulationWorld
                     return;
                 }
             }
-            var id = Spawn(command.UnitType, command.Position);
+            if ((command.States & ~_types[command.UnitType].AllowedStateMask) != 0)
+            { _events.Add(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
+            var id = Spawn(command.UnitType, command.Position, command.Owner, command.States);
             _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType));
             return;
         }
@@ -250,6 +276,8 @@ public sealed partial class SimulationWorld
             _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity));
             return;
         }
+        if (command.Kind is CommandKind.PlayAnimation or CommandKind.SetVisualStates or CommandKind.ToggleVisualState or CommandKind.Aim or CommandKind.ClearAim)
+        { ApplyPresentation(index, command); return; }
         if (command.Kind == CommandKind.Move) SetTarget(index, command.Position);
         else
         {
@@ -287,7 +315,7 @@ public sealed partial class SimulationWorld
         entity.Moving = entity.Position != entity.Target;
     }
 
-    private EntityId Spawn(int unitType, WorldPosition position)
+    private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
     {
         if (_nextId == uint.MaxValue) throw new InvalidOperationException("Entity ID space exhausted.");
         if (Count == _entities.Length)
@@ -297,7 +325,10 @@ public sealed partial class SimulationWorld
         }
         var id = new EntityId(_nextId++);
         _entities[Count] = new() { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
-            Previous = position, Position = position, Target = position,
+            Previous = position, Position = position, Target = position, Owner = owner, VisualStates = states,
+            BodyFacing = FacingDirection.North, PreviousBodyFacing = FacingDirection.North,
+            WeaponFacing = FacingDirection.North, PreviousWeaponFacing = FacingDirection.North,
+            BodyAnimation = new(_types[unitType].IdleAnimation, Tick, 0), WeaponAnimation = AnimationPlayback.None,
             GoalCell = _navigation?.Grid.CellAt(position) ?? -1 };
         _motion?.Add(Count, id, position);
         _indices.Add(id, Count++);

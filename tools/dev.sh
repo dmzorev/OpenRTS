@@ -24,6 +24,10 @@ build() {
   dotnet build "$target" --configuration "$configuration" --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false
 }
 
+import_assets() {
+  "$godot_bin" --headless --editor --path "$PWD/sandbox" --import
+}
+
 action="${1:-build}"
 if [[ $# -gt 0 ]]; then shift; fi
 case "$action" in
@@ -38,8 +42,8 @@ case "$action" in
     build tools/OpenRTS.Headless/OpenRTS.Headless.csproj Release
     DOTNET_TieredCompilation=0 dotnet run --project tools/OpenRTS.Headless --configuration Release --no-build --no-launch-profile -- --benchmark "$@"
     ;;
-  run) build; exec "$godot_bin" --path "$PWD/sandbox" -- "$@" ;;
+  run) build; import_assets; exec "$godot_bin" --path "$PWD/sandbox" -- "$@" ;;
   editor) build; exec "$godot_bin" --path "$PWD/sandbox" --editor ;;
-  verify) "$0" test; python3 tools/verify.py "$godot_bin" ;;
+  verify) "$0" test; import_assets; python3 tools/verify.py "$godot_bin" ;;
   *) echo 'Usage: tools/dev.sh [build|test|headless|benchmark|run|editor|verify]' >&2; exit 2 ;;
 esac

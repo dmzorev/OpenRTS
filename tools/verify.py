@@ -36,8 +36,8 @@ def main():
 
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 2:
-        raise RuntimeError("Expected two concrete unit definitions")
+    if expected["DefinitionCount"] != 5:
+        raise RuntimeError("Expected five concrete unit definitions")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -80,6 +80,15 @@ def main():
     if "ERROR:" in controls.stderr or "OPENRTS_CONTROLS:PASS" not in controls.stdout:
         raise RuntimeError("Sandbox controls failed:\n" + controls.stdout + controls.stderr)
     print("PASS Godot wheel focus, zoom, pan and playback input handlers", flush=True)
+
+    presentation = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-presentation"])
+    showcase = report(run(headless + ["--showcase", "--ticks=12"]).stdout, "OPENRTS_SIMULATION:")
+    if "ERROR:" in presentation.stderr or "OPENRTS_PRESENTATION:PASS" not in presentation.stdout or report(presentation.stdout, "OPENRTS_SIMULATION:") != showcase:
+        raise RuntimeError("Presentation verification failed:\n" + presentation.stdout + presentation.stderr)
+    controls = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--showcase", "--verify-controls"])
+    if "ERROR:" in controls.stderr or "OPENRTS_CONTROLS:PASS" not in controls.stdout:
+        raise RuntimeError("Showcase controls failed:\n" + controls.stdout + controls.stderr)
+    print("PASS SpriteFrames, layered presentation, alpha, states and showcase input", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

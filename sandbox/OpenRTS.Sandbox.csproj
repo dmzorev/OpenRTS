@@ -6,8 +6,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Sandbox.cs" />
-    <Compile Include="Sandbox.ControlsVerification.cs" />
+    <Compile Include="Sandbox*.cs" />
     <Compile Include="../src/OpenRTS.Godot/**/*.cs" />
     <ProjectReference Include="../src/OpenRTS.Content/OpenRTS.Content.csproj" />
   </ItemGroup>

@@ -1,11 +1,41 @@
 ^unit:
   Health:
     HP: 100
+  Presentation:
+    Animations: [idle, move, fire]
+    States: [damaged]
 
-scout:
+rifleman:
   Inherits: ^unit
+  Presentation:
+    Model: infantry-rifle
+    Name: Пехотинец с автоматом
+
+rocketeer:
+  Inherits: ^unit
+  Presentation:
+    Model: infantry-rocket
+    Name: Пехотинец с ракетницей
+
+apc-mg:
+  Inherits: ^unit
+  Health:
+    HP: 250
+  Presentation:
+    Model: apc-machinegun
+    States: [damaged, swimming]
+    Name: БТР · пулемёт
+
+apc-rocket:
+  Inherits: apc-mg
+  Presentation:
+    Model: apc-missiles
+    Name: БТР · ракеты
 
 tank:
   Inherits: ^unit
   Health:
     HP: 400
+  Presentation:
+    Model: tank
+    Name: Танк

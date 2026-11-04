@@ -1,0 +1,76 @@
+^sprite:
+  Model:
+    Kind: Sprite
+    States:
+      damaged: {Tint: [0.64, 0.48, 0.40]}
+      swimming: {Tint: [0.64, 0.86, 1.0], Scale: 0.94, Opacity: 0.88}
+
+infantry-rifle:
+  Inherits: ^sprite
+  Model:
+    Parts:
+      body:
+        Facing: Weapon
+        Resource: res://resources/units/rifleman.tres
+        Size: [1.25, 1.25]
+        Pivot: [0.5, 0.64]
+    Animations:
+      idle: {Sequence: stand, Parts: [body]}
+      move: {Sequence: travel, Parts: [body], Bob: 0.025}
+      fire: {Sequence: shoot, Parts: [body], Recoil: 0.045, Flash: 0.24}
+
+infantry-rocket:
+  Inherits: infantry-rifle
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/rocketeer.tres
+        Pivot: [0.5, 0.64]
+    Animations:
+      fire: {Sequence: shoot, Parts: [body], Recoil: 0.09, Flash: 0.32}
+
+apc-machinegun:
+  Inherits: ^sprite
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/apc-hull.tres
+        Size: [1.8, 1.8]
+      turret:
+        Parent: body
+        Facing: Weapon
+        Resource: res://resources/units/apc-mg-turret.tres
+        Size: [1.25, 1.25]
+        Pivot: [0.5, 0.70]
+        Offset: [0, -0.04]
+        Layer: 1
+    Animations:
+      idle: {Sequence: stand, Parts: [body, turret]}
+      move: {Sequence: travel, Parts: [body], Bob: 0.008}
+      fire: {Sequence: shoot, Parts: [turret], Recoil: 0.05, Flash: 0.30}
+
+apc-missiles:
+  Inherits: apc-machinegun
+  Model:
+    Parts:
+      turret:
+        Resource: res://resources/units/apc-rocket-turret.tres
+        Size: [1.25, 1.25]
+        Pivot: [0.5, 0.5]
+    Animations:
+      fire: {Sequence: shoot, Parts: [turret], Recoil: 0.06, Flash: 0.40}
+
+tank:
+  Inherits: apc-machinegun
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/tank-hull.tres
+        Size: [2.1, 2.1]
+      turret:
+        Resource: res://resources/units/tank-turret.tres
+        Size: [1.8, 1.8]
+        Pivot: [0.5, 0.73]
+        Offset: [0, -0.07]
+    Animations:
+      fire: {Sequence: shoot, Parts: [turret], Recoil: 0.12, Flash: 0.38}

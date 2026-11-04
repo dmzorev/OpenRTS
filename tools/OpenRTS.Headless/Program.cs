@@ -7,27 +7,29 @@ using OpenRTS.Core;
 try
 {
     var path = "sandbox/content/units.yaml";
-    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false;
+    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
         if (argument == "--simulate") simulate = true;
         else if (argument == "--benchmark") { simulate = true; benchmark = true; }
+        else if (argument == "--showcase") { simulate = true; showcase = true; }
         else if (argument == "--navigation") { simulate = true; navigation = true; }
         else if (argument == "--reverse-jobs") reverseJobs = true;
         else if (argument.StartsWith("--count=", StringComparison.Ordinal) && int.TryParse(argument[8..], out int value) && value is >= 1 and <= 1000000) count = value;
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) ticks = value;
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark] [--navigation] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--showcase] [--navigation] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
+    if (showcase && (navigation || benchmark)) throw new ArgumentException("Showcase is a presentation fixture; use navigation/benchmark separately.");
     var catalog = UnitCatalog.Load([new ContentSource(path, File.ReadAllText(path))]);
     Console.WriteLine("OPENRTS_CONTENT:" + JsonSerializer.Serialize(catalog.Summary));
     if (simulate)
     {
-        SimulationWorld Create() => navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
+        SimulationWorld Create() => showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
         var world = Create();
-        var commands = navigation ? NavigationScenario.Commands(count, ticks) : benchmark
+        var commands = showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
         SimulationReport report;

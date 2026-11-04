@@ -12,6 +12,13 @@ public partial class Sandbox : Node3D
     private SimulationSession? _session;
     private UnitCatalog? _catalog;
     private WorldView? _view;
+    private SpriteWorldView? _sprites;
+    private bool _showcase, _verifyPresentation;
+    private EntityId _selected = new(1);
+    private EntityPose[] _displayPoses = [];
+    private int _displayCount;
+    private MeshInstance3D? _selectionRing;
+    private string? _capturePath;
     private Camera3D? _camera;
     private Label? _label;
     private int _count = 10000, _ticks = DiagnosticScenario.DefaultTicks;
@@ -34,6 +41,9 @@ public partial class Sandbox : Node3D
             foreach (string arg in OS.GetCmdlineUserArgs())
             {
                 if (arg == "--verify") continue;
+                if (arg == "--showcase") { _showcase = true; continue; }
+                if (arg == "--verify-presentation") { _verifyPresentation = _showcase = true; continue; }
+                if (arg.StartsWith("--capture=", StringComparison.Ordinal)) { _capturePath = arg[10..]; continue; }
                 if (arg == "--verify-simulation") { _verifySimulation = true; continue; }
                 if (arg == "--verify-controls") { _verifyControls = true; _paused = true; continue; }
                 if (arg == "--realtime") { _pacedVerification = true; continue; }
@@ -43,8 +53,14 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
+            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal))) _showcase = true;
+            if (_showcase && _navigation) throw new ArgumentException("Полигон и диагностическая навигация — отдельные режимы.");
+            if (_showcase && _count != ShowcaseScenario.UnitCount && Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)))
+                throw new ArgumentException("Полигон содержит 10 юнитов; для нагрузок используйте --navigation --count=... .");
+            if (_showcase) _count = ShowcaseScenario.UnitCount;
+            if (_verifyPresentation) { _verifySimulation = true; _ticks = 12; }
             if ((verify ? 1 : 0) + (_verifySimulation ? 1 : 0) + (_verifyControls ? 1 : 0) > 1) throw new ArgumentException("Выберите один режим проверки.");
             using var file = Godot.FileAccess.Open("res://content/units.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть content/units.yaml: " + Godot.FileAccess.GetOpenError());
@@ -60,8 +76,14 @@ public partial class Sandbox : Node3D
             }
             else
             {
-                _view = new WorldView(_catalog.Units[0], _count);
-                AddChild(_view.Node);
+                if (_showcase)
+                {
+                    using var models = Godot.FileAccess.Open("res://content/models.yaml", Godot.FileAccess.ModeFlags.Read)
+                        ?? throw new InvalidOperationException("Не удалось открыть models.yaml.");
+                    _sprites = new(_catalog, ModelCatalog.Load([new("models.yaml", models.GetAsText())]));
+                    AddChild(new TerrainView().Node); AddChild(_sprites.Node); CreateSelectionRing();
+                }
+                else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
                 if (_navigation)
                 {
                     _obstacles = new ObstacleView();
@@ -86,8 +108,8 @@ public partial class Sandbox : Node3D
         _leftGoal = false;
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
-        _session = new SimulationSession(() => _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+        _session = new SimulationSession(() => _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -97,18 +119,24 @@ public partial class Sandbox : Node3D
     public override void _Process(double delta)
     {
         if (!_verifySimulation) PanCamera(delta);
-        if (_session is null || _view is null || _verificationDone) return;
+        if (_session is null || _view is null && _sprites is null || _verificationDone) return;
         try
         {
             bool completed = _session.Completion.IsCompleted;
             if (_session.Completion.IsFaulted) _session.Completion.GetAwaiter().GetResult();
             using var frame = _session.Frames.AcquireLatest();
             if (frame is null) return;
-            if (_verifyControls) { VerifyControls(frame.Tick); return; }
             float alpha = completed ? 1 : _session.GetInterpolationAlpha(frame.Tick);
-            _view.Apply(frame.Poses, alpha);
+            _view?.Apply(frame.Poses, alpha);
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate);
+            if (_showcase)
+            {
+                if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
+                frame.Poses.CopyTo(_displayPoses); _displayCount = frame.Poses.Length; UpdateSelection(alpha);
+            }
             _displayGrid = frame.Grid;
             _obstacles?.Apply(frame.Grid);
+            if (_verifyControls) { VerifyControls(frame.Tick); return; }
             while (_session.TryReadEvent(out var value))
                 _notice = value.Kind switch
                 {
@@ -117,12 +145,18 @@ public partial class Sandbox : Node3D
                     WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
                     _ => _notice
                 };
-            if (_label is not null)
+            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick);
+            else if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."
                         : "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.") + "\nКолесо — масштаб · WASD/стрелки/СКМ — камера\n+/− — темп · P — пауза · N — один тик" + (_notice.Length == 0 ? "" : "\nПоследний отказ: " + _notice);
+            if (_verifyPresentation && completed)
+            {
+                VerifyPresentation(frame); return;
+            }
             if (_verifySimulation && completed)
             {
+                var view = _view ?? throw new InvalidOperationException("Missing diagnostic view.");
                 var report = _session.Completion.GetAwaiter().GetResult();
                 if (frame.Tick != report.Tick || frame.Poses.Length != report.EntityCount)
                     throw new InvalidOperationException("Не опубликован конечный кадр симуляции.");
@@ -141,22 +175,22 @@ public partial class Sandbox : Node3D
                             throw new InvalidOperationException("Неверная позиция препятствия.");
                     }
                 }
-                int capacity = _view.Node.Multimesh.InstanceCount;
-                _view.Apply(ReadOnlySpan<EntityPose>.Empty, 1);
-                if (_view.Node.Multimesh.VisibleInstanceCount != 0)
+                int capacity = view.Node.Multimesh.InstanceCount;
+                view.Apply(ReadOnlySpan<EntityPose>.Empty, 1);
+                if (view.Node.Multimesh.VisibleInstanceCount != 0)
                     throw new InvalidOperationException("Пустое состояние не скрыло экземпляры.");
-                _view.Apply(frame.Poses, 0.5f);
+                view.Apply(frame.Poses, 0.5f);
                 if (frame.Poses.Length > 0 && DisplayServer.GetName() != "headless")
                 {
-                    var last = _view.Node.Multimesh.GetInstanceTransform(frame.Poses.Length - 1).Origin;
+                    var last = view.Node.Multimesh.GetInstanceTransform(frame.Poses.Length - 1).Origin;
                     var pose = frame.Poses[^1];
                     var expected = new Vector3((pose.Previous.X + pose.Current.X) / 2048f,
                         (pose.Previous.Elevation + pose.Current.Elevation) / 2048f + 0.25f,
                         (pose.Previous.Y + pose.Current.Y) / 2048f);
                     if (!last.IsEqualApprox(expected)) throw new InvalidOperationException($"Неверная позиция представления: {last}, ожидалась {expected}.");
                 }
-                _view.Apply(frame.Poses, 1);
-                if (_view.Node.Multimesh.InstanceCount != capacity || _view.Node.Multimesh.VisibleInstanceCount != frame.Poses.Length)
+                view.Apply(frame.Poses, 1);
+                if (view.Node.Multimesh.InstanceCount != capacity || view.Node.Multimesh.VisibleInstanceCount != frame.Poses.Length)
                     throw new InvalidOperationException("Ёмкость MultiMesh не переиспользуется.");
                 GD.Print("OPENRTS_CONTENT:" + JsonSerializer.Serialize(_catalog!.Summary));
                 GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(report));
@@ -192,6 +226,7 @@ public partial class Sandbox : Node3D
                     _playbackSpeed = Math.Clamp(_playbackSpeed * (slower ? 0.5 : 2), 0.125, 8);
                     _session.SetPlayback(_playbackSpeed, _paused);
                 }
+                else if (_showcase && HandleShowcaseKey(code)) { }
                 else if (code == Key.Space)
                 {
                     if (_displayGrid is not null)
@@ -206,7 +241,7 @@ public partial class Sandbox : Node3D
                         _session.Submit(CommandKind.Scatter, new(side, side));
                     }
                 }
-                else if (code == Key.B && _displayGrid is not null && MousePoint(GetViewport().GetMousePosition()) is { } target)
+                else if (!_showcase && code == Key.B && _displayGrid is not null && MousePoint(GetViewport().GetMousePosition()) is { } target)
                 {
                     int cell = _displayGrid.CellAt(target);
                     _session.Submit(_displayGrid.IsBlocked(cell) ? CommandKind.UnblockCell : CommandKind.BlockCell, target);
@@ -222,6 +257,8 @@ public partial class Sandbox : Node3D
                 var after = GroundPoint(motion.Position);
                 if (before is { } from && after is { } to) MoveCamera(from - to);
             }
+            else if (_showcase && input is InputEventMouseButton { Pressed: true } click && click.ButtonIndex is MouseButton.Left or MouseButton.Right)
+            { HandleShowcaseClick(click); }
             else if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } mouse && _camera is not null)
             {
                 if (MousePoint(mouse.Position) is { } target) _session.Submit(_navigation ? CommandKind.MoveGroup : CommandKind.MoveAll, target);
@@ -287,9 +324,9 @@ public partial class Sandbox : Node3D
         float side = DiagnosticScenario.SideCells(count);
         var center = new Vector3(side / 2, 0, side / 2);
         Vector2 groundSize = new(side, side);
-        if (_navigation)
+        if (_navigation || _showcase)
         {
-            var grid = NavigationScenario.Grid(count);
+            var grid = _showcase ? ShowcaseScenario.Grid() : NavigationScenario.Grid(count);
             float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
             side = Math.Max(grid.Width, grid.Height) * sample;
             center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);
@@ -305,21 +342,23 @@ public partial class Sandbox : Node3D
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
             }
         };
-        AddChild(ground);
+        if (!_showcase) AddChild(ground);
+        else ground.QueueFree();
         var camera = new Camera3D
         {
             Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = side * 1.18f,
-            Position = center + new Vector3(0, side, side * 0.7f),
+            Size = _showcase ? 28 : side * 1.18f,
+            Position = center + new Vector3(0, side, 0),
             Far = side * 4,
             Current = true
         };
         AddChild(camera);
-        camera.LookAt(center);
+        camera.RotationDegrees = new(-90, 0, 0);
         _camera = camera;
         _baseCameraSize = camera.Size;
         _mapWidth = groundSize.X; _mapDepth = groundSize.Y;
         _label = AddOverlay("OpenRTS · запуск симуляции…");
+        if (_showcase) AddShowcaseFooter();
     }
 
     private Label AddOverlay(string text)

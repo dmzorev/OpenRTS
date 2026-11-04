@@ -124,7 +124,9 @@ public sealed class SimulationSession : IDisposable
     }
 
     /// <summary>Enqueues live input. Its authoritative tick is assigned by the worker and recorded in the journal.</summary>
-    public long Submit(CommandKind kind, WorldPosition position = default, EntityId entity = default, int unitType = 0)
+    public long Submit(CommandKind kind, WorldPosition position = default, EntityId entity = default, int unitType = 0,
+        uint owner = 0, int animation = 0, int durationTicks = 1, AnimationTrack track = AnimationTrack.Weapon,
+        uint states = 0, EntityId targetEntity = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_endTick.HasValue || Completion.IsCompleted) throw new InvalidOperationException("This session no longer accepts live input.");
@@ -135,7 +137,7 @@ public sealed class SimulationSession : IDisposable
             throw new InvalidOperationException("Input backlog exceeded.");
         }
         long sequence = Interlocked.Increment(ref _inputSequence);
-        _input.Enqueue(new(0, 1, sequence, kind, entity, position, unitType));
+        _input.Enqueue(new(0, 1, sequence, kind, entity, position, unitType, owner, animation, durationTicks, track, states, targetEntity));
         return sequence;
     }
 

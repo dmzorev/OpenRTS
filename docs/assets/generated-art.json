@@ -1,0 +1,147 @@
+{
+  "generator": "Built-in image_gen",
+  "date": "2026-11-04",
+  "entries": [
+    {
+      "id": "rifleman",
+      "destination": "sandbox/assets/units/rifleman.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: one infantry soldier holding an assault rifle with both hands, rifle pointed toward the top; overhead helmet, shoulders and backpack visible, compact stable standing pose. Small magenta team paint on helmet crown and shoulder armor, olive fatigues, steel rifle. No muzzle flash, no second pose, no ground tile.",
+      "transparent_background": true,
+      "sha256": "971d6de289cadcefb6851fecb3e22244c1c10a25da964dd710e38919290d0378",
+      "origin_file": "exec-1b39af03-f485-44e9-b89e-31e496d9a42c.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "rocketeer",
+      "destination": "sandbox/assets/units/rocketeer.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: one infantry soldier with a shoulder-fired rocket launcher pointed straight toward the TOP. The launcher tube runs along the right shoulder, compact standing combat pose seen from directly above. Overhead helmet, olive fatigues and backpack. Magenta helmet crown and shoulder plates. No firing, no smoke. Match a readable top-down RTS sprite, not a side-view character.",
+      "transparent_background": true,
+      "sha256": "244b81e0ef559fd0005adf4e4ccbc2c691565d65b8bd7f178da79f537425cf30",
+      "origin_file": "exec-af47d42c-adf6-4baa-962d-dd4bc7169620.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "apc-hull",
+      "destination": "sandbox/assets/units/apc-hull.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: ONE eight-wheeled armored personnel carrier HULL ONLY, front pointed to the top. Rectangular olive-gray armored roof, four dark rugged wheels visible on each side, rear hatch and vents. NO turret, NO weapon, NO gun barrel. A clearly visible empty circular turret socket exactly at the image center to receive a separately rendered turret. Hull occupies about 65 percent canvas width and 80 percent height. Small flat magenta team-color roof panels and stripes.",
+      "transparent_background": true,
+      "sha256": "e15dca98bd9b3369333880fa26731a53003787aadc7cfa38190844bf1b129bf0",
+      "origin_file": "exec-a41a46ea-2d45-40ba-ad6f-af7cdb4eef48.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "apc-mg-turret",
+      "destination": "sandbox/assets/units/apc-mg-turret.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: ONE detached machine-gun turret for an armored personnel carrier, with compact armored circular base and one medium machine gun aimed straight to the top. Turret rotation mount exactly at canvas center; long barrel extends upward, lower base centered. NO vehicle hull, NO wheels, NO ground. Match olive-gray armored vehicle parts. Small magenta team-color plate on turret roof. Whole turret including barrel fully visible with transparent margins.",
+      "transparent_background": true,
+      "sha256": "ec49edc2e687ac8c1ded1dede5f8d22ec055f275c8abed439f174ebb53ad723b",
+      "origin_file": "exec-1bb1cf97-bfe1-4a69-ba48-6af42b0ed021.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "apc-rocket-turret",
+      "destination": "sandbox/assets/units/apc-rocket-turret.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: ONE detached rocket-launcher turret for an armored personnel carrier. Two compact rectangular six-tube missile pods flank a small central rotating armored base. Tubes aim to the top, aligned overhead. Pivot of the central circular mounting base exactly at canvas center. NO vehicle hull, NO wheels, NO firing. Olive-gray armored pods with small magenta team-color plates. Whole turret visible with transparent margins.",
+      "transparent_background": true,
+      "sha256": "0317bbe5aa7d3f869726637c2c1779692dd837de05536f1887a9773ab77776eb",
+      "origin_file": "exec-df1ca2de-1236-4ee2-a073-07fe58b865b2.png",
+      "width": 1254,
+      "height": 1254,
+      "note": "Первый вариант; уточняющая правка перспективы отклонена фильтром генератора."
+    },
+    {
+      "id": "tank-hull",
+      "destination": "sandbox/assets/units/tank-hull.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: ONE tracked main battle tank HULL ONLY, front pointed straight to the top. Broad angular olive-gray hull, continuous dark tracks on both sides, front glacis, engine grilles at rear. NO turret, NO gun, NO barrel. Empty round turret mounting socket exactly at canvas center. Hull occupies about 68 percent canvas width and 80 percent height. Small flat magenta team-color panels on side armor and roof.",
+      "transparent_background": true,
+      "sha256": "b0b47877e306b06eb2e18b3c15fc34c96f515d8573b5f7d38b04bed097414708",
+      "origin_file": "exec-4f4cfe51-cfc6-47f3-b1ca-874f84b657c1.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "tank-turret",
+      "destination": "sandbox/assets/units/tank-turret.png",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game. Orthographic camera exactly 90 degrees overhead, no perspective, no isometric angle. Crisp hand-painted game art with restrained realistic military detail, readable at 64-128 pixels, dark outlines, muted charcoal/olive armor, soft ambient highlights, no ground shadow outside the subject. One isolated asset only, facing straight toward the TOP of the image. Center its body/rotation pivot exactly at the canvas center. Square 1024x1024 composition with generous transparent margins. Actual transparent RGBA background, no checkerboard, no backdrop, no text, no labels, no watermark, no insignia. Team color convention: flat saturated MAGENTA paint panels (RGB about 255,0,255) in small clearly defined opaque areas; ONLY the team-color panels may use magenta, with neutral gray/olive materials everywhere else. Preserve that separation for shader recoloring. No colored rim lighting. Subject: ONE detached main battle tank turret with angular olive-gray armored roof and long cannon pointed toward the TOP. Turret ring pivot exactly at canvas center; cannon extends toward the upper margin. Entire cannon and turret visible with transparent padding. NO hull, NO tracks, NO wheels, NO ground. Small magenta team-color roof panels, dark cannon muzzle. A separately composited game part, not an exploded view.",
+      "transparent_background": true,
+      "sha256": "ad36b326dc3543ef9daf58ecdbfbac21219b39573d30a9926b6eb526a262963d",
+      "origin_file": "exec-14649e5c-6ac7-4959-8d08-840b0fa85957.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-road",
+      "destination": "sandbox/assets/terrain/road.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: weathered medium-gray concrete highway surface, subtle slabs and fine cracks, pale aggregate and faint tire wear. No road lane lines, no curbs, no road signs; uninterrupted continuous pavement suitable for roads of any width.",
+      "transparent_background": false,
+      "sha256": "b905c59f4330cad04fda9dab0fdfbd2f5fe03b10a4345ade051f1c37ed14cc13",
+      "origin_file": "exec-44327836-9468-4e40-af9b-c1dc05ea5649.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-grass",
+      "destination": "sandbox/assets/terrain/grass.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: short meadow grass in restrained moss-green and olive shades, small tufts with sparse tiny dry patches, enough texture to feel natural but calm enough to read units above it.",
+      "transparent_background": false,
+      "sha256": "f9e942cd0feb46234ad2893859e0e8856862db2236a018aed41e9f5aba7bb12a",
+      "origin_file": "exec-5921c4f3-fe58-47c9-b8ac-d5b9f2b67d05.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-mud",
+      "destination": "sandbox/assets/terrain/mud.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: damp brown churned earth and mud, soft irregular ruts and compacted soil, small wet highlights, no puddle large enough to dominate.",
+      "transparent_background": false,
+      "sha256": "507cd7aeb8a9487d221a92d03aa460ab676a93c0694a9db25015bcc43c08232d",
+      "origin_file": "exec-47403aa4-54b7-42a0-9ab5-be752bc6adcb.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-water",
+      "destination": "sandbox/assets/terrain/water.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: river water from exactly above, muted blue-teal with soft ripples and subtle darker depth patches. No shoreline, no foam borders, no islands; seamless open water texture.",
+      "transparent_background": false,
+      "sha256": "6edea2c5c19bbb97ee194e5187cd8c626ba7ac7a0c8f38166057272de92b1c40",
+      "origin_file": "exec-c9af2c24-dddd-4621-842e-e28e8b5714a0.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-forest",
+      "destination": "sandbox/assets/terrain/forest.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: dense forest canopy seen from directly overhead, overlapping rounded pine and deciduous tree crowns, layered dark green and muted olive foliage, small shadow gaps. Entire square filled by forest canopy, no sky, no visible horizon or tree trunks in side view.",
+      "transparent_background": false,
+      "sha256": "e6d7164f80b980ad8eaaadc28e05eaa336ee99678878a48e83493ebbca68e3bd",
+      "origin_file": "exec-a6a37b3d-1aaf-4fce-bd61-c30402fa2471.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-swamp",
+      "destination": "sandbox/assets/terrain/swamp.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: shallow marshy wetland from directly above, olive-brown mud, dark green algae, scattered reeds and small murky water patches. Seamless mixed wet terrain, no single central pond, no shoreline border.",
+      "transparent_background": false,
+      "sha256": "638580755b92ac7bc1b0334cf3458fd5d9b931c1db7de384138704118af3c16c",
+      "origin_file": "exec-08e9ffa7-0b4f-4b6e-ae7f-a83c8758fb10.png",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "terrain-mountains",
+      "destination": "sandbox/assets/terrain/mountains.png",
+      "prompt": "Use case: stylized-concept. Asset type: a single seamless square terrain tile texture for a strict top-down RTS game. Orthographic exactly overhead; no horizon, no isometric perspective. Muted hand-painted game art, grounded natural materials, crisp readable mid-scale detail matching olive-gray military sprites. Texture fills the entire square edge to edge. Seamlessly tileable on all four edges, even neutral diffuse lighting, no directional cast shadows, no vignette, no border, no labels, no text, no objects from other tiles, no UI. This tile is opaque terrain; no transparency. Subject: rugged impassable rocky mountain terrain seen exactly from above, angular gray-brown crags and fractured ridges, restrained light gray highlights and charcoal crevices. No sky, no horizon, no snow, no isometric cliffs; seamless rocky highland texture.",
+      "transparent_background": false,
+      "sha256": "4fb382b381da2fb81de647d3a66092f189db0125f6c224260d102f57873214dc",
+      "origin_file": "exec-650a1e0b-5593-4247-afc8-ec94ef64727b.png",
+      "width": 1254,
+      "height": 1254
+    }
+  ]
+}
