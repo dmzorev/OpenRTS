@@ -65,7 +65,7 @@ public sealed class DestinationResolver
         return component > 0 && component == ComponentAt(destination, token);
     }
     public bool HasStoppingTerrain(WorldPosition source, CancellationToken token = default)
-    { int component = ComponentAt(source, token); return _stoppable[component]; }
+    { int component = ComponentAt(source, token); return component > 0 && _stoppable[component]; }
     public bool Resolve(WorldPosition source, WorldPosition requested, out WorldPosition result, CancellationToken token = default)
     {
         result = default;
@@ -76,7 +76,7 @@ public sealed class DestinationResolver
         var key = (component, requested.X, requested.Y);
         if (!_cache.TryGetValue(key, out var cached))
         {
-            cached = Nearest(Grid, requested, p => CanStop(p) && ComponentAt(p, token) == component, token);
+            cached = Nearest(Grid, requested, p => CanStop(p) && ComponentAt(p, token) == component, token, Profile.Body);
             if (_cacheOrder.Count == 128) _cache.Remove(_cacheOrder.Dequeue());
             _cacheOrder.Enqueue(key); _cache.Add(key, cached);
         }

@@ -42,6 +42,13 @@ def main():
                 raise RuntimeError("Weapon-stage art provenance differs: " + item[path_key])
     print("PASS weapon-stage sprite sources and normalized assets match SHA-256", flush=True)
 
+    art = json.loads((ROOT / "docs/assets/buildings-art.json").read_text())
+    for item in art["assets"]:
+        for path_key, hash_key in (("source", "source_sha256"), ("asset", "sha256"), ("original_source", "original_source_sha256")):
+            if path_key in item and hashlib.sha256((ROOT / item[path_key]).read_bytes()).hexdigest() != item[hash_key]:
+                raise RuntimeError("Building art provenance differs: " + item[path_key])
+    print("PASS building sources, open-door edits and normalized sprites match SHA-256", flush=True)
+
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
     if expected["DefinitionCount"] != 10:
@@ -101,6 +108,13 @@ def main():
     if "ERROR:" in rts.stderr or "OPENRTS_RTS_CONTROLS:PASS" not in rts.stdout:
         raise AssertionError("RTS selection/action/cursor verification failed: " + rts.stdout + rts.stderr)
     print("PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions", flush=True)
+
+    buildings = report(run(headless + ["--buildings", "--ticks=24", "--workers=1"]).stdout, "OPENRTS_SIMULATION:")
+    parallel = report(run(headless + ["--buildings", "--ticks=24", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")
+    native = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-buildings", "--workers=4"])
+    if buildings != parallel or "ERROR:" in native.stderr or "OPENRTS_BUILDINGS:PASS" not in native.stdout or report(native.stdout, "OPENRTS_SIMULATION:") != buildings:
+        raise RuntimeError("Building host/worker/presentation parity failed:\n" + native.stdout + native.stderr)
+    print("PASS buildings, footprint masks, sizes, lifecycle states, doors, radar and 10000-building batches; host/worker parity", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

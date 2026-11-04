@@ -106,23 +106,49 @@ tank-mixed:
 bunker-cannon:
   Inherits: tank
   Model:
+    DamagedState: damaged
+    DestroyedState: destroyed
+    States:
+      working: {Pulse: 0.05}
+      destroyed: {Tint: [0.72, 0.68, 0.62]}
     Parts:
       body:
+        HiddenWhen: [destroyed]
         Resource: res://resources/units/bunker-base.tres
         Size: [2.6, 2.6]
       turret:
+        HiddenWhen: [destroyed]
         Offset: [0, 0]
+      ruins:
+        Parent: body
+        Resource: res://resources/buildings/building-ruins.tres
+        Size: [2.6, 2.6]
+        VisibleWhen: [destroyed]
     Animations:
+      idle: {Sequence: stand, Parts: [body, turret, ruins]}
       move: {Sequence: stand, Parts: [body]}
 
 bunker-mixed:
   Inherits: tank-mixed
   Model:
+    DamagedState: damaged
+    DestroyedState: destroyed
+    States:
+      working: {Pulse: 0.05}
+      destroyed: {Tint: [0.72, 0.68, 0.62]}
     Parts:
       body:
+        HiddenWhen: [destroyed]
         Resource: res://resources/units/bunker-base.tres
         Size: [2.6, 2.6]
       turret:
+        HiddenWhen: [destroyed]
         Offset: [0, 0]
+      ruins:
+        Parent: body
+        Resource: res://resources/buildings/building-ruins.tres
+        Size: [2.6, 2.6]
+        VisibleWhen: [destroyed]
     Animations:
+      idle: {Sequence: stand, Parts: [body, turret, ruins]}
       move: {Sequence: stand, Parts: [body]}

@@ -21,10 +21,10 @@ public sealed partial class SimulationWorld
     private void InitializeLocomotion(NavigationGrid grid, int workers, int budget, int cache, bool reverse)
     {
         int maximum = Math.Max(grid.MaximumTerrain, _types.SelectMany(t => t.Footprint?.Cells ?? []).Max(c => (int?)c.Navigation.Terrain) ?? 0);
-        _useClearance = grid.HasGeometry || _types.Any(t => t.Footprint is not null || t.Body != BodyShape.Default || t.Locomotor.MaximumStep != int.MaxValue || t.Locomotor.MaximumSlope != int.MaxValue || t.Locomotor.MaximumDepth != int.MaxValue);
+        _useClearance = grid.HasGeometry || grid.CellSize < 514 || _types.Any(t => t.Footprint is null && (t.Body != BodyShape.Default || t.Locomotor.MaximumStep != int.MaxValue || t.Locomotor.MaximumSlope != int.MaxValue || t.Locomotor.MaximumDepth != int.MaxValue));
         foreach (var type in _types)
             if (type.Footprint is null && type.Locomotor.Rules.Count <= maximum) throw new ArgumentException("Unit locomotor does not define every terrain in this grid.");
-        if (!_useClearance && !grid.HasTerrain && _types.All(t => t.Locomotor.Rules[0] == TerrainRule.Ground)) return;
+        if (!_useClearance && maximum == 0 && !grid.HasTerrain && _types.All(t => t.Locomotor.Rules[0] == TerrainRule.Ground)) return;
         var profiles = _types.Where(t => t.Footprint is null).Select(t => t.Locomotor).GroupBy(p => p.NavigationKey, StringComparer.Ordinal)
             .OrderBy(g => g.Key, StringComparer.Ordinal).Select(g =>
             {
@@ -67,9 +67,7 @@ public sealed partial class SimulationWorld
             int i = _movementOrder[order]; ref var entity = ref _entities[i];
             if (!entity.Moving || entity.YieldFor.Value != 0 || _groupRoutes.TryGetValue(entity.Id, out var old) && old.Revision == grid.Revision) continue;
             int profile = _profileIndices[entity.UnitType]; var resolver = navigation.Resolver(profile);
-            int start = resolver.NodeAt(entity.Position, token), goal = resolver.NodeAt(entity.Target, token);
-            if (!StopAllowed(entity.UnitType, entity.Target) || start < 0 || goal < 0 || !navigation.CanReach(profile, start, goal, token))
-            { RejectRoute(ref entity); continue; }
+            if (!StopAllowed(entity.UnitType, entity.Target)) { RejectRoute(ref entity); continue; }
             var locomotor = _types[entity.UnitType].Locomotor;
             long dx = (long)entity.Target.X - entity.Position.X, dy = (long)entity.Target.Y - entity.Position.Y;
             long length = (long)SquareRoot((ulong)(dx * dx + dy * dy)); if (length * length < dx * dx + dy * dy) length++;
@@ -77,6 +75,10 @@ public sealed partial class SimulationWorld
             if (ClearTerrain(i, entity.Position, entity.Target) &&
                 TerrainCost.Segment(grid, locomotor, entity.Position, entity.Target) <= length * cheapest * 2)
             { _groupRoutes[entity.Id] = new([entity.Target], grid.Revision); continue; }
+            // An exact clear segment proves reachability without constructing a full-map clearance mask.
+            int start = resolver.NodeAt(entity.Position, token), goal = resolver.NodeAt(entity.Target, token);
+            if (start < 0 || goal < 0 || !navigation.CanReach(profile, start, goal, token))
+            { RejectRoute(ref entity); continue; }
             if (entity.GroupMember)
             {
                 long before = Stopwatch.GetTimestamp();

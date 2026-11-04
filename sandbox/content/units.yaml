@@ -80,12 +80,18 @@ engineer:
 
 bunker-cannon:
   Inherits: tank
+  Footprint:
+    Rows: ['##', '##']
+    Types: {'#': {Traverse: false, CanStop: false}}
   Movement: {Enabled: false}
   Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка}
+  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка, States: [damaged, working, destroyed]}
 
 bunker-mixed:
   Inherits: tank-mixed
+  Footprint:
+    Rows: ['##', '##']
+    Types: {'#': {Traverse: false, CanStop: false}}
   Movement: {Enabled: false}
   Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты}
+  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты, States: [damaged, working, destroyed]}

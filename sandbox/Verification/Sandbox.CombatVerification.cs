@@ -54,11 +54,13 @@ public partial class Sandbox
                 {
                     var tracers = _combatEffects.Node.GetNode<MultiMeshInstance3D>("Tracers").Multimesh;
                     var buffer = tracers.Buffer; bool horizontalRepair = false;
+                    var repairShot = world.Events.ToArray().Single(e => e.Kind == WorldEventKind.WeaponFired && e.Entity.Value == 3);
+                    float expectedLength = (repairShot.Position.X - repairShot.SourcePosition.X) / 1024f;
                     for (int i = 0; i < tracers.VisibleInstanceCount; i++)
                     {
                         int n = i * 16;
                         if (MathF.Abs(buffer[n + 12] - 0.2f) < 0.001f && MathF.Abs(buffer[n + 13] - 1) < 0.001f)
-                            horizontalRepair |= MathF.Abs(buffer[n + 2]) > 1.9f && MathF.Abs(buffer[n + 10]) < 0.001f;
+                            horizontalRepair |= MathF.Abs(MathF.Abs(buffer[n + 2]) - expectedLength) < 0.001f && MathF.Abs(buffer[n + 10]) < 0.001f;
                     }
                     if (!horizontalRepair) throw new InvalidOperationException("Repair beam does not follow the source-to-target segment.");
                     _displayPoses = poses; _displayCount = poses.Length; RefreshSelection(); _selection.Change([new(3)], OpenRTS.Godot.Controls.SelectionChange.Replace);

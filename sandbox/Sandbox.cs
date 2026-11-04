@@ -28,6 +28,7 @@ public partial class Sandbox : Node3D
     private int _count = 10000, _ticks = DiagnosticScenario.DefaultTicks;
     private bool _verifySimulation, _pacedVerification, _verificationDone;
     private bool _verifyControls, _verifyRtsControls;
+    private bool _buildings, _verifyBuildings;
     private bool _navigation, _reverseJobs, _leftGoal;
     private int _workers = 4;
     private ObstacleView? _obstacles;
@@ -45,6 +46,8 @@ public partial class Sandbox : Node3D
             foreach (string arg in OS.GetCmdlineUserArgs())
             {
                 if (arg == "--verify") continue;
+                if (arg == "--buildings") { _buildings = _showcase = true; continue; }
+                if (arg == "--verify-buildings") { _verifyBuildings = _buildings = _showcase = true; _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; continue; }
                 if (arg == "--showcase") { _showcase = true; continue; }
                 if (arg == "--verify-presentation") { _verifyPresentation = _showcase = true; continue; }
                 if (arg.StartsWith("--capture=", StringComparison.Ordinal)) { _capturePath = arg[10..]; continue; }
@@ -58,20 +61,23 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --buildings, --verify-buildings, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
-            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal))) _showcase = true;
+            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)) && !_showcase) _buildings = _showcase = true;
             if (_showcase && _navigation) throw new ArgumentException("Полигон и диагностическая навигация — отдельные режимы.");
             if (_showcase && _count != ShowcaseScenario.UnitCount && Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)))
                 throw new ArgumentException("Полигон содержит 10 юнитов; для нагрузок используйте --navigation --count=... .");
-            if (_showcase) _count = ShowcaseScenario.UnitCount;
+            if (_showcase) _count = _buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount;
+            if (_verifyBuildings) { _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; }
             if (_verifyPresentation) { _verifySimulation = true; _ticks = 12; }
             if ((verify ? 1 : 0) + (_verifySimulation ? 1 : 0) + (_verifyControls ? 1 : 0) > 1) throw new ArgumentException("Выберите один режим проверки.");
             using var file = Godot.FileAccess.Open("res://content/units.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть content/units.yaml: " + Godot.FileAccess.GetOpenError());
             using var terrain = Godot.FileAccess.Open("res://content/terrain.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть terrain.yaml.");
-            _catalog = UnitCatalog.Load([new ContentSource("content/units.yaml", file.GetAsText())],
+            var unitSources = new System.Collections.Generic.List<ContentSource> { new("content/units.yaml", file.GetAsText()) };
+            if (_buildings) unitSources.Add(new("buildings.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/buildings.yaml"))));
+            _catalog = UnitCatalog.Load(unitSources,
                 LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]),
                 WeaponCatalog.Load([new("weapons.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/weapons.yaml")))]));
             if (verify)
@@ -89,10 +95,12 @@ public partial class Sandbox : Node3D
                 {
                     using var models = Godot.FileAccess.Open("res://content/models.yaml", Godot.FileAccess.ModeFlags.Read)
                         ?? throw new InvalidOperationException("Не удалось открыть models.yaml.");
-                    _sprites = new(_catalog, ModelCatalog.Load([new("models.yaml", models.GetAsText())]), TeamColor);
+                    var modelSources = new System.Collections.Generic.List<ContentSource> { new("models.yaml", models.GetAsText()) };
+                    if (_buildings) modelSources.Add(new("buildings-models.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/buildings-models.yaml"))));
+                    _sprites = new(_catalog, ModelCatalog.Load(modelSources), TeamColor);
                     _combatEffects = new(_catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
                     AddChild(_combatEffects.Node);
-                    AddChild(new TerrainView(ShowcaseScenario.Width, ShowcaseScenario.Height, ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
+                    AddChild(new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width, _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
                 }
                 else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
                 if (_navigation)
@@ -121,8 +129,8 @@ public partial class Sandbox : Node3D
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
-        _session = new SimulationSession(() => _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+        _session = new SimulationSession(() => _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -147,11 +155,10 @@ public partial class Sandbox : Node3D
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
                 frame.Poses.CopyTo(_displayPoses); _displayCount = frame.Poses.Length;
-                RefreshSelection(); UpdateSelection(alpha); UpdateRtsCursor();
+                RefreshSelection(); UpdateSelection(alpha); UpdateRtsCursor(); if (_buildings) UpdateFootprintPreview();
             }
             _displayGrid = frame.Grid;
             _obstacles?.Apply(frame.Grid);
-            if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             while (_session.TryReadEvent(out var value))
             {
                 _combatEffects?.Accept(value); _sprites?.Accept(value);
@@ -168,11 +175,13 @@ public partial class Sandbox : Node3D
             }
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
+            if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick);
             else if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."
                         : "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.") + "\nКолесо — масштаб · WASD/стрелки/СКМ — камера\n+/− — темп · P — пауза · N — один тик" + (_notice.Length == 0 ? "" : "\nПоследний отказ: " + _notice);
+            if (_verifyBuildings && completed) { VerifyBuildings(frame); return; }
             if (_verifyPresentation && completed)
             {
                 VerifyPresentation(frame); return;
@@ -353,7 +362,7 @@ public partial class Sandbox : Node3D
         Vector2 groundSize = new(side, side);
         if (_navigation || _showcase)
         {
-            var grid = _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
+            var grid = _buildings ? BuildingScenario.Grid(_catalog!.Locomotion!) : _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
             float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
             side = Math.Max(grid.Width, grid.Height) * sample;
             center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);
@@ -374,7 +383,7 @@ public partial class Sandbox : Node3D
         var camera = new Camera3D
         {
             Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = _showcase ? 28 : side * 1.18f,
+            Size = _buildings ? 52 : _showcase ? 28 : side * 1.18f,
             Position = center + new Vector3(0, side, 0),
             Far = side * 4,
             Current = true

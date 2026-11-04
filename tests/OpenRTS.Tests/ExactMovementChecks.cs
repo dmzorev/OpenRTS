@@ -21,7 +21,9 @@ internal static class ExactMovementChecks
         test("Terrain sample scale is validated and survives immutable revisions", () =>
         {
             NavigationChecks.Reject<ArgumentOutOfRangeException>(() => new NavigationGrid(2, 2, cellSize: 0));
-            NavigationChecks.Reject<ArgumentException>(() => Exact(new NavigationGrid(2, 2, cellSize: 513)));
+            var fine = Exact(new NavigationGrid(12, 12, cellSize: 128), new WorldPosition(768, 768));
+            fine.Step([new(1, 0, 1, CommandKind.Move, new(1), new(800, 800))]); Finish(fine);
+            NavigationChecks.Check(Poses(fine)[0].Current == new WorldPosition(800, 800), "Body spanning small terrain cells cannot move");
             var grid = new NavigationGrid(3, 3, cellSize: 514);
             var modified = grid.WithBlocked(4, true);
             NavigationChecks.Check(modified.CellSize == 514 && modified.Center(0) == new WorldPosition(257, 257), "Grid revision lost the sampling scale");
@@ -181,7 +183,8 @@ internal static class ExactMovementChecks
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: new(2948, 1536))]);
             world.Step([new(2, 0, 1, CommandKind.BlockCell, Position: new(3584, 1536))]);
             NavigationChecks.Check(world.NavigationGrid!.IsBlocked(world.NavigationGrid.Index(new(3, 1))), "Terrain edit was not applied");
-            NavigationChecks.Check(world.MovingCount == 0 && world.Events.ToArray().Any(e => e.Kind == WorldEventKind.NoRoute), "Group kept an exact endpoint overlapping new terrain");
+            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted) && Poses(world)[0].Order.Destination.X <= 2815, "Goal did not project outside the newly blocked body clearance");
+            Finish(world); NavigationChecks.Check(Poses(world)[0].Current.X <= 2815, "Unit kept an overlapping endpoint");
         });
         test("An interrupted yield times out en route and restores the original order", () =>
         {

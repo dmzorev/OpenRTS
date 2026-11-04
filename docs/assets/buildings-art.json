@@ -12,21 +12,27 @@
     },
     {
       "name": "barracks",
-      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a compact military barracks, two joined olive-roof dormitory blocks, courtyard and a clearly visible entrance on the bottom edge; no people",
-      "source": "docs/assets/sources/building-barracks-source.png",
-      "source_sha256": "35e4330ee11189c683c1d0e7ef85164fc44e01a38ee20a8cd113426eda9673cf",
+      "prompt": "Edit only the small double entrance doors in the bottom-center gatehouse to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-barracks-open-source.png",
+      "source_sha256": "188603a1127d564438b8d509a958a6a659b88968faad8ff632a4ca8b98d3cefa",
       "asset": "sandbox/assets/buildings/barracks.png",
-      "sha256": "740844ec05f1452a363eea95fb818a90ceae1c89f42d28666c19949519ecff87",
-      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+      "sha256": "7239512c67b9bbf60f807883f0de2507524269d5ce95482d91d70590d55ef9f0",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved",
+      "original_source": "docs/assets/sources/building-barracks-source.png",
+      "original_source_sha256": "35e4330ee11189c683c1d0e7ef85164fc44e01a38ee20a8cd113426eda9673cf",
+      "original_prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a compact military barracks, two joined olive-roof dormitory blocks, courtyard and a clearly visible entrance on the bottom edge; no people"
     },
     {
       "name": "factory",
-      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a vehicle factory with a broad assembly hall on the left, a drive-through open repair bay on the right with yellow service markings, entrance at the bottom; no vehicles",
-      "source": "docs/assets/sources/building-factory-source.png",
-      "source_sha256": "ee746d8bd87efb757d15f1c3baf7a7d0f4972f34482d7a94ba614202d030c937",
+      "prompt": "Edit only the closed garage shutter at the bottom-left front of the large left workshop (leave the open repair bay on the right unchanged) to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-factory-open-source.png",
+      "source_sha256": "f9a89048745c33ac9960d8c18c345919f10a157189d2f0ca4b1bf060a682b47c",
       "asset": "sandbox/assets/buildings/factory.png",
-      "sha256": "153c7a368c332c104183fe8cfca5b4d8a8068659ee4dd37f7d48eb5e45f71114",
-      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+      "sha256": "5eece777d2f553eaa149d00deb36c5af0acb56156ecc80d4d357763db4bf2bd5",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved",
+      "original_source": "docs/assets/sources/building-factory-source.png",
+      "original_source_sha256": "ee746d8bd87efb757d15f1c3baf7a7d0f4972f34482d7a94ba614202d030c937",
+      "original_prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down from directly overhead, no perspective/isometric side view. Hand-painted crisp industrial details, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied game-art reference. Single complete object centered with margin, readable at small game scale, no text, no logos, no ground scenery outside the foundation, genuinely transparent alpha background. Subject: a vehicle factory with a broad assembly hall on the left, a drive-through open repair bay on the right with yellow service markings, entrance at the bottom; no vehicles"
     },
     {
       "name": "headquarters",
@@ -39,12 +45,15 @@
     },
     {
       "name": "construction-yard",
-      "prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a construction yard / vehicle assembly facility, a low industrial workshop on left, an OPEN assembly pad on right with a small unfinished vehicle chassis, overhead yellow gantry crane, entrance/garage exit on bottom, compact rectangular foundation; the crane and garage can be animated with separate overlays later",
-      "source": "docs/assets/sources/building-construction-yard-source.png",
-      "source_sha256": "1e97946440c17e7bb06539e08f2678db89989a366be76e1dbad462321dc00b2d",
+      "prompt": "Edit only the closed large shutter in the bottom-right front of the assembly bay to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-construction-yard-open-source.png",
+      "source_sha256": "7aee5504e4af54269337af7124113d940750d3d4a370519104c381b946870d60",
       "asset": "sandbox/assets/buildings/construction-yard.png",
-      "sha256": "23dd46ca59f4f437118f8054713da0990a8baba547818c0151fc44fdaa9f74df",
-      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved"
+      "sha256": "752215d8a8725caa121a20011bd5509043962a97140c1bbb5e22dad8a882ab3c",
+      "normalization": "alpha>128 bounding box; aspect-preserving fit928 center1024, original alpha preserved",
+      "original_source": "docs/assets/sources/building-construction-yard-source.png",
+      "original_source_sha256": "1e97946440c17e7bb06539e08f2678db89989a366be76e1dbad462321dc00b2d",
+      "original_prompt": "Use case: stylized-concept. Transparent RTS game building sprite, strict orthographic top-down directly overhead, not isometric. Crisp hand-painted industrial game art, weathered olive metal roofs and gray concrete, vivid flat magenta team-color panels, matching supplied reference. Single complete object centered with margin, readable at small game scale. No text, no logos, no ground outside the foundation. Genuinely transparent alpha background. Subject: a construction yard / vehicle assembly facility, a low industrial workshop on left, an OPEN assembly pad on right with a small unfinished vehicle chassis, overhead yellow gantry crane, entrance/garage exit on bottom, compact rectangular foundation; the crane and garage can be animated with separate overlays later"
     },
     {
       "name": "mine",
@@ -124,8 +133,8 @@
       "source": "docs/assets/sources/building-door-strip-source.png",
       "source_sha256": "b9e75df3aeab9636400634f5b9ed812cc2861bf8a144df4955401a9d0aa29bb6",
       "asset": "sandbox/assets/buildings/door-strip.png",
-      "sha256": "0762efd299f673abefd55fb1cdc8f0377ec12fb8239fe9e3f1475b6f88a71d4e",
-      "normalization": "three equal cells; uniform resize512, shared canvas and anchor; RGBA preserved"
+      "sha256": "be8e5ef8d7d2d29a4681cf7908455ec848357ba9c23afc3688eae9e0fbd679ed",
+      "normalization": "three equal cells; shared 4px border crop, resize480 and pad16 to512; uniform scale/anchor, RGBA preserved"
     },
     {
       "name": "work-strip",
@@ -135,6 +144,23 @@
       "asset": "sandbox/assets/buildings/work-strip.png",
       "sha256": "234d1650ea5d15a3c13e61ff14f2d24ccbe1ce57e32b9b44d33555221ccadcea",
       "normalization": "three equal cells; uniform resize512, shared canvas and anchor; RGBA preserved"
+    }
+  ],
+  "open_door_edits": [
+    {
+      "name": "barracks",
+      "prompt": "Edit only the small double entrance doors in the bottom-center gatehouse to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-barracks-open-source.png"
+    },
+    {
+      "name": "factory",
+      "prompt": "Edit only the closed garage shutter at the bottom-left front of the large left workshop (leave the open repair bay on the right unchanged) to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-factory-open-source.png"
+    },
+    {
+      "name": "construction-yard",
+      "prompt": "Edit only the closed large shutter in the bottom-right front of the assembly bay to a dark OPEN unobstructed doorway with the panels removed/retracted. This is a base sprite for a separately animated door overlay. Preserve the exact building, all other details, silhouette, canvas, anchor, palette and exterior alpha. Do not add any new objects or change the roof, courtyard or foundation. Keep the supplied top-down game sprite composition. Preserve transparency.",
+      "source": "docs/assets/sources/building-construction-yard-open-source.png"
     }
   ]
 }

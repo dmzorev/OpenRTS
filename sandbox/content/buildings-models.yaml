@@ -1,0 +1,140 @@
+^building-model:
+  Model:
+    Kind: Sprite
+    DamagedState: damaged
+    DestroyedState: destroyed
+    Parts:
+      body:
+        Resource: res://resources/buildings/power-plant.tres
+        Size: [3.3103, 3.3139]
+        HiddenWhen: [destroyed]
+      ruins:
+        Parent: body
+        Resource: res://resources/buildings/building-ruins.tres
+        Size: [3.3, 3.3]
+        VisibleWhen: [destroyed]
+      workfx:
+        Parent: body
+        Resource: res://resources/buildings/work-strip.tres
+        Size: [1.1, 1.1]
+        Offset: [0.6, 0]
+        Layer: 8
+        VisibleWhen: [working]
+        HiddenWhen: [destroyed]
+        LoopWhen: working
+        LoopAnimation: produce
+    Animations:
+      idle: {Sequence: stand, Parts: [body, ruins, workfx]}
+      construct: {Sequence: stand, Parts: [body], ScaleFrom: 0.92, OpacityFrom: 0.15}
+      produce: {Sequence: shoot, Parts: [workfx], Flash: 0.12}
+      door: {Sequence: stand, Parts: [body]}
+    States:
+      damaged: {Tint: [0.56, 0.42, 0.32]}
+      working: {Pulse: 0.1}
+      destroyed: {Tint: [0.72, 0.68, 0.62]}
+
+power-plant:
+  Inherits: ^building-model
+
+barracks:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/barracks.tres, Size: [4.5061, 3.3103]}
+      ruins: {Size: [4.4, 3.3]}
+      door:
+        Parent: body
+        Resource: res://resources/buildings/door-strip.tres
+        Size: [1.3, 0.7]
+        Offset: [0, 1.0]
+        Layer: 12
+        HiddenWhen: [destroyed]
+    Animations:
+      idle: {Sequence: stand, Parts: [body, ruins, workfx, door]}
+      door: {Sequence: shoot, Parts: [door]}
+
+factory:
+  Inherits: barracks
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/factory.tres, Size: [5.5292, 4.4138]}
+      ruins: {Size: [5.5, 4.4]}
+      door: {Size: [1.5, 0.7], Offset: [-0.85, 1.15]}
+      workfx: {Offset: [1.15, 0.1]}
+
+construction-yard:
+  Inherits: factory
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/construction-yard.tres, Size: [5.5172, 6.4403]}
+      door: {Size: [1.8, 0.8], Offset: [0.95, 1.75]}
+      workfx: {Offset: [0.8, 0.0], Size: [0.9, 0.9]}
+
+headquarters:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/headquarters.tres, Size: [4.4138, 5.0443]}
+      ruins: {Size: [4.4, 3.3]}
+      radar:
+        Parent: body
+        Resource: res://resources/buildings/radar.tres
+        Size: [1.45, 1.45]
+        Offset: [1.18, -0.55]
+        Layer: 3
+        Spin: 65
+        SpinWhen: working
+        HiddenWhen: [destroyed]
+    Animations:
+      idle: {Sequence: stand, Parts: [body, ruins, workfx, radar]}
+
+mine:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/mine.tres, Size: [3.4909, 4.4138]}
+      ruins: {Size: [3.3, 4.4]}
+      workfx: {Offset: [0, 0.5]}
+
+oil-derrick:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/oil-derrick.tres, Size: [3.3247, 3.3103]}
+      workfx: {Offset: [0.6, -0.2]}
+
+^nature-model:
+  Model:
+    Kind: Sprite
+    DestroyedState: destroyed
+    Parts:
+      body:
+        Resource: res://resources/buildings/trees.tres
+        Size: [3.3103, 2.5859]
+        HiddenWhen: [destroyed]
+      ruins:
+        Resource: res://resources/buildings/debris.tres
+        Size: [2.0, 1.5]
+        VisibleWhen: [destroyed]
+    Animations:
+      idle: {Sequence: stand, Parts: [body, ruins]}
+    States:
+      destroyed: {Tint: [0.6, 0.6, 0.6]}
+
+nature-trees:
+  Inherits: ^nature-model
+nature-rocks:
+  Inherits: ^nature-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/rocks.tres, Size: [2.4468, 2.6667]}
+nature-cliff:
+  Inherits: ^nature-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/cliff.tres, Size: [3.3103, 4.2372]}
+nature-debris:
+  Inherits: ^nature-model
+  Model:
+    Parts:
+      body: {Resource: res://resources/buildings/debris.tres, Size: [3.3103, 2.8405]}

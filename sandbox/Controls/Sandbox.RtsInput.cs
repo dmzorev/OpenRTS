@@ -43,11 +43,20 @@ public partial class Sandbox
     private EntityPose? Selected() => _selectionPoses.TryGetValue(_selection.Primary, out var pose) ? pose : null;
     private EntityPose? Pick(WorldPosition point)
     {
-        EntityPose? selected = null; long best = 1100L * 1100;
+        EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false;
         for (int i = 0; i < _displayCount; i++)
         {
-            var pose = _displayPoses[i]; long x = (long)pose.Current.X - point.X, y = (long)pose.Current.Y - point.Y, distance = x * x + y * y;
-            if (distance < best || distance == best && selected is { } old && pose.Id.Value < old.Id.Value) { best = distance; selected = pose; }
+            var pose = _displayPoses[i]; var type = _catalog!.Units[pose.UnitType]; bool footprint = type.Footprint is not null;
+            if (footprint)
+            {
+                bool inside = type.Footprint!.Cells.Any(c => { var b = type.Footprint.Bounds(c, pose.Current); return point.X >= b.MinX && point.X < b.MaxX && point.Y >= b.MinY && point.Y < b.MaxY; });
+                if (!inside || selected is not null && !selectedFootprint || selectedFootprint && selected!.Value.Id.Value > pose.Id.Value) continue;
+                selected = pose; selectedFootprint = true; continue;
+            }
+            if (!ObjectGeometry.WithinRadius(type, pose.Current, point, 600)) continue;
+            long x = (long)pose.Current.X - point.X, y = (long)pose.Current.Y - point.Y, distance = x * x + y * y;
+            if (selectedFootprint || distance < best || distance == best && selected is { } old && pose.Id.Value < old.Id.Value)
+            { best = distance; selected = pose; selectedFootprint = false; }
         }
         return selected;
     }
@@ -110,9 +119,11 @@ public partial class Sandbox
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(click.Position))) return;
         if (!click.Pressed)
         { if (click.ButtonIndex == MouseButton.Left && _pointerDown) FinishSelection(click.Position); return; }
+        if (_buildings && _placing && click.ButtonIndex == MouseButton.Right) { _placing = false; return; }
         if (click.ButtonIndex == MouseButton.Right && (_armedAction is not null || _pointerDown))
         { _armedAction = null; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return; }
         if (CommandPoint(click.Position) is not { } point) { _notice = "Точка вне карты."; return; }
+        if (HandlePlacement(click, point)) return;
         var picked = Pick(point);
         if (click.ButtonIndex == MouseButton.Left && _armedAction is { } armed)
         {
@@ -126,7 +137,7 @@ public partial class Sandbox
             if ((click.DoubleClick || click.CtrlPressed) && picked is { } same)
             {
                 var ids = _displayPoses.Take(_displayCount).Where(p => p.UnitType == same.UnitType && p.Presentation.Owner == same.Presentation.Owner && OnScreen(p)).Select(p => p.Id);
-                if (!click.ShiftPressed || same.Presentation.Owner == 1) _selection.Change(ids, click.ShiftPressed && CanIssue(UnitActionKind.Move) ? SelectionChange.Add : SelectionChange.Replace);
+                if (!click.ShiftPressed || same.Presentation.Owner == 1) _selection.Change(ids, click.ShiftPressed && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
                 _pointerDown = false; return;
             }
             _pointerDown = true; _dragStart = click.Position; _dragAdd = click.ShiftPressed;
@@ -136,7 +147,7 @@ public partial class Sandbox
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
         bool enemy = picked is { Presentation.Owner: not 1 and not 0 };
-        bool repair = !enemy && picked is { Presentation.Owner: 1 } && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
+        bool repair = !enemy && picked is { Presentation.Owner: 1 } ally && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
         IssueAction(repair ? UnitActionKind.Repair : enemy && !click.CtrlPressed ? UnitActionKind.Attack : UnitActionKind.Move, point, picked?.Id ?? default, click.ShiftPressed);
     }
     public override void _Input(InputEvent input)
@@ -161,26 +172,27 @@ public partial class Sandbox
         {
             var box = new Rect2(_dragStart, end - _dragStart).Abs();
             var ids = _displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == 1 && OnScreen(p) && box.HasPoint(Screen(p))).Select(p => p.Id);
-            _selection.Change(ids, _dragAdd && CanIssue(UnitActionKind.Move) ? SelectionChange.Add : SelectionChange.Replace);
+            _selection.Change(ids, _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
         }
         else if (CommandPoint(end) is { } point)
         {
             var picked = Pick(point);
             if (!_dragAdd || picked is { Presentation.Owner: 1 })
-                _selection.Change(picked is { } pose ? [pose.Id] : [], _dragAdd && CanIssue(UnitActionKind.Move) ? SelectionChange.Toggle : SelectionChange.Replace);
+                _selection.Change(picked is { } pose ? [pose.Id] : [], _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Toggle : SelectionChange.Replace);
         }
         UpdateSelection(1); UpdateRtsCursor();
     }
     private bool HandleRtsKey(InputEventKey key, Key code)
     {
+        if (HandleBuildingKey(code)) return true;
         if (code == Key.Escape)
         { if (_armedAction is not null || _pointerDown) { _armedAction = null; _pointerDown = false; } else _selection.Change([], SelectionChange.Replace);
             if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return true; }
         if (code >= Key.Key1 && code <= Key.Key9)
         {
             int group = (int)(code - Key.Key0);
-            if (key.CtrlPressed) { if (CanIssue(UnitActionKind.Move)) _selection.StoreGroup(group); else _notice = "Контрольные группы доступны для своих юнитов."; }
-            else _selection.RecallGroup(group, key.ShiftPressed && CanIssue(UnitActionKind.Move), _selectionPoses.ContainsKey);
+            if (key.CtrlPressed) { if (CanIssue(UnitActionKind.Stop)) _selection.StoreGroup(group); else _notice = "Контрольные группы доступны для своих юнитов."; }
+            else _selection.RecallGroup(group, key.ShiftPressed && CanIssue(UnitActionKind.Stop), _selectionPoses.ContainsKey);
             return true;
         }
         if (code == Key.A && key.CtrlPressed)
@@ -220,9 +232,11 @@ public partial class Sandbox
                         _cursorProfiles.Clear();
                         foreach (var id in _selection.Ids)
                         {
-                            var pose = _selectionPoses[id]; var profile = _catalog!.Units[pose.UnitType].Locomotor;
-                            if (!_cursorResolvers.TryGetValue(profile, out var resolver)) { resolver = new(grid, profile); _cursorResolvers.Add(profile, resolver); }
-                            if (!_cursorProfiles.Add((profile, resolver.Component(grid.CellAt(pose.Current))))) continue;
+                            var pose = _selectionPoses[id]; var type = _catalog!.Units[pose.UnitType];
+                            if (!type.Movable) continue;
+                            var profile = type.Locomotor;
+                            if (!_cursorResolvers.TryGetValue(profile, out var resolver)) { resolver = new(grid, profile, grid.HasGeometry || grid.CellSize < 514 || profile.Body != BodyShape.Default || profile.MaximumStep != int.MaxValue || profile.MaximumSlope != int.MaxValue || profile.MaximumDepth != int.MaxValue); _cursorResolvers.Add(profile, resolver); }
+                            if (!_cursorProfiles.Add((profile, resolver.ComponentAt(pose.Current)))) continue;
                             if (!resolver.HasStoppingTerrain(pose.Current)) { cursor = RtsCursor.Unavailable; break; }
                             if (!resolver.CanStop(point) || !resolver.CanReach(pose.Current, point)) cursor = RtsCursor.AdjustedMove;
                         }
@@ -246,8 +260,9 @@ public partial class Sandbox
         for (int i = 0; i < _displayCount; i++) if (_selection.Contains(_displayPoses[i].Id))
         {
             var p = _displayPoses[i]; int at = ring++ * 16;
-            float size = _catalog!.Units[p.UnitType].Id is "rifleman" or "rocketeer" ? 0.65f : 1;
-            _ringBuffer[at] = _ringBuffer[at + 10] = size; _ringBuffer[at + 5] = 1;
+            var type = _catalog!.Units[p.UnitType];
+            _ringBuffer[at] = ((type.Footprint?.HalfWidth ?? type.Body.HalfWidth) / 1024f + 0.2f) / 0.88f;
+            _ringBuffer[at + 10] = ((type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f + 0.2f) / 0.88f; _ringBuffer[at + 5] = 1;
             _ringBuffer[at + 3] = (p.Previous.X + ((long)p.Current.X - p.Previous.X) * alpha) / 1024;
             _ringBuffer[at + 7] = 0.015f; _ringBuffer[at + 11] = (p.Previous.Y + ((long)p.Current.Y - p.Previous.Y) * alpha) / 1024;
             _ringBuffer[at + 12] = p.Presentation.Owner == 1 ? 0.6f : 1;

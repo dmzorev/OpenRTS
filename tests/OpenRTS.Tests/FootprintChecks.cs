@@ -25,6 +25,12 @@ internal static class FootprintChecks
             NavigationChecks.Check(units.Units[0].Footprint!.Cells.Count == 4 && !units.Units[0].Movable, "Footprint YAML not compiled");
             NavigationChecks.Reject<ContentException>(() => UnitCatalog.Load([new("u", "u: {Health: {HP: 1}, Footprint: {Rows: ['z']}}") ]));
         });
+        test("N2: a cursor query from blocked geometry returns no stopping terrain without indexing an absent component", () =>
+        {
+            var resolver = new DestinationResolver(new(4, 4, [new GridCell(1, 1)]), Locomotor.Default, exactGeometry: true);
+            NavigationChecks.Check(!resolver.HasStoppingTerrain(new(1536, 1536)), "Blocked origin has a stopping component");
+            NavigationChecks.Check(resolver.HasStoppingTerrain(new(512, 512)), "A valid origin lost its stopping component");
+        });
         test("N2: overlay removal preserves lower layers and stable placement priority after packed removal", () =>
         {
             var profile = new Locomotor("p", [TerrainRule.Ground, TerrainRule.Ground, TerrainRule.Blocked]);
@@ -168,6 +174,61 @@ internal static class FootprintChecks
             NavigationChecks.Check(Pose(world, 2).Current.X == 14336 && Pose(world, 3).Current.X < 7168, "Forest override ignored locomotor");
             world.Step([new(world.Tick + 1, 0, 1, CommandKind.Destroy, new(1))]); Move(world, 3, new(14336, 6144)); Finish(world);
             NavigationChecks.Check(Pose(world, 3).Current.X == 14336, "Terrain did not restore after neutral removal");
+        });
+        test("N2: different circle radii remain separated over complete swept moves", () =>
+        {
+            var world = new SimulationWorld([Mover("small", 160), Mover("large", 640)], 16384, 10240, speedPerTick: 256, navigationGrid: new(16, 10));
+            world.AddInitialUnit(0, new(2048, 4096)); world.AddInitialUnit(1, new(8192, 4096));
+            world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(10240, 4096)), new(1, 0, 2, CommandKind.Move, new(2), new(2048, 4096))]);
+            for (int tick = 0; tick < 250 && world.MovingCount > 0; tick++)
+            {
+                var a = Pose(world, 1); var b = Pose(world, 2);
+                decimal x = a.Previous.X - b.Previous.X, y = a.Previous.Y - b.Previous.Y;
+                decimal dx = a.Current.X - a.Previous.X - (b.Current.X - b.Previous.X), dy = a.Current.Y - a.Previous.Y - (b.Current.Y - b.Previous.Y);
+                decimal length = dx * dx + dy * dy, t = length == 0 ? 0 : Math.Clamp(-(x * dx + y * dy) / length, 0, 1);
+                NavigationChecks.Check((x + dx * t) * (x + dx * t) + (y + dy * t) * (y + dy * t) >= 800 * 800, "Mixed radii overlapped during interpolation"); world.Step();
+            }
+            NavigationChecks.Check(world.MovingCount == 0, "Mixed circle traffic did not finish");
+        });
+        test("N2: large group destinations use body-dependent spacing", () =>
+        {
+            var world = new SimulationWorld([Mover(radius: 640)], 20480, 14336, navigationGrid: new(20, 14));
+            for (int i = 0; i < 4; i++) world.AddInitialUnit(0, new((2 + i % 2 * 3) * 1024, (2 + i / 2 * 3) * 1024));
+            world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: new(10240, 8192))]); Finish(world, 300);
+            var poses = Poses(world); NavigationChecks.Check(world.MovingCount == 0, "Oversized bodies were packed into impossible goals");
+            for (int i = 0; i < poses.Length; i++) for (int j = i + 1; j < poses.Length; j++)
+            { long x = poses[i].Current.X - poses[j].Current.X, y = poses[i].Current.Y - poses[j].Current.Y; NavigationChecks.Check(x * x + y * y >= 1280L * 1280, "Group slots overlap large bodies"); }
+        });
+        test("N2: dynamic clearance fields and overlays remain canonical across workers", () =>
+        {
+            SimulationWorld Create(int workers)
+            {
+                var w = new SimulationWorld([Mover("s", 128), Mover("l", 384), Building("wall", Stamp(2, 4, new(false, false)))], 20480, 10240,
+                    navigationGrid: new(20, 10), navigationWorkers: workers, reverseNavigationJobs: workers > 1);
+                w.AddInitialUnit(0, new(2048, 2048)); w.AddInitialUnit(1, new(2048, 6144)); return w;
+            }
+            var a = Create(1); var b = Create(4);
+            for (int tick = 1; tick <= 160; tick++)
+            {
+                WorldCommand[] commands = tick switch {
+                    1 => [new(1, 0, 1, CommandKind.Move, new(1), new(18432, 2048)), new(1, 0, 2, CommandKind.Move, new(2), new(18432, 6144))],
+                    3 => [new(3, 0, 1, CommandKind.Spawn, Position: new(8192, 4096), UnitType: 2)],
+                    14 => [new(14, 0, 1, CommandKind.Destroy, new(3))],
+                    20 => [new(20, 0, 1, CommandKind.Spawn, Position: new(12288, 4096), UnitType: 2)],
+                    40 => [new(40, 0, 1, CommandKind.Remove, new(4))], _ => [] };
+                a.Step(commands); b.Step(commands); NavigationChecks.Check(a.Report() == b.Report(), "Worker completion order changed N2 state");
+            }
+            NavigationChecks.Check(a.MovingCount == 0 && a.Count == 2, "Dynamic worker scenario did not finish");
+        });
+        test("N2: published terrain is immutable while stacked objects change", () =>
+        {
+            var p = new Locomotor("p", [TerrainRule.Ground, TerrainRule.Ground]);
+            var world = new SimulationWorld([Mover(profile: p), Building("forest", Stamp(2, 2, new(true, true, 1)))], 12288, 8192, navigationGrid: new(12, 8));
+            world.AddInitialUnit(0, new(2048, 2048)); var exchange = new FrameExchange(); exchange.TryPublish(world); using var old = exchange.AcquireLatest()!;
+            int c = old.Grid!.CellAt(new(6144, 4096)); world.Step([new(1, 0, 1, CommandKind.Spawn, Position: new(6144, 4096), UnitType: 1)]);
+            exchange.TryPublish(world); using var stamped = exchange.AcquireLatest()!;
+            world.Step([new(2, 0, 1, CommandKind.Remove, new(2))]); exchange.TryPublish(world); using var current = exchange.AcquireLatest()!;
+            NavigationChecks.Check(old.Grid.TerrainAt(c) == 0 && stamped.Grid!.TerrainAt(c) == 1 && current.Grid!.TerrainAt(c) == 0, "Grid snapshots were mutated by overlay removal");
         });
     }
 }

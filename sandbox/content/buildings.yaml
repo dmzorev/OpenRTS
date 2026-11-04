@@ -1,0 +1,102 @@
+^building:
+  Health: {HP: 1000, Armor: Building}
+  Movement: {Enabled: false}
+  Presentation:
+    Animations: [idle, construct, produce, door]
+    States: [damaged, working, destroyed]
+  Footprint:
+    Types:
+      '#': {Traverse: false, CanStop: false}
+      '+': {Traverse: true, CanStop: false, Terrain: road, Targetable: false}
+      '=': {Traverse: true, CanStop: true, Terrain: road, Targetable: false}
+
+power-plant:
+  Inherits: ^building
+  Footprint: {Rows: ['###', '###']}
+  Presentation: {Model: power-plant, Name: Электростанция}
+
+barracks:
+  Inherits: ^building
+  Footprint: {Rows: ['####', '#==#', '#++#']}
+  Presentation: {Model: barracks, Name: Бараки}
+
+factory:
+  Inherits: ^building
+  Footprint: {Rows: ['#####', '###==', '###==', '###++']}
+  Armaments:
+    Mounts:
+      repair: {Weapon: repair, Animation: produce}
+  Presentation: {Model: factory, Name: Завод · ремонтная зона}
+
+headquarters:
+  Inherits: ^building
+  Footprint: {Rows: ['####', '####', '####']}
+  Presentation: {Model: headquarters, Name: HQ · Радар}
+
+construction-yard:
+  Inherits: ^building
+  Footprint: {Rows: ['#####', '###==', '###==', '###++']}
+  Presentation: {Model: construction-yard, Name: Construction Yard}
+
+mine:
+  Inherits: ^building
+  Footprint: {Rows: ['###', '###', '#+#', '#+#']}
+  Presentation: {Model: mine, Name: Шахта}
+
+oil-derrick:
+  Inherits: ^building
+  Footprint: {Rows: ['###', '###', '###']}
+  Presentation: {Model: oil-derrick, Name: Нефтяная вышка}
+
+^nature:
+  Health: {HP: 600, Armor: Building}
+  Movement: {Enabled: false}
+  Presentation: {Animations: [idle], States: [destroyed]}
+
+nature-trees:
+  Inherits: ^nature
+  Footprint:
+    Rows: ['ttt', 'ttt']
+    Types: {t: {Traverse: true, Terrain: forest}}
+  Presentation: {Model: nature-trees, Name: Деревья · лес}
+
+nature-rocks:
+  Inherits: ^nature
+  Footprint:
+    Rows: ['rr', 'rr']
+    Types: {r: {Terrain: mountains}}
+  Presentation: {Model: nature-rocks, Name: Груда камней}
+
+nature-cliff:
+  Inherits: ^nature
+  Footprint:
+    Rows: ['.rr', 'rrr', 'rr.']
+    Types: {r: {Terrain: mountains}}
+  Presentation: {Model: nature-cliff, Name: Скала · горы}
+
+nature-debris:
+  Inherits: ^nature
+  Footprint:
+    Rows: ['rrr', 'rrr']
+    Types: {r: {Traverse: false, CanStop: false}}
+  Presentation: {Model: nature-debris, Name: Обломки}
+
+light-infantry:
+  Inherits: rifleman
+  Body: {Kind: Circle, Radius: 160}
+  Presentation: {Name: Пехота · радиус 160}
+
+medium-apc:
+  Inherits: apc-mg
+  Body: {Kind: Circle, Radius: 384}
+  Presentation: {Name: БТР · радиус 384}
+
+large-tank:
+  Inherits: tank
+  Body: {Kind: Circle, Radius: 640}
+  Presentation: {Name: Танк · радиус 640}
+
+box-vehicle:
+  Inherits: tank
+  Body: {Kind: Box, HalfSize: [640, 320]}
+  Presentation: {Name: Техника · прямоугольное тело}

@@ -31,5 +31,5 @@ animations = [{
 "frames": [{"duration": 1.0, "texture": SubResource("Frame0")}, {"duration": 1.0, "texture": SubResource("Frame1")}, {"duration": 1.0, "texture": SubResource("Frame2")}],
 "loop": 1,
 "name": &"shoot",
-"speed": 8
+"speed": 7
 }]
