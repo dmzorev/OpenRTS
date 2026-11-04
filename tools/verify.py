@@ -62,7 +62,9 @@ def main():
     print("PASS real-time worker pacing at 25 Hz with a 15 FPS presentation", flush=True)
 
     for count in (1, 10000):
-        arguments = ["--navigation", f"--count={count}", f"--ticks={768 if count == 10000 else 128}"]
+        # Any-angle motion reaches the wall earlier; 256 ticks exercise routes and local contacts.
+        # Complete passage is checked separately by the 1000-member Core regression.
+        arguments = ["--navigation", f"--count={count}", f"--ticks={256 if count == 10000 else 128}"]
         expected_navigation = report(run(headless + arguments + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")
         reverse = report(run(headless + arguments + ["--workers=4", "--reverse-jobs"]).stdout, "OPENRTS_SIMULATION:")
         if reverse != expected_navigation:

@@ -2,23 +2,26 @@ namespace OpenRTS.Core;
 
 public readonly record struct GridCell(int X, int Y);
 
-/// <summary>Immutable one-cell navigation layer. Readers can safely share it with workers and views.</summary>
+/// <summary>Immutable terrain sampling layer, independent of exact body positions and collision bins.</summary>
 public sealed class NavigationGrid
 {
     public const int MaximumCells = 16 * 1024 * 1024;
     private readonly uint[] _blocked;
     public int Width { get; }
     public int Height { get; }
+    public int CellSize { get; }
     public int CellCount => Width * Height;
     public int Revision { get; }
 
-    public NavigationGrid(int width, int height, IEnumerable<GridCell>? blocked = null)
+    public NavigationGrid(int width, int height, IEnumerable<GridCell>? blocked = null, int cellSize = WorldPosition.UnitsPerCell)
     {
-        if (width < 1 || width > WorldPosition.MaximumExtent / 1024) throw new ArgumentOutOfRangeException(nameof(width));
-        if (height < 1 || height > WorldPosition.MaximumExtent / 1024 || (long)width * height > MaximumCells)
+        if (cellSize < 1 || cellSize > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(cellSize));
+        if (width < 1 || width > WorldPosition.MaximumExtent / cellSize) throw new ArgumentOutOfRangeException(nameof(width));
+        if (height < 1 || height > WorldPosition.MaximumExtent / cellSize || (long)width * height > MaximumCells)
             throw new ArgumentOutOfRangeException(nameof(height), "Navigation layer exceeds its cell budget.");
         Width = width;
         Height = height;
+        CellSize = cellSize;
         _blocked = new uint[(CellCount + 31) / 32];
         foreach (var cell in blocked ?? [])
         {
@@ -31,6 +34,7 @@ public sealed class NavigationGrid
     {
         Width = previous.Width;
         Height = previous.Height;
+        CellSize = previous.CellSize;
         Revision = checked(previous.Revision + 1);
         _blocked = (uint[])previous._blocked.Clone();
         uint bit = 1u << (cell & 31);
@@ -46,15 +50,15 @@ public sealed class NavigationGrid
 
     public int CellAt(WorldPosition position)
     {
-        if (position.X < 0 || position.X > (long)Width * 1024 || position.Y < 0 || position.Y > (long)Height * 1024)
+        if (position.X < 0 || position.X > (long)Width * CellSize || position.Y < 0 || position.Y > (long)Height * CellSize)
             throw new ArgumentOutOfRangeException(nameof(position));
-        return Math.Min(position.Y / 1024, Height - 1) * Width + Math.Min(position.X / 1024, Width - 1);
+        return Math.Min(position.Y / CellSize, Height - 1) * Width + Math.Min(position.X / CellSize, Width - 1);
     }
 
     public WorldPosition Center(int index, int elevation = 0)
     {
         if ((uint)index >= (uint)CellCount) throw new ArgumentOutOfRangeException(nameof(index));
-        return new(index % Width * 1024 + 512, index / Width * 1024 + 512, elevation);
+        return new(index % Width * CellSize + CellSize / 2, index / Width * CellSize + CellSize / 2, elevation);
     }
 
     public bool IsBlocked(int index)
@@ -90,7 +94,7 @@ public sealed class NavigationGrid
 
     internal void WriteState(BinaryWriter writer)
     {
-        writer.Write(Width); writer.Write(Height); writer.Write(Revision);
+        writer.Write(Width); writer.Write(Height); writer.Write(CellSize); writer.Write(Revision);
         foreach (uint bits in _blocked) writer.Write(bits);
     }
 }

@@ -16,7 +16,7 @@ internal static class NavigationChecks
     internal static SimulationWorld World(NavigationGrid grid, GridCell[] starts, int workers = 1,
         int speed = 1024, bool reverse = false, int budget = 2, int cache = 8)
     {
-        var world = new SimulationWorld([new("unit", 100)], grid.Width * 1024, grid.Height * 1024,
+        var world = new SimulationWorld([new("unit", 100)], grid.Width * grid.CellSize, grid.Height * grid.CellSize,
             initialCapacity: starts.Length, speedPerTick: speed, navigationGrid: grid,
             navigationWorkers: workers, fieldsPerTick: budget, cachedFields: cache, reverseNavigationJobs: reverse);
         foreach (var start in starts) world.AddInitialUnit(0, grid.Center(grid.Index(start)));
@@ -39,7 +39,7 @@ internal static class NavigationChecks
                     long ay = (long)poses[a].Previous.Y * (4 - alpha) + (long)poses[a].Current.Y * alpha;
                     long bx = (long)poses[b].Previous.X * (4 - alpha) + (long)poses[b].Current.X * alpha;
                     long by = (long)poses[b].Previous.Y * (4 - alpha) + (long)poses[b].Current.Y * alpha;
-                    Check(Math.Abs(ax - bx) >= 4096 || Math.Abs(ay - by) >= 4096, "Interpolated unit-cell footprints overlap");
+                    Check((ax - bx) * (ax - bx) + (ay - by) * (ay - by) >= 2048L * 2048, "Interpolated circular bodies overlap");
                 }
     }
 
@@ -133,7 +133,7 @@ internal static class NavigationChecks
             world.Step([new(3, 0, 1, CommandKind.MoveAll, Position: goal)]); world.Step();
             Check(Poses(world)[0].Current == goal, "Stale unreachable field was reused");
         });
-        test("Units cannot claim the same cell or swap through one another", () =>
+        test("Units cannot occupy the same point or cross through one another", () =>
         {
             var grid = new NavigationGrid(3, 3); var world = World(grid, [new(0, 1), new(2, 1)]);
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: grid.Center(grid.Index(new(1, 1))))]);
@@ -146,27 +146,27 @@ internal static class NavigationChecks
             headOn.Step([new(1, 0, 1, CommandKind.Move, new(1), before[1].Current), new(1, 0, 2, CommandKind.Move, new(2), before[0].Current)]);
             Check(Poses(headOn).Select(p => p.Current).SequenceEqual(before.Select(p => p.Current)), "Head-on cell swap was allowed");
         });
-        test("A cell vacated on this tick cannot cause a perpendicular interpolation collision", () =>
+        test("Perpendicular movement through nearby samples stays safe throughout interpolation", () =>
         {
             var grid = new NavigationGrid(3, 3); var world = World(grid, [new(0, 1), new(0, 0)]);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(0)),
                 new(1, 0, 2, CommandKind.Move, new(2), grid.Center(1))]);
             Separated(world);
-            Check(Poses(world).Single(p => p.Id.Value == 1).Current == grid.Center(grid.Index(new(0, 1))), "Vacated cell was reused before the next tick");
-            world.Step(); Separated(world);
-            Check(Poses(world).Single(p => p.Id.Value == 1).Current == grid.Center(0), "Vacated cell remained unavailable");
+            for (int i = 0; i < 32; i++) { world.Step(); Separated(world); }
+            Check(world.MovingCount == 0, "Safe perpendicular motion failed to finish");
         });
-        test("Mid-edge retargeting retains reservations and terrain cannot trap an in-flight unit", () =>
+        test("Mid-segment retargeting is immediate and terrain cannot overlap the current body", () =>
         {
             var grid = new NavigationGrid(5, 2); var world = World(grid, [new(0, 0), new(2, 0)], speed: 128);
             var origin = grid.Center(0);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(4))]);
             world.Step([new(2, 0, 1, CommandKind.Move, new(1), origin),
-                new(2, 0, 2, CommandKind.BlockCell, Position: grid.Center(1)),
+                new(2, 0, 2, CommandKind.BlockCell, Position: origin),
                 new(2, 0, 3, CommandKind.Move, new(2), origin)]);
-            Check(world.Events[0].Kind == WorldEventKind.CellOccupied && !world.NavigationGrid!.IsBlocked(1), "Reserved destination was blocked");
+            Check(world.Events[0].Kind == WorldEventKind.CellOccupied && !world.NavigationGrid!.IsBlocked(0), "Terrain overlapped the body");
+            Check(Poses(world).Single(p => p.Id.Value == 1).Current == origin, "A retarget finished an obsolete cell transition");
             for (int i = 0; i < 32; i++) { Separated(world); world.Step(); }
-            Check(Poses(world).Single(p => p.Id.Value == 1).Current == origin, "Retargeting froze an in-flight reservation");
+            Check(Poses(world).Single(p => p.Id.Value == 1).Current == origin, "Retargeted unit left its exact goal");
         });
         test("Blocked and occupied spawns are rejected; destroy releases reservations", () =>
         {

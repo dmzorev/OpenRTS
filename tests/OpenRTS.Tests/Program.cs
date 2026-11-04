@@ -3,8 +3,13 @@ using OpenRTS.Content;
 using OpenRTS.Core;
 
 int passed = 0;
+var failures = new List<Exception>();
 void Check(bool value, string message) { if (!value) throw new Exception(message); }
-void Test(string name, Action check) { check(); passed++; Console.WriteLine("PASS " + name); }
+void Test(string name, Action check)
+{
+    try { check(); passed++; Console.WriteLine("PASS " + name); }
+    catch (Exception error) { failures.Add(error); Console.WriteLine($"FAIL {name}: {error.Message}"); }
+}
 void Reject<T>(Action action) where T : Exception
 {
     try { action(); }
@@ -40,8 +45,10 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
     Reject<ArgumentException>(() => Load("^base: {Health: {HP: 1}}"));
 });
 SimulationChecks.Run(Test);
+ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);
 GroupNavigationChecks.Run(Test);
 PlaybackChecks.Run(Test);
 GroupPlanningChecks.Run(Test);
-Console.WriteLine($"{passed} OpenRTS checks passed.");
+Console.WriteLine($"{passed} OpenRTS checks passed; {failures.Count} failed.");
+if (failures.Count > 0) throw new AggregateException(failures);

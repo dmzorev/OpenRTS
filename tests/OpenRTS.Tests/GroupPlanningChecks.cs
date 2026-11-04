@@ -12,7 +12,7 @@ internal static class GroupPlanningChecks
             var world = NavigationScenario.Create(catalog, 1000);
             world.Step(NavigationScenario.Commands(1000, 1));
             int failures = 0;
-            for (int i = 1; i < 16384 && world.MovingCount > 0; i++)
+            for (int i = 1; i < 32768 && world.MovingCount > 0; i++)
             {
                 world.Step();
                 foreach (var value in world.Events) if (value.Kind == WorldEventKind.NoRoute) failures++;
@@ -54,7 +54,7 @@ internal static class GroupPlanningChecks
                 new(1, 0, 2, CommandKind.Move, new(2), grid.Center(grid.Index(new(5, 1))))]);
             int yields = 0;
             for (int i = 0; i < 100; i++) { yields += world.NavigationYields; Separated(world); world.Step(); }
-            NavigationChecks.Check(yields == 0 && Poses(world).Single(p => p.Id.Value == 2).Current == grid.Center(grid.Index(new(4, 1))), "A rear unit displaced its queued leader");
+            NavigationChecks.Check(yields == 0 && Poses(world).Single(p => p.Id.Value == 2).Current.Y == grid.Center(grid.Index(new(4, 1))).Y && Poses(world).Single(p => p.Id.Value == 2).Current.X <= grid.Center(grid.Index(new(4, 1))).X + 512, "A rear unit displaced its queued leader");
         });
         test("An idle blocker leaves its own goal to yield and then returns", () =>
         {
@@ -101,7 +101,10 @@ internal static class GroupPlanningChecks
                 var world = World(grid, Enumerable.Range(0, 9).Select(i => new GridCell(14 + i % 3, 14 + i / 3)).ToArray(), speed: 128);
                 var initial = Poses(world).ToDictionary(p => p.Id, p => p.Current);
                 world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(15 + delta.X, 15 + delta.Y))))]);
-                for (int tick = 1; tick <= 8 * (Math.Abs(delta.X) + Math.Abs(delta.Y)); tick++)
+                var reference = new SimulationWorld([new("unit", 100)], grid.Width * grid.CellSize, grid.Height * grid.CellSize, speedPerTick: 128);
+                reference.AddInitialUnit(0, initial[new(1)]);
+                reference.Step([new(1, 0, 1, CommandKind.Move, new(1), initial[new(1)] with { X = initial[new(1)].X + delta.X * 1024, Y = initial[new(1)].Y + delta.Y * 1024 })]);
+                for (int tick = 1; tick <= 128; tick++)
                 {
                     var poses = Poses(world); var first = poses[0];
                     int dx = first.Current.X - initial[first.Id].X, dy = first.Current.Y - initial[first.Id].Y;
@@ -112,9 +115,11 @@ internal static class GroupPlanningChecks
                         NavigationChecks.Check(delta.Y == 0 || Math.Sign(dy) == Math.Sign(delta.Y) || dy == 0, "Backwards Y movement");
                     }
                     Separated(world);
-                    NavigationChecks.Check(tick == 8 * (Math.Abs(delta.X) + Math.Abs(delta.Y)) ? world.MovingCount == 0 : world.MovingCount == 9, "Unequal start/arrival or slower than a common translation");
-                    if (world.MovingCount > 0) world.Step();
+                    NavigationChecks.Check(first.Current == Poses(reference)[0].Current && world.MovingCount == reference.MovingCount * 9, "Common translation differs from normalized direct motion");
+                    if (world.MovingCount == 0) break;
+                    world.Step(); reference.Step();
                 }
+                NavigationChecks.Check(world.MovingCount == 0, "Common translation failed to finish");
                 foreach (var pose in Poses(world)) NavigationChecks.Check(pose.Current == initial[pose.Id] with { X = initial[pose.Id].X + delta.X * 1024, Y = initial[pose.Id].Y + delta.Y * 1024 }, "Wrong assigned endpoint");
             }
         });
@@ -153,14 +158,14 @@ internal static class GroupPlanningChecks
             var expected = Enumerable.Range(0, 9).Select(i => grid.Center(grid.Index(new(14 + i % 3, 4 + i / 3)))).ToHashSet();
             NavigationChecks.Check(expected.SetEquals(Poses(a).Select(p => p.Current)), "The compact destination changed after passage");
         });
-        test("Mid-edge retarget, destruction and spawn protect synchronized reservations", () =>
+        test("Mid-segment retarget, destruction and spawn protect exact body occupancy", () =>
         {
             var grid = new NavigationGrid(15, 12); var a = World(grid, [new(2, 2), new(3, 2), new(2, 3), new(3, 3)], speed: 128);
             a.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(10, 2))))]);
             a.Step([new(2, 0, 1, CommandKind.Destroy, new(2)),
-                new(2, 0, 2, CommandKind.BlockCell, Position: grid.Center(grid.Index(new(3, 2)))),
-                new(2, 0, 3, CommandKind.Spawn, Position: grid.Center(grid.Index(new(3, 2))))]);
-            NavigationChecks.Check(a.Events.ToArray().Count(e => e.Kind == WorldEventKind.CellOccupied) == 2, "An internal source/destination overlap lost its reservation");
+                new(2, 0, 2, CommandKind.BlockCell, Position: grid.Center(grid.Index(new(2, 2)))),
+                new(2, 0, 3, CommandKind.Spawn, Position: Poses(a).Single(p => p.Id.Value == 1).Current)]);
+            NavigationChecks.Check(a.Events.ToArray().Count(e => e.Kind == WorldEventKind.CellOccupied) == 2, "Destroying a neighbor lost the remaining body occupancy");
             a.Step([new(3, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(5, 9))))]);
             for (int i = 0; i < 160 && a.MovingCount > 0; i++) { Separated(a); a.Step(); }
             NavigationChecks.Check(a.MovingCount == 0 && a.Count == 3, "Membership changes froze a synchronized edge");

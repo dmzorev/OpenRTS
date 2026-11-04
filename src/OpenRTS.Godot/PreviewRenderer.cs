@@ -17,7 +17,7 @@ public static class PreviewRenderer
         var mesh = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-            Mesh = new BoxMesh { Size = new Vector3(0.6f, 0.5f, 0.6f), Material = material },
+            Mesh = new CylinderMesh { TopRadius = 0.25f, BottomRadius = 0.25f, Height = 0.5f, RadialSegments = 12, Material = material },
             InstanceCount = count
         };
         int columns = (int)Math.Ceiling(Math.Sqrt(count));

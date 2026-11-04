@@ -13,11 +13,13 @@ public sealed partial class SimulationWorld
         public int UnitType, Health;
         public WorldPosition Previous, Position, Target;
         public bool Moving;
-        public int OccupiedCell, WaypointCell, GoalCell;
+        public int GoalCell;
         public bool GroupMember;
-        public int WaitTicks, PathLength, PathCursor, YieldOrigin;
+        public int WaitTicks, PathLength, PathCursor;
         public EntityId YieldFor;
         public long YieldDeadline;
+        public long LastProgressTick;
+        public WorldPosition LocalTarget;
     }
 
     private readonly UnitDefinition[] _types;
@@ -29,8 +31,7 @@ public sealed partial class SimulationWorld
     private uint _nextId = 1;
     private DeterministicRandom _random;
     private readonly GridNavigator? _navigation;
-    private readonly Dictionary<int, EntityId> _occupied = new();
-    private readonly HashSet<int> _vacated = [];
+    private readonly MotionIndex? _motion;
     private int[] _movementOrder = [], _navigationGoals = [];
     private bool _orderDirty = true, _failed;
     private readonly IComparer<int> _idOrder;
@@ -79,16 +80,17 @@ public sealed partial class SimulationWorld
         _indices = new(initialCapacity);
         _random = new(seed);
         _idOrder = Comparer<int>.Create((a, b) => _entities[a].Id.Value.CompareTo(_entities[b].Id.Value));
-        _cellOrder = Comparer<int>.Create((a, b) => _entities[a].OccupiedCell.CompareTo(_entities[b].OccupiedCell));
         if (navigationGrid is not null)
         {
-            if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "Cell reservations allow at most one cell per tick.");
-            if (width != (long)navigationGrid.Width * 1024 || depth != (long)navigationGrid.Height * 1024)
+            if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "The current local motion budget allows at most 1024 world units per tick.");
+            if (navigationGrid.CellSize < MotionIndex.BodyRadius * 2 + 2)
+                throw new ArgumentException("Terrain samples must leave clearance for the current body radius.", nameof(navigationGrid));
+            if (width != (long)navigationGrid.Width * navigationGrid.CellSize || depth != (long)navigationGrid.Height * navigationGrid.CellSize)
                 throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
             _navigation = new(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
-            _occupied.EnsureCapacity(checked(initialCapacity * 2));
-            _vacated.EnsureCapacity(initialCapacity);
-            _localPaths = new int[checked(initialCapacity * LocalRouteSearch.PathCapacity)];
+            _motion = new(speedPerTick);
+            _motion.Clear(initialCapacity);
+            _localPaths = new WorldPosition[checked(initialCapacity * LocalMotionSearch.PathCapacity)];
         }
     }
 
@@ -97,11 +99,9 @@ public sealed partial class SimulationWorld
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
-        ValidateNavigationSpawn(position);
         if (_navigation is not null)
         {
-            int cell = _navigation.Grid.CellAt(position);
-            if (_navigation.Grid.IsBlocked(cell) || TryOccupant(cell, out _))
+            if (!TerrainGeometry.Clear(_navigation.Grid, position, position, MotionIndex.BodyRadius) || !_motion!.ClearPlacement(position, out _))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
         }
         return Spawn(unitType, position);
@@ -126,13 +126,13 @@ public sealed partial class SimulationWorld
                 ValidatePosition(command.Position);
             if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
                 throw new ArgumentException("Scatter area must have positive extents.", nameof(commands));
-            if (command.Kind == CommandKind.Spawn) { ValidateType(command.UnitType); ValidateNavigationSpawn(command.Position); }
+            if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
             if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.MoveGroup) && _navigation is null)
                 throw new ArgumentException("This world has no navigation layer.", nameof(commands));
         }
 
         _events.Clear();
-        _vacated.Clear();
+        RebuildMotionIndex();
         _commandCount = commands.Length;
         Tick = nextTick;
         foreach (var command in AppliedCommands) Apply(command);
@@ -164,7 +164,7 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 1 : 4);
+            writer.Write(_navigation is null ? 1 : 5);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -178,20 +178,21 @@ public sealed partial class SimulationWorld
                 writer.Write(entity.Moving);
                 if (_navigation is not null)
                 {
-                    writer.Write(entity.OccupiedCell); writer.Write(entity.WaypointCell); writer.Write(entity.GoalCell);
-                    writer.Write(entity.GroupMember); writer.Write(entity.WaitTicks);
-                    writer.Write(entity.YieldFor.Value); writer.Write(entity.YieldOrigin); writer.Write(entity.YieldDeadline);
+                    writer.Write(entity.GoalCell); writer.Write(entity.GroupMember); writer.Write(entity.WaitTicks);
+                    writer.Write(entity.YieldFor.Value); writer.Write(entity.YieldDeadline);
+                    writer.Write(entity.LastProgressTick);
+                    writer.Write(entity.LocalTarget.X); writer.Write(entity.LocalTarget.Y);
                     writer.Write(entity.PathLength - entity.PathCursor);
                     int index = _indices[entity.Id];
-                    for (int i = entity.PathCursor; i < entity.PathLength; i++)
-                        writer.Write(_localPaths[index * LocalRouteSearch.PathCapacity + i]);
+                    foreach (var point in Path(index)[entity.PathCursor..entity.PathLength])
+                    { writer.Write(point.X); writer.Write(point.Y); }
                 }
             }
             _navigation?.WriteState(writer);
             if (_navigation is not null)
             {
                 writer.Write(_groupSlots.Length);
-                foreach (int cell in _groupSlots) writer.Write(cell);
+                foreach (var point in _groupSlots) { writer.Write(point.X); writer.Write(point.Y); }
                 WriteGroupState(writer);
             }
         }
@@ -204,19 +205,25 @@ public sealed partial class SimulationWorld
         if (command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell)
         {
             int cell = _navigation!.Grid.CellAt(command.Position);
-            if (command.Kind == CommandKind.BlockCell && TryOccupant(cell, out var occupant))
+            if (command.Kind == CommandKind.BlockCell && _motion!.OverlapsCell(_navigation.Grid, cell, Count, out var occupant))
                 _events.Add(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation.Grid.Center(cell)));
-            else _navigation.SetBlocked(cell, command.Kind == CommandKind.BlockCell);
+            else
+            {
+                var previous = _navigation.Grid;
+                _navigation.SetBlocked(cell, command.Kind == CommandKind.BlockCell);
+                if (!ReferenceEquals(previous, _navigation.Grid)) _bulkAllowed = false;
+            }
             return;
         }
         if (command.Kind == CommandKind.Spawn)
         {
             if (_navigation is not null)
             {
-                int cell = _navigation.Grid.CellAt(command.Position);
-                if (_navigation.Grid.IsBlocked(cell) || TryOccupant(cell, out _))
+                bool terrain = TerrainGeometry.Clear(_navigation.Grid, command.Position, command.Position, MotionIndex.BodyRadius);
+                bool free = _motion!.ClearPlacement(command.Position, out _);
+                if (!terrain || !free)
                 {
-                    _events.Add(new(Tick, TryOccupant(cell, out _) ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
+                    _events.Add(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
                         default, command.Position, command.UnitType));
                     return;
                 }
@@ -249,10 +256,6 @@ public sealed partial class SimulationWorld
             _events.Add(new(Tick, WorldEventKind.Destroyed, command.Entity, _entities[index].Position, _entities[index].UnitType));
             if (_navigation is not null)
             {
-                int source = _entities[index].OccupiedCell, next = _entities[index].WaypointCell;
-                if (_occupied.TryGetValue(source, out var sourceOwner) && sourceOwner == command.Entity) _occupied.Remove(source);
-                if (next >= 0 && _occupied.TryGetValue(next, out var nextOwner) && nextOwner == command.Entity) _occupied.Remove(next);
-                if (next >= 0 && _groupReservations.TryGetValue(next, out var reservedOwner) && reservedOwner == command.Entity) _groupReservations.Remove(next);
                 _groupRoutes.Remove(command.Entity);
             }
             _indices.Remove(command.Entity);
@@ -261,12 +264,11 @@ public sealed partial class SimulationWorld
             if (index != Count)
             {
                 _entities[index] = _entities[Count];
-                if (_navigation is not null)
-                    _localPaths.AsSpan(Count * LocalRouteSearch.PathCapacity, LocalRouteSearch.PathCapacity)
-                        .CopyTo(_localPaths.AsSpan(index * LocalRouteSearch.PathCapacity));
+                if (_navigation is not null) Path(Count).CopyTo(Path(index));
                 _indices[_entities[index].Id] = index;
             }
             _entities[Count] = default;
+            RebuildMotionIndex();
         }
     }
 
@@ -275,12 +277,12 @@ public sealed partial class SimulationWorld
         ref var entity = ref _entities[index];
         entity.GroupMember = false;
         entity.WaitTicks = entity.PathLength = entity.PathCursor = 0;
-        entity.YieldFor = default; entity.YieldDeadline = 0; entity.YieldOrigin = 0;
+        entity.YieldFor = default; entity.YieldDeadline = 0; entity.LocalTarget = default;
+        _groupRoutes.Remove(entity.Id);
         entity.Target = position with { Elevation = entity.Position.Elevation };
         if (_navigation is not null)
         {
             entity.GoalCell = _navigation.Grid.CellAt(position);
-            entity.Target = _navigation.Grid.Center(entity.GoalCell, entity.Position.Elevation);
         }
         entity.Moving = entity.Position != entity.Target;
     }
@@ -291,43 +293,39 @@ public sealed partial class SimulationWorld
         if (Count == _entities.Length)
         {
             Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
-            if (_navigation is not null)
-            {
-                _occupied.EnsureCapacity(checked(_entities.Length * 2));
-                _vacated.EnsureCapacity(_entities.Length);
-                Array.Resize(ref _localPaths, checked(_entities.Length * LocalRouteSearch.PathCapacity));
-            }
+            if (_navigation is not null) Array.Resize(ref _localPaths, checked(_entities.Length * LocalMotionSearch.PathCapacity));
         }
         var id = new EntityId(_nextId++);
         _entities[Count] = new() { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
             Previous = position, Position = position, Target = position,
-            OccupiedCell = _navigation?.Grid.CellAt(position) ?? -1, WaypointCell = -1, GoalCell = -1 };
-        if (_navigation is not null) _occupied.Add(_entities[Count].OccupiedCell, id);
+            GoalCell = _navigation?.Grid.CellAt(position) ?? -1 };
+        _motion?.Add(Count, id, position);
         _indices.Add(id, Count++);
         _orderDirty = true;
         return id;
     }
 
-    private void ValidateNavigationSpawn(WorldPosition position)
-    {
-        if (_navigation is not null && (position.X % 1024 != 512 || position.Y % 1024 != 512))
-            throw new ArgumentException("Navigation units must spawn at cell centers.", nameof(position));
-    }
-
     private bool Advance(ref EntityState entity, WorldPosition target)
     {
-        long dx = (long)target.X - entity.Position.X, dy = (long)target.Y - entity.Position.Y;
+        entity.Position = StepTowards(entity.Position, target);
+        return entity.Position == target;
+    }
+
+    private WorldPosition StepTowards(WorldPosition position, WorldPosition target) => StepTowards(position, target, SpeedPerTick);
+
+    private static WorldPosition StepTowards(WorldPosition position, WorldPosition target, int speed)
+    {
+        long dx = (long)target.X - position.X, dy = (long)target.Y - position.Y;
         ulong squared = (ulong)(dx * dx + dy * dy);
-        if (squared <= (ulong)SpeedPerTick * (ulong)SpeedPerTick) { entity.Position = target; return true; }
+        if (squared <= (ulong)speed * (ulong)speed) return target;
         long distance = (long)SquareRoot(squared);
         if ((ulong)(distance * distance) < squared) distance++;
-        int stepX = (int)(dx * SpeedPerTick / distance), stepY = (int)(dy * SpeedPerTick / distance);
+        int stepX = (int)(dx * speed / distance), stepY = (int)(dy * speed / distance);
         if (stepX == 0 && stepY == 0)
         {
             if (Math.Abs(dx) >= Math.Abs(dy)) stepX = Math.Sign(dx); else stepY = Math.Sign(dy);
         }
-        entity.Position = new(checked(entity.Position.X + stepX), checked(entity.Position.Y + stepY), entity.Position.Elevation);
-        return false;
+        return new(checked(position.X + stepX), checked(position.Y + stepY), position.Elevation);
     }
 
     private void ValidateType(int type)

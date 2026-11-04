@@ -68,7 +68,7 @@ try
             Array.Sort(samples);
             Console.WriteLine("OPENRTS_BENCHMARK:" + JsonSerializer.Serialize(new
             {
-                Workload = navigation ? "compact spatial assignment, coherent batches, shared route tree and local avoidance, no combat/rendering" : "direct movement, no navigation/combat/rendering",
+                Workload = navigation ? "world-space compact assignment, exact any-angle motion, swept circles, shared terrain routes and bounded local search, no combat/rendering" : "direct movement, no navigation/combat/rendering",
                 TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "runtime default",
                 Count = count, Ticks = ticks, Workers = navigation ? workers : 1,
                 MapWidthCells = world.Width / 1024, MapHeightCells = world.Depth / 1024,

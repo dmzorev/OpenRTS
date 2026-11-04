@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-04",
+  "native_graphics": true,
+  "manual_playtest": false,
+  "scenario": {
+    "count": 36,
+    "ticks": 1400,
+    "workers": 4
+  },
+  "report": {
+    "Tick": 1400,
+    "EntityCount": 36,
+    "StateHash": "F6FCA09CABC0BA9116A0F2EC90614B83DEA5AF7CB4F63E25EC8E44629E8208CC"
+  },
+  "controls": "InputEvent verification passed",
+  "additional_native_scenario": {
+    "count": 10000,
+    "ticks": 256,
+    "workers": 4,
+    "report": {
+      "Tick": 256,
+      "EntityCount": 10000,
+      "StateHash": "9CFAA42315AA0AE70BFBEFDEA55AC513300DFD2A2BFCA77C8AEBBC533FFC635A"
+    },
+    "matches_release_headless": true
+  },
+  "source_sha256": {
+    "src/OpenRTS.Core/FrameExchange.cs": "aadb037da4dba817da5b222850d631b58bf99a7efdbfcd561d0410e563eab089",
+    "src/OpenRTS.Core/GridNavigator.cs": "80b0c62fb538f956b4e9a739f9790cfc6b356a8f87bb0e1b47f6b8309baed0a5",
+    "src/OpenRTS.Core/GridNeighbors.cs": "9b4e20d062cd802f83d83a2b25c49d5c7366e05d3d4fec8002eaecd651bd2f9b",
+    "src/OpenRTS.Core/GroupDestinations.cs": "f263c2a375b19b5772edaba8de3b9488672ba14ffaa96f3e1387b893a10f91ac",
+    "src/OpenRTS.Core/LocalMotionSearch.cs": "62f18a48bd30ed2f454ec4c3b0a957297aaf8eebe85f3eabff38c210e0755359",
+    "src/OpenRTS.Core/MotionIndex.cs": "3f011e768ff62529add01ac5d1f175ea8763f9bd2af7d629c9837d7f5d7e9693",
+    "src/OpenRTS.Core/NavigationGrid.cs": "bc254173b170ad22deac6bc8320e6dca3fe47ab7d27aa6bfcbd19ca04b3d9878",
+    "src/OpenRTS.Core/SharedRouteTree.cs": "0e8f6475186e6604ab60a9e09db1695854065946af8ee652d337045c2c68ba8e",
+    "src/OpenRTS.Core/SimulationSession.cs": "eda386b19f99f728dfbd3843b63f5b1e098664f43dd59ec639dc386927a63a1a",
+    "src/OpenRTS.Core/SimulationTypes.cs": "f4071458adcfdc973eddd3c168b2d094e9dc8e45a999d34dc3e606ed99c8c35e",
+    "src/OpenRTS.Core/SimulationWorld.GroupMovement.cs": "1c05787d22986b7c436ebde97a8b02c5e497fc52f9b59010828ec8cd30d60573",
+    "src/OpenRTS.Core/SimulationWorld.Navigation.cs": "92168b0d2ceeb06f7d1e14b2c45ebd708c971e369865895d2af9ceba6e88a091",
+    "src/OpenRTS.Core/SimulationWorld.cs": "8c7c13aa5e175acb3d711ab88062fa032bef26e0259f67284473ecad4699f94b",
+    "src/OpenRTS.Core/TerrainGeometry.cs": "6b13bb8c63fa2cab3de9e1525cc9a684a1b9ebeef5a4c0f759c7eb27afb22b09",
+    "src/OpenRTS.Core/UnitDefinition.cs": "db5c923edc8e5e86696b16f932aa028ddcf1dd7120a765b2fa1a264d87c5441f",
+    "src/OpenRTS.Content/NavigationScenario.cs": "20510b86b2d97ac2f368d8b0e121af119b58f82d13ef0cbbf422a7cba2b20d7d",
+    "tools/OpenRTS.Headless/Program.cs": "5f785a2c9c238edef4aa0d8cf7a03f6f300bf25129b0b7a88c4e37b9ade07960"
+  },
+  "presentation_sha256": {
+    "src/OpenRTS.Godot/ObstacleView.cs": "962edab6b53c5f2bafee55d30ff78f4588e335fb219ef2d4ac7797e7cae245b1",
+    "src/OpenRTS.Godot/PreviewRenderer.cs": "6b59e1d3e0bbcd96238f227b4d1b2ec1e9625ef5df196ca0a66e058bea875f56",
+    "src/OpenRTS.Godot/WorldView.cs": "2e863a96cd3a6941e304e26f9d937dda431ab5302a105feca6f41049bd96c8d7",
+    "sandbox/Sandbox.ControlsVerification.cs": "a5e485b8562b9f5c584124d95f52f89e14b4098323190468a2937f13bdfd869a",
+    "sandbox/Sandbox.cs": "24d18425766d7448ad718002347ad4618bf533955cbd2da5582a4e7da6276d85",
+    "sandbox/OpenRTS.Sandbox.csproj": "6dd67d551d79dfcff75cd25c14ac7503b67df03a380a0b04aee523c378b019b6"
+  }
+}

@@ -35,7 +35,7 @@ internal sealed class SharedRouteTree
                     int cell = queue[head++];
                     for (int direction = 0; direction < 4; direction++)
                     {
-                        int next = LocalRouteSearch.Neighbor(grid, cell, direction);
+                        int next = GridNeighbors.Neighbor(grid, cell, direction);
                         if (next < 0 || _depth[next] >= 0 || grid.IsBlocked(next)) continue;
                         _depth[next] = _depth[cell] + 1; _parent[next] = cell; queue[tail++] = next;
                     }

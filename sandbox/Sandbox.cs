@@ -113,13 +113,13 @@ public partial class Sandbox : Node3D
                 _notice = value.Kind switch
                 {
                     WorldEventKind.NoRoute => "Нет маршрута или недостаточно связного места для группы.",
-                    WorldEventKind.CellOccupied => "Изменение отклонено: клетка занята или зарезервирована.",
+                    WorldEventKind.CellOccupied => "Изменение отклонено: область пересекает тело юнита.",
                     WorldEventKind.CellBlocked => "Создание отклонено: клетка непроходима.",
                     _ => _notice
                 };
             if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
-                    (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nОдна клетка на юнит. Обходы и уступание ограничены."
+                    (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."
                         : "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.") + "\nКолесо — масштаб · WASD/стрелки/СКМ — камера\n+/− — темп · P — пауза · N — один тик" + (_notice.Length == 0 ? "" : "\nПоследний отказ: " + _notice);
             if (_verifySimulation && completed)
             {
@@ -243,7 +243,8 @@ public partial class Sandbox : Node3D
     private WorldPosition? MousePoint(Vector2 mouse)
     {
         if (GroundPoint(mouse) is not { } point) return null;
-        int width = (_displayGrid?.Width ?? 4096) * 1024, height = (_displayGrid?.Height ?? 4096) * 1024;
+        int width = _displayGrid is { } grid ? grid.Width * grid.CellSize : 4096 * 1024;
+        int height = _displayGrid is { } map ? map.Height * map.CellSize : 4096 * 1024;
         return new((int)Math.Clamp(point.X * 1024, 0, width), (int)Math.Clamp(point.Z * 1024, 0, height));
     }
 
@@ -289,9 +290,10 @@ public partial class Sandbox : Node3D
         if (_navigation)
         {
             var grid = NavigationScenario.Grid(count);
-            side = Math.Max(grid.Width, grid.Height);
-            center = new(grid.Width / 2f, 0, grid.Height / 2f);
-            groundSize = new(grid.Width, grid.Height);
+            float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
+            side = Math.Max(grid.Width, grid.Height) * sample;
+            center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);
+            groundSize = new(grid.Width * sample, grid.Height * sample);
         }
         var ground = new MeshInstance3D
         {

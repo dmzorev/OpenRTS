@@ -17,8 +17,9 @@ public sealed class ObstacleView
             for (int i = 0; i < grid.CellCount; i++) if (grid.IsBlocked(i)) cells.Add(i);
         var material = new StandardMaterial3D { AlbedoColor = new Color(0.85f, 0.43f, 0.22f),
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
+        float size = (grid?.CellSize ?? WorldPosition.UnitsPerCell) / (float)WorldPosition.UnitsPerCell;
         var mesh = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-            Mesh = new BoxMesh { Size = new Vector3(1, 1.2f, 1), Material = material }, InstanceCount = cells.Count };
+            Mesh = new BoxMesh { Size = new Vector3(size, 1.2f, size), Material = material }, InstanceCount = cells.Count };
         for (int i = 0; i < cells.Count; i++)
         {
             var center = grid!.Center(cells[i]);
