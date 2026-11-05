@@ -2,61 +2,51 @@ using System.Collections.ObjectModel;
 
 namespace OpenRTS.Core;
 
-/// <summary>Gameplay and semantic capabilities; no textures, model resources or adapter types.</summary>
+/// <summary>Spatial-unit view over a compiled recipe, retaining the existing host/content API.</summary>
 public sealed record UnitDefinition
 {
-    public string Id { get; }
-    public int MaxHealth { get; }
-    public ReadOnlyCollection<string> Animations { get; }
-    public ReadOnlyCollection<string> States { get; }
+    public EntityDefinition Definition { get; }
+    public string Id => Definition.Id;
+    public int MaxHealth => Definition.Health!.MaxHealth;
+    public ArmorKind Armor => Definition.Health!.Armor;
+    public ReadOnlyCollection<string> Animations => Definition.Presentation!.Animations;
+    public ReadOnlyCollection<string> States => Definition.Presentation!.States;
     public int IdleAnimation { get; }
     public int MoveAnimation { get; }
-    public Locomotor Locomotor { get; }
-    public ReadOnlyCollection<WeaponMountDefinition> Weapons { get; }
+    public Locomotor Locomotor => Definition.Spatial!.Locomotor;
+    public bool Movable => Definition.Spatial!.Movable;
+    public BodyShape Body => Definition.Spatial!.Body;
+    public FootprintDefinition? Footprint => Definition.Spatial!.Footprint;
+    public ReadOnlyCollection<WeaponMountDefinition> Weapons => (Definition.Armament ?? ArmamentDefinition.Empty).Weapons;
     public WeaponDefinition? Weapon => Weapons.Count == 0 ? null : Weapons[0].Weapon;
-    public ArmorKind Armor { get; }
-    public bool Movable { get; }
-    public BodyShape Body => Locomotor.Body;
-    public FootprintDefinition? Footprint { get; }
-    public ReadOnlyCollection<AbilityDefinition> Abilities { get; }
-    public ReadOnlyCollection<TaskQueueDefinition> TaskQueues { get; }
-    public ReadOnlyCollection<ProductionDefinition> Products { get; }
-    public BuildDefinition? Build { get; }
+    public ReadOnlyCollection<AbilityDefinition> Abilities => (Definition.Armament ?? ArmamentDefinition.Empty).Abilities;
+    public ReadOnlyCollection<TaskQueueDefinition> TaskQueues => (Definition.Production ?? ProducerDefinition.Empty).Queues;
+    public ReadOnlyCollection<ProductionDefinition> Products => (Definition.Production ?? ProducerDefinition.Empty).Products;
+    public BuildDefinition? Build => Definition.Build;
+
+    public UnitDefinition(EntityDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (definition.Health is null || definition.Spatial is null || definition.Presentation is null)
+            throw new ArgumentException("The current unit simulation requires health, spatial and semantic presentation capabilities.", nameof(definition));
+        Definition = definition;
+        IdleAnimation = definition.Presentation.IdleAnimation;
+        MoveAnimation = definition.Presentation.MoveAnimation;
+        if (!Movable && MoveAnimation < 0) MoveAnimation = IdleAnimation;
+        if (IdleAnimation < 0 || MoveAnimation < 0) throw new ArgumentException("Units require idle and move semantic animations.", nameof(definition));
+    }
 
     public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null, WeaponDefinition? weapon = null, IEnumerable<WeaponMountDefinition>? weapons = null, ArmorKind armor = ArmorKind.Living, bool movable = true, BodyShape? body = null, FootprintDefinition? footprint = null, IEnumerable<AbilityDefinition>? abilities = null, IEnumerable<TaskQueueDefinition>? taskQueues = null, IEnumerable<ProductionDefinition>? products = null, BuildDefinition? build = null)
+        : this(Compose(id, maxHealth, animations, states, locomotor, weapon, weapons, armor, movable, body, footprint, abilities, taskQueues, products, build)) { }
+
+    private static EntityDefinition Compose(string id, int maxHealth, IEnumerable<string>? animations, IEnumerable<string>? states,
+        Locomotor? locomotor, WeaponDefinition? weapon, IEnumerable<WeaponMountDefinition>? weapons, ArmorKind armor, bool movable,
+        BodyShape? body, FootprintDefinition? footprint, IEnumerable<AbilityDefinition>? abilities,
+        IEnumerable<TaskQueueDefinition>? taskQueues, IEnumerable<ProductionDefinition>? products, BuildDefinition? build)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxHealth);
-        Id = id; MaxHealth = maxHealth;
-        if (footprint is not null && movable) throw new ArgumentException("Footprints belong to immobile objects.", nameof(footprint));
-        Footprint = footprint;
-        Locomotor = (locomotor ?? Locomotor.Default).WithBody(footprint is not null ? BodyShape.None : body ?? locomotor?.Body ?? BodyShape.Default);
         if (weapon is not null && weapons is not null) throw new ArgumentException("Use either a single weapon or mounts.");
-        var mounts = weapons?.ToArray() ?? (weapon is null ? [] : [new WeaponMountDefinition("main", weapon)]);
-        if (mounts.Length > 8 || mounts.Any(m => m is null || m.Weapon is null || string.IsNullOrWhiteSpace(m.Id)) || mounts.Select(m => m.Id).Distinct(StringComparer.Ordinal).Count() != mounts.Length || !Enum.IsDefined(armor))
-            throw new ArgumentException("Units allow up to eight uniquely named weapon mounts and a known armor class.");
-        Weapons = Array.AsReadOnly(mounts); Armor = armor; Movable = movable;
-        var skills = (abilities ?? []).ToArray();
-        var queues = (taskQueues ?? []).ToArray();
-        var recipes = (products ?? []).ToArray();
-        if (skills.Any(a => a is null) || queues.Any(q => q is null) || recipes.Any(p => p is null)) throw new ArgumentException("Actions/queues cannot be null.");
-        Array.Sort(skills, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id)); Array.Sort(queues, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id)); Array.Sort(recipes, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id));
-        if (skills.Length > 8 || queues.Length > 8 || recipes.Length > 64 || skills.Any(a => string.IsNullOrWhiteSpace(a.Id) || a.Id.Length > 128 || !mounts.Any(m => m.Id == a.Mount)) ||
-            skills.Select(a => a.Id).Distinct().Count() != skills.Length || skills.Select(a => a.Mount).Distinct().Count() != skills.Length ||
-            queues.Select(q => q.Id).Distinct().Count() != queues.Length || recipes.Select(p => p.Id).Distinct().Count() != recipes.Length ||
-            recipes.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.Id.Length > 128 || string.IsNullOrWhiteSpace(p.Unit) || !queues.Any(q => q.Id == p.Queue)) || skills.Any(a => recipes.Any(p => p.Id == a.Id)))
-            throw new ArgumentException("Actions require unique IDs, known mounts/queues and bounded counts.");
-        foreach (var a in skills)
-        { var w = mounts.Single(m => m.Id == a.Mount).Weapon; if (a.GroundTarget && (w.Effect == WeaponEffect.Repair || w.Projectile == ProjectileKind.Missile || w.SplashRadius == 0)) throw new ArgumentException("Ground abilities require splash and cannot repair or home."); }
-        Abilities = Array.AsReadOnly(skills); TaskQueues = Array.AsReadOnly(queues); Products = Array.AsReadOnly(recipes); Build = build;
-        Animations = Names(animations ?? ["idle", "move"], 64);
-        States = Names(states ?? [], 32);
-        if (queues.Any(q => q.WorkingState is not null && !States.Contains(q.WorkingState))) throw new ArgumentException("Queue working state must be declared by the unit.");
-        if (queues.Any(q => q.ExitAnimation is not null && !Animations.Contains(q.ExitAnimation))) throw new ArgumentException("Queue exit animation must be declared by the unit.");
-        IdleAnimation = AnimationIndex("idle"); MoveAnimation = AnimationIndex("move");
-        if (!movable && MoveAnimation < 0) MoveAnimation = IdleAnimation;
-        if (IdleAnimation < 0 || MoveAnimation < 0) throw new ArgumentException("Units require idle and move semantic animations.", nameof(animations));
-        if (Weapons.Any(m => AnimationIndex(m.Animation) < 0)) throw new ArgumentException("Weapon mounts must reference declared semantic animations.", nameof(animations));
+        return new(id, new(maxHealth, armor), new(locomotor, movable, body, footprint), new(animations, states),
+            new(weapons ?? (weapon is null ? [] : [new WeaponMountDefinition("main", weapon)]), abilities), new(taskQueues, products), build);
     }
 
     public void WriteState(BinaryWriter writer)
@@ -72,21 +62,7 @@ public sealed record UnitDefinition
         writer.Write(Animations.Count); foreach (var name in Animations) writer.Write(name);
         writer.Write(States.Count); foreach (var name in States) writer.Write(name);
     }
-    public int AnimationIndex(string name) => Animations.IndexOf(name);
-    public uint StateMask(string name)
-    {
-        int index = States.IndexOf(name);
-        if (index < 0) throw new ArgumentException("Unknown semantic state: " + name, nameof(name));
-        return 1u << index;
-    }
-    public uint AllowedStateMask => States.Count == 32 ? uint.MaxValue : (1u << States.Count) - 1;
-
-    private static ReadOnlyCollection<string> Names(IEnumerable<string> source, int maximum)
-    {
-        var names = source.ToArray();
-        if (names.Length > maximum || names.Any(string.IsNullOrWhiteSpace) || names.Distinct(StringComparer.Ordinal).Count() != names.Length)
-            throw new ArgumentException("Semantic names must be nonempty, unique and within their channel budget.", nameof(source));
-        Array.Sort(names, StringComparer.Ordinal);
-        return Array.AsReadOnly(names);
-    }
+    public int AnimationIndex(string name) => Definition.Presentation!.AnimationIndex(name);
+    public uint StateMask(string name) => Definition.Presentation!.StateMask(name);
+    public uint AllowedStateMask => Definition.Presentation!.AllowedStateMask;
 }

@@ -1,10 +1,10 @@
 # 014. Готовый ECS как основа состояния
 
-Дата: 2026-11-05. **Принято пользователем; реализован первый перенос E0–E2.** [Проверки и замеры](../verification/015-ecs-production.md). [Исследование](../research/ecs-selection/README.md), [архитектура](../research/ecs-selection/architecture.md), [план](../research/ecs-selection/migration.md), [проверки API](../research/ecs-selection/probe/README.md).
+Дата: 2026-11-05. **Принято пользователем; реализованы E0–E3.** [Проверки и замеры](../verification/015-ecs-production.md). [Исследование](../research/ecs-selection/README.md), [архитектура](../research/ecs-selection/architecture.md), [план](../research/ecs-selection/migration.md), [проверки API](../research/ecs-selection/probe/README.md).
 
 ## Решение
 
-Использовать **Frent0.9.1-beta** на net10.0 для ECS хранения, запросов и компонентной композиции. Версия закреплена точно в Core, с package lock и уведомлением MIT. Реализованы baseline, ECS identity/lifecycle юнитов и production-пилот; остальные горячие данные пока в EntityState[].
+Использовать **Frent0.9.1-beta** на net10.0 для ECS хранения, запросов и компонентной композиции. Версия закреплена точно в Core, с package lock и уведомлением MIT. Реализованы baseline, ECS identity/lifecycle юнитов и production-пилот; остальные горячие данные пока в EntityState[]. [E3 definitions/actions](015-composed-definitions-and-actions.md) реализован отдельно.
 
 Компоненты authoritative состояния — данные; игровые системы явно вызываются координатором SimulationWorld. Default Frent.World.Update и per-component EC callbacks не определяют игровой тик, порядок фаз, смерть или выпуск юнитов.
 

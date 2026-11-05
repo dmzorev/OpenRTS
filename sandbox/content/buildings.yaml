@@ -22,9 +22,13 @@ barracks:
     Queues:
       infantry: {Capacity: 20, Payment: Upfront, WorkingState: working, ExitAnimation: door, Exit: [0, 1024]}
   Actions:
+    Definitions:
+      rifleman: {Unit: rifleman}
+      rocketeer: {Unit: rocketeer}
+  ActionPanel:
     Buttons:
-      rifleman: {Unit: rifleman, Label: Автоматчик}
-      rocketeer: {Unit: rocketeer, Label: Ракетчик}
+      rifleman: {Label: Автоматчик}
+      rocketeer: {Label: Ракетчик}
   Footprint: {Rows: ['####', '#==#', '#++#']}
   Presentation: {Model: barracks, Name: Бараки}
 
@@ -34,10 +38,15 @@ factory:
     Queues:
       vehicles: {Capacity: 12, Payment: Progressive, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
   Actions:
+    Definitions:
+      apc: {Unit: apc-mg}
+      tank: {Unit: large-tank, Cost: 180, Ticks: 150}
+      repair: {Mount: repair}
+  ActionPanel:
     Buttons:
-      apc: {Unit: apc-mg, Label: БТР, Order: 0}
-      tank: {Unit: large-tank, Label: Танк, Cost: 180, Ticks: 150, Order: 1}
-      repair: {Mount: repair, Label: Ремонт, Cursor: repair, Order: 2}
+      apc: {Label: БТР, Order: 0}
+      tank: {Label: Танк, Order: 1}
+      repair: {Label: Ремонт, Cursor: repair, Order: 2}
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Armaments:
     Mounts:
@@ -56,11 +65,17 @@ construction-yard:
       construction: {Capacity: 12, Payment: Upfront, WorkingState: working}
       vehicles: {Capacity: 5, Payment: OnCompletion, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
   Actions:
+    Definitions:
+      power: {Unit: power-plant, Queue: construction}
+      barracks: {Unit: barracks, Queue: construction}
+      factory: {Unit: factory, Queue: construction}
+      engineer: {Unit: engineer, Queue: vehicles}
+  ActionPanel:
     Buttons:
-      power: {Unit: power-plant, Label: Электростанция, Queue: construction, Order: 0}
-      barracks: {Unit: barracks, Label: Бараки, Queue: construction, Order: 1}
-      factory: {Unit: factory, Label: Завод, Queue: construction, Order: 2}
-      engineer: {Unit: engineer, Label: Инженер, Queue: vehicles, Order: 3}
+      power: {Label: Электростанция, Order: 0}
+      barracks: {Label: Бараки, Order: 1}
+      factory: {Label: Завод, Order: 2}
+      engineer: {Label: Инженер, Order: 3}
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Presentation: {Model: construction-yard, Name: Construction Yard}
 

@@ -13,8 +13,11 @@ rifleman:
       main: {Weapon: rifle}
       grenade: {Weapon: grenade}
   Actions:
+    Definitions:
+      grenade: {Mount: grenade, GroundTarget: true}
+  ActionPanel:
     Buttons:
-      grenade: {Mount: grenade, GroundTarget: true, Label: Граната, Cursor: grenade, Icon: res://assets/units/rifleman.png}
+      grenade: {Label: Граната, Cursor: grenade, Icon: res://assets/units/rifleman.png}
   Presentation: {Model: infantry-rifle, Name: Пехотинец с автоматом}
 
 rocketeer:
@@ -66,8 +69,11 @@ tank-mixed:
 engineer:
   Inherits: ^unit
   Actions:
+    Definitions:
+      repair: {Mount: main}
+  ActionPanel:
     Buttons:
-      repair: {Mount: main, Label: Ремонт, Cursor: repair}
+      repair: {Label: Ремонт, Cursor: repair}
   Movement: {Locomotor: amphibious}
   Health: {HP: 220, Armor: Mechanical}
   Armaments:

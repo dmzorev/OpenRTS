@@ -1,0 +1,58 @@
+Full Core/Content
+189 OpenRTS checks passed; 0 failed.
+
+Final definitions
+PASS Local overrides win even when Inherits is written last; origin survives
+PASS Cross-file inheritance and multiple-parent precedence
+PASS Removal, nested removal, and independent named instances
+PASS Sequences replace instead of silently concatenate
+PASS Quoted # and colon, Unicode, comments, block text
+PASS Unknown parent gives location
+PASS Cycles show inheritance chain
+PASS Duplicate definitions across files rejected
+PASS Duplicate YAML fields rejected
+PASS Missing removal is an error
+PASS Anchors and aliases rejected deliberately
+PASS Custom CLR tags rejected
+PASS Tabs and multiple documents rejected
+PASS Missing and unknown option fields fail loudly
+PASS Validation uses invariant finite numbers and strict named enums
+PASS Named traits get distinct mutable instances per entity
+PASS Required traits, singleton multiplicity and unknown trait checks
+PASS Factories follow dependencies, not YAML order
+PASS Trait dependency cycles rejected before spawning
+PASS Generated schema contains enums, limits and field help
+PASS Inherited content becomes typed gameplay definitions
+PASS Invalid concrete and abstract definitions fail before use
+PASS Adapter model bindings do not enter gameplay definitions or state hashes
+PASS Definitions: capabilities can describe nonspatial data without fake health or presentation
+PASS Definitions: unit facade and composed recipe preserve immutable physical and semantic capabilities
+PASS Definitions: missing capability dependencies fail during preparation
+PASS Definitions: removing or changing a panel leaves actions and gameplay fingerprint unchanged
+PASS Definitions: hidden actions execute through the public command boundary
+PASS Definitions: invalid action references and fields fail before a match
+PASS Definitions: legacy declarations keep gameplay and can use an independent replacement panel
+PASS Definitions: shared recipes do not share mutable production state
+PASS Definitions: inherited actions survive panel removal and reject UI fields in gameplay templates
+12 OpenRTS checks passed; 0 failed.
+
+Godot/headless
+PASS DeclarativeContent import and documented local changes match SHA-256
+PASS pinned Frent MIT license notice matches the verified package
+PASS weapon-stage sprite sources and normalized assets match SHA-256
+PASS building sources, open-door edits and normalized sprites match SHA-256
+PASS Godot/headless content parity; 1 static MultiMesh instances
+PASS Godot/headless content parity; 10000 static MultiMesh instances
+PASS Godot/headless content parity; 10001 static MultiMesh instances
+PASS 1 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10000 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10001 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS real-time worker pacing at 25 Hz with a 15 FPS presentation
+PASS 1 navigation entities: sequential/parallel/reverse/Godot parity
+PASS 10000 navigation entities: sequential/parallel/reverse/Godot parity
+PASS Godot wheel focus, zoom, pan and playback input handlers
+PASS SpriteFrames, layered presentation, combat effects, repair cursor, alpha, states and showcase input
+PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions
+PASS buildings, footprint masks, sizes, lifecycle states, doors, radar and 10000-building batches; host/worker parity
+PASS custom hotkeys/cursors, type tabs, autocast/cooldowns, task stacks, production/rally/placement and journal host parity
+PASS invalid content and preview arguments fail explicitly

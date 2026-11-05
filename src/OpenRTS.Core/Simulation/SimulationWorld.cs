@@ -404,8 +404,8 @@ public sealed partial class SimulationWorld : IDisposable
         var type = _types[unitType];
         _unitStorage ??= new();
         state.StorageEntity = type.TaskQueues.Count == 0
-            ? _unitStorage.Create(new UnitIdentity { Id = id })
-            : _unitStorage.Create(new UnitIdentity { Id = id }, new ProducerState(type.TaskQueues.Count));
+            ? _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition)
+            : _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new ProducerState(type.TaskQueues.Count));
         _entities[Count] = state;
         _nextId++;
         (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);

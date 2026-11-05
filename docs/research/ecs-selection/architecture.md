@@ -1,6 +1,6 @@
 # Архитектура OpenRTS поверх Frent
 
-Статус: E0–E2 реализованы; identity/lifecycle и производство в ECS, горячие данные ещё в EntityState[]. [Выбор и альтернативы](README.md), [переход](migration.md).
+Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, горячие данные ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
 
 ## Entity и Actor
 
@@ -28,7 +28,7 @@ SimulationWorld — логический игровой мир и координ
 
 Definition — рецепт, **не entity в живом store**. Content валидирует зависимости и ссылки, разрешает имена в стабильные ID и готовит конкретные типизированные данные. Spawn создаёт компоненты только заявленных возможностей. Повреждённый юнит меняет своё Health, улучшение игрока — effective modifier/Player state, а не общий шаблон всех юнитов.
 
-Сначала сохраняем существующий YAML как совместимый вход. Затем отделяем `GameplayActions` от `ActionPanel` references: удаление UI кнопки не удаляет способность и не меняет gameplay fingerprint. Model/UI bindings остаются вне Core gameplay definitions. Не вводим `Dictionary<Type,object>` как способ доступа ко всем горячим компонентам и не разбираем YAML при Spawn/Step.
+Существующий YAML сохранён как совместимый вход. `Actions.Definitions` отделён от `ActionPanel.Buttons` references: удаление UI кнопки не удаляет способность и не меняет gameplay fingerprint. Model/UI bindings остаются вне Core gameplay definitions. Не вводим `Dictionary<Type,object>` как способ доступа ко всем горячим компонентам и не разбираем YAML при Spawn/Step.
 
 ## Разделение состояния
 
