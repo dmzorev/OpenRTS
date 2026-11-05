@@ -18,7 +18,7 @@ internal static class OrderChecks
             var resolver = new DestinationResolver(grid, profile);
             NavigationChecks.Check(resolver.HasStoppingTerrain(new(1536, 3584)), "Cold component hint lost legal stopping terrain");
             NavigationChecks.Check(resolver.Resolve(new(1536, 3584), new(8704, 3584), out var shore) && shore.X < 5 * 1024 && shore.Y == 3584 && resolver.CanStop(shore), "Resolver chose inaccessible opposite shore");
-            var world = new SimulationWorld([new("tank", 100, locomotor: profile)], 12288, 7168, navigationGrid: grid);
+            using var world = new SimulationWorld([new("tank", 100, locomotor: profile)], 12288, 7168, navigationGrid: grid);
             world.AddInitialUnit(0, new(1536, 3584)); world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(8704, 3584))]);
             NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Adjusted order had no event");
             for (int i = 0; i < 60; i++) world.Step();
@@ -26,7 +26,7 @@ internal static class OrderChecks
         });
         test("Orders: selected recipients leave unselected orders intact", () =>
         {
-            var world = new SimulationWorld([new("u", 100)], 16384, 12288, navigationGrid: new(16, 12));
+            using var world = new SimulationWorld([new("u", 100)], 16384, 12288, navigationGrid: new(16, 12));
             for (int i = 0; i < 4; i++) world.AddInitialUnit(0, new(2048 + i * 2048, 2048));
             world.Step([new(1, 0, 1, CommandKind.MoveSelected, Position: new(10240, 8192), Recipients: new([new(1), new(2)]))]);
             NavigationChecks.Check(Pose(world, 1).Current != Pose(world, 1).Previous && Pose(world, 3).Current == Pose(world, 3).Previous, "Command escaped its recipient set");
@@ -45,7 +45,7 @@ internal static class OrderChecks
             session.Issue(new(UnitActionKind.Move, recipients, new(4096, 2048)));
             session.Issue(new(UnitActionKind.Move, recipients, new(4096, 4096), Queued: true));
             session.StepOnce(); Wait(() => session.Frames.AcquireLatest() is { } frame && Tick(frame) == 1);
-            var log = session.GetCommandLog(); var direct = Create(); direct.Step(log);
+            var log = session.GetCommandLog(); using var direct = Create(); direct.Step(log);
             using var snapshot = session.Frames.AcquireLatest()!;
             NavigationChecks.Check(snapshot.Poses[0].Order.QueuedCount == 1 && snapshot.Poses[0] == Pose(direct, 1), "UI-independent action and canonical command differ");
             for (int i = 0; i < 50; i++) direct.Step();
@@ -55,7 +55,7 @@ internal static class OrderChecks
         });
         test("Orders: invalid replacement preserves the pending queue, bounded to 32", () =>
         {
-            var world = new SimulationWorld([new("u", 100)], 16384, 12288); world.AddInitialUnit(0, new(1024, 1024));
+            using var world = new SimulationWorld([new("u", 100)], 16384, 12288); world.AddInitialUnit(0, new(1024, 1024));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(15000, 1024))]);
             WorldCommand[] queued = Enumerable.Range(1, 33).Select(i => new WorldCommand(2, 0, i, CommandKind.Move, new(1), new(15000, 4096), Queued: true)).ToArray();
             world.Step(queued);
@@ -67,7 +67,7 @@ internal static class OrderChecks
         });
         test("Orders: AttackMove engages an enemy and resumes its original destination", () =>
         {
-            var world = Battle(); world.AddInitialUnit(0, new(2048, 4096), 1); world.AddInitialUnit(1, new(8192, 4096), 2);
+            using var world = Battle(); world.AddInitialUnit(0, new(2048, 4096), 1); world.AddInitialUnit(1, new(8192, 4096), 2);
             world.Step([new(1, 0, 1, CommandKind.AttackMove, new(1), new(18432, 4096))]);
             int shots = 0;
             for (int i = 0; i < 220; i++) { shots += world.Events.ToArray().Count(e => e.Kind == WorldEventKind.WeaponFired); world.Step(); }
@@ -75,7 +75,7 @@ internal static class OrderChecks
         });
         test("Orders: moving cancels windup and never resets a fired weapon's cooldown", () =>
         {
-            var world = Battle(false); world.AddInitialUnit(0, new(2048, 4096), 1); world.AddInitialUnit(1, new(3584, 4096), 2);
+            using var world = Battle(false); world.AddInitialUnit(0, new(2048, 4096), 1); world.AddInitialUnit(1, new(3584, 4096), 2);
             world.Step([new(1, 0, 1, CommandKind.AttackTarget, new(1), TargetEntity: new(2))]);
             world.Step([new(2, 0, 1, CommandKind.Move, new(1), new(2048, 8192))]);
             NavigationChecks.Check(Pose(world, 2).Health == 60, "Move failed to cancel windup");
@@ -87,7 +87,7 @@ internal static class OrderChecks
         });
         test("Orders: Hold fires in place and simultaneous lethal hits resolve together", () =>
         {
-            var world = new SimulationWorld([Fighter(damage: 100, windup: 0)], 16384, 12288, navigationGrid: new(16, 12));
+            using var world = new SimulationWorld([Fighter(damage: 100, windup: 0)], 16384, 12288, navigationGrid: new(16, 12));
             world.AddInitialUnit(0, new(2048, 4096), 1); world.AddInitialUnit(0, new(3584, 4096), 2);
             world.Step([new(1, 0, 1, CommandKind.HoldPosition, new(1)), new(1, 0, 2, CommandKind.HoldPosition, new(2))]);
             NavigationChecks.Check(world.Count == 0 && world.Events.ToArray().Count(e => e.Kind == WorldEventKind.WeaponFired) == 2, "ID order prevented simultaneous retaliation");
@@ -95,7 +95,7 @@ internal static class OrderChecks
         test("Orders: acquisition ignores hidden nearer enemies and combat respects walls", () =>
         {
             var grid = new NavigationGrid(16, 12, [new(3, 3)]);
-            var world = new SimulationWorld([Fighter(), new("dummy", 100)], 16384, 12288, navigationGrid: grid);
+            using var world = new SimulationWorld([Fighter(), new("dummy", 100)], 16384, 12288, navigationGrid: grid);
             world.AddInitialUnit(0, new(2560, 3584), 1); world.AddInitialUnit(1, new(4608, 3584), 2); world.AddInitialUnit(1, new(2560, 5632), 2);
             world.Step([new(1, 0, 1, CommandKind.HoldPosition, new(1))]);
             NavigationChecks.Check(Pose(world, 1).Order.Target.Value == 3, "A wall-hidden nearer target suppressed visible acquisition");
@@ -104,7 +104,7 @@ internal static class OrderChecks
         });
         test("Orders: queued targets are revalidated after terrain changes", () =>
         {
-            var grid = new NavigationGrid(12, 8); var world = new SimulationWorld([new("u", 100)], 12288, 8192, navigationGrid: grid);
+            var grid = new NavigationGrid(12, 8); using var world = new SimulationWorld([new("u", 100)], 12288, 8192, navigationGrid: grid);
             world.AddInitialUnit(0, new(1536, 2560));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(3584, 2560)), new(1, 0, 2, CommandKind.Move, new(1), new(7680, 2560), Queued: true)]);
             world.Step([new(2, 0, 1, CommandKind.BlockCell, Position: new(7680, 2560))]);
@@ -114,7 +114,7 @@ internal static class OrderChecks
         });
         test("Orders: missing queued attack targets are skipped without losing later waypoints", () =>
         {
-            var world = Battle(); world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 6144), 2);
+            using var world = Battle(); world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 6144), 2);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(4096, 2048)),
                 new(1, 0, 2, CommandKind.AttackTarget, new(1), TargetEntity: new(2), Queued: true),
                 new(1, 0, 3, CommandKind.Move, new(1), new(6144, 2048), Queued: true)]);
@@ -128,7 +128,7 @@ internal static class OrderChecks
             var bridge = new Locomotor("bridge", [TerrainRule.Ground, new(true, false, 1024, 1024)]);
             var free = new Locomotor("free", [TerrainRule.Ground, TerrainRule.Ground]);
             var grid = new NavigationGrid(7, 5, terrain: Enumerable.Range(0, 35).Select(i => i % 7 == 3 ? (byte)1 : (byte)0));
-            var world = new SimulationWorld([new("f", 100, ["idle", "move", "fire"], locomotor: bridge, weapon: new(2048, 5120, 10, 12)), new("d", 100, locomotor: free)],
+            using var world = new SimulationWorld([new("f", 100, ["idle", "move", "fire"], locomotor: bridge, weapon: new(2048, 5120, 10, 12)), new("d", 100, locomotor: free)],
                 7168, 5120, navigationGrid: grid);
             world.AddInitialUnit(0, new(1536, 2560), 1); world.AddInitialUnit(1, new(4096, 2560), 2);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(5632, 2560))]); for (int i = 1; i < 13; i++) world.Step();
@@ -140,7 +140,7 @@ internal static class OrderChecks
         });
         test("Orders: independent groups never exchange each other's final goals", () =>
         {
-            var world = new SimulationWorld([new("u", 100)], 12288, 5120, navigationGrid: new(12, 5));
+            using var world = new SimulationWorld([new("u", 100)], 12288, 5120, navigationGrid: new(12, 5));
             foreach (var p in new WorldPosition[] { new(2560, 1536), new(2560, 3584), new(7680, 1536), new(7680, 3584) }) world.AddInitialUnit(0, p);
             world.Step([new(1, 0, 1, CommandKind.MoveSelected, Position: new(9728, 2560), Recipients: new([new(1), new(2)])),
                 new(1, 0, 2, CommandKind.MoveSelected, Position: new(1536, 2560), Recipients: new([new(3), new(4)]))]);
@@ -154,7 +154,7 @@ internal static class OrderChecks
         test("Orders: selections spanning disconnected islands resolve on both islands", () =>
         {
             var grid = new NavigationGrid(12, 7, Enumerable.Range(0, 7).Select(y => new GridCell(5, y)));
-            var world = new SimulationWorld([new("u", 100)], 12288, 7168, navigationGrid: grid);
+            using var world = new SimulationWorld([new("u", 100)], 12288, 7168, navigationGrid: grid);
             world.AddInitialUnit(0, new(1536, 3584)); world.AddInitialUnit(0, new(9728, 3584));
             world.Step([new(1, 0, 1, CommandKind.MoveSelected, Position: new(5632, 3584), Recipients: new([new(1), new(2)]))]);
             NavigationChecks.Check(Pose(world, 1).Order.Destination.X < 5120 && Pose(world, 2).Order.Destination.X > 6144, "Disconnected selection was ignored or crossed a wall");
@@ -168,7 +168,7 @@ internal static class OrderChecks
                 for (int i = 0; i < 6; i++) world.AddInitialUnit(0, new((i < 3 ? 4096 : 18432), (i % 3 + 2) * 2048), i < 3 ? 1u : 2u);
                 return world;
             }
-            var a = Create(1, false); var b = Create(4, true);
+            using var a = Create(1, false); using var b = Create(4, true);
             for (int tick = 1; tick <= 180; tick++)
             {
                 WorldCommand[] commands = tick == 1 ? [new(1, 0, 1, CommandKind.AttackMove, Position: new(11264, 6144), Recipients: new([new(1), new(2), new(3)])),
@@ -179,7 +179,7 @@ internal static class OrderChecks
         });
         test("Orders: multi-recipient Move and AttackMove work without a navigation host", () =>
         {
-            var world = Battle(false); world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(0, new(4096, 2048), 1);
+            using var world = Battle(false); world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(0, new(4096, 2048), 1);
             world.Step([new(1, 0, 1, CommandKind.MoveSelected, Position: new(8192, 2048), Recipients: new([new(1), new(2)]))]);
             world.Step([new(2, 0, 1, CommandKind.AttackMove, Position: new(8192, 4096), Recipients: new([new(1), new(2)]))]);
             NavigationChecks.Check(world.MovingCount == 2, "Action dispatcher required Godot or a navigation layer");
@@ -189,7 +189,7 @@ internal static class OrderChecks
             var free = Enumerable.Range(0, 7).Select(x => new GridCell(x, 1)).Append(new(3, 0)).ToHashSet();
             var grid = new NavigationGrid(7, 3, from y in Enumerable.Range(0, 3) from x in Enumerable.Range(0, 7)
                 where !free.Contains(new(x, y)) select new GridCell(x, y));
-            var world = new SimulationWorld([new("u", 100)], 7168, 3072, navigationGrid: grid, speedPerTick: 256);
+            using var world = new SimulationWorld([new("u", 100)], 7168, 3072, navigationGrid: grid, speedPerTick: 256);
             world.AddInitialUnit(0, grid.Center(grid.Index(new(1, 1))), 1); var enemy = grid.Center(grid.Index(new(3, 1)));
             world.AddInitialUnit(0, enemy, 2);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(grid.Index(new(6, 1))))]);

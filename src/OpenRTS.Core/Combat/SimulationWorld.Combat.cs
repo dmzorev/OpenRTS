@@ -181,6 +181,7 @@ public sealed partial class SimulationWorld
     public int WeaponCount { get { int count = 0; for (int i = 0; i < Count; i++) count += _entities[i].Weapons.Length; return count; } }
     public void CopyWeaponPoses(Span<WeaponPose> destination)
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < WeaponCount) throw new ArgumentException("Destination is too small.", nameof(destination));
         int offset = 0;

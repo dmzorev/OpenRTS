@@ -27,7 +27,7 @@ internal static class WeaponChecks
         test("Weapons: burst intervals and reload survive interruption without replenishing shots", () =>
         {
             var weapon = new WeaponDefinition(4096, 4096, 1, 10, 0, burst: 3, burstIntervalTicks: 2);
-            var world = new SimulationWorld([Armed("u", weapon), new("target", 1000)], 16384, 16384);
+            using var world = new SimulationWorld([Armed("u", weapon), new("target", 1000)], 16384, 16384);
             world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 2);
             var fired = new List<long>();
             for (int t = 1; t <= 16; t++)
@@ -44,14 +44,14 @@ internal static class WeaponChecks
         {
             var cannon = new WeaponDefinition(8192, 8192, 40, 100, 0, projectile: ProjectileKind.Cannon, projectileSpeed: 256);
             SimulationWorld Create() { var w = new SimulationWorld([Armed("gun", cannon), new("target", 100)], 16384, 16384); w.AddInitialUnit(0, new(2048, 4096), 1); w.AddInitialUnit(1, new(7168, 4096), 2); return w; }
-            var still = Create(); still.Step([Attack(still)]); NavigationChecks.Check(Pose(still, 2).Health == 100 && still.ProjectileCount == 1, "Cannon became hitscan");
+            using var still = Create(); still.Step([Attack(still)]); NavigationChecks.Check(Pose(still, 2).Health == 100 && still.ProjectileCount == 1, "Cannon became hitscan");
             for (int t = 0; t < 25; t++) still.Step(); NavigationChecks.Check(Pose(still, 2).Health == 60, "Stationary target escaped cannon");
-            var dodge = Create(); dodge.Step([Attack(dodge)]); dodge.Step([new(2, 0, 1, CommandKind.Move, new(2), new(7168, 12000))]);
+            using var dodge = Create(); dodge.Step([Attack(dodge)]); dodge.Step([new(2, 0, 1, CommandKind.Move, new(2), new(7168, 12000))]);
             for (int t = 0; t < 25; t++) dodge.Step(); NavigationChecks.Check(Pose(dodge, 2).Health == 100 && dodge.ProjectileCount == 0, "Cannon followed target or guaranteed damage");
         });
         test("Weapons: fast cannon collision chooses the first intercepted body instead of the ordered target", () =>
         {
-            var world = new SimulationWorld([Armed("gun", new(8192, 8192, 20, 100, 0, projectile: ProjectileKind.Cannon, projectileSpeed: 4096)), new("body", 100)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("gun", new(8192, 8192, 20, 100, 0, projectile: ProjectileKind.Cannon, projectileSpeed: 4096)), new("body", 100)], 16384, 8192);
             world.AddInitialUnit(0, new(1024, 2048), 1); world.AddInitialUnit(1, new(7168, 2048), 2); world.AddInitialUnit(1, new(3072, 2048), 2);
             world.Step([Attack(world)]); world.Step();
             NavigationChecks.Check(Pose(world, 3).Health == 80 && Pose(world, 2).Health == 100, "Fast shot tunneled or damaged its target by ID");
@@ -59,11 +59,11 @@ internal static class WeaponChecks
         test("Weapons: swept collision detects a crossing target and static edits stop a shot", () =>
         {
             var gun = Armed("gun", new(8192, 8192, 20, 1000, 0, projectile: ProjectileKind.Cannon, projectileSpeed: 4096));
-            var world = new SimulationWorld([gun, new("body", 100)], 16384, 8192, speedPerTick: 4096);
+            using var world = new SimulationWorld([gun, new("body", 100)], 16384, 8192, speedPerTick: 4096);
             world.AddInitialUnit(0, new(1024, 4096), 1); world.AddInitialUnit(1, new(9000, 4096), 2); world.AddInitialUnit(1, new(3072, 2048), 2);
             world.Step([Attack(world)]); world.Step([new(2, 0, 1, CommandKind.Move, new(3), new(3072, 6144))]);
             NavigationChecks.Check(Pose(world, 3).Health == 80 && Pose(world, 2).Health == 100, "Relative swept collision missed a crossing body");
-            var blocked = new SimulationWorld([gun, new("body", 100)], 16384, 8192, navigationGrid: new(16, 8));
+            using var blocked = new SimulationWorld([gun, new("body", 100)], 16384, 8192, navigationGrid: new(16, 8));
             blocked.AddInitialUnit(0, new(1024, 2048), 1); blocked.AddInitialUnit(1, new(7168, 2048), 2); blocked.Step([Attack(blocked)]);
             blocked.Step([new(2, 0, 1, CommandKind.BlockCell, Position: new(3072, 2048))]);
             NavigationChecks.Check(blocked.ProjectileCount == 0 && Pose(blocked, 2).Health == 100, "Projectile crossed new static terrain");
@@ -71,11 +71,11 @@ internal static class WeaponChecks
         test("Weapons: missile follows a maneuvering target and has a bounded travel budget", () =>
         {
             var missile = new WeaponDefinition(8192, 8192, 30, 1000, 0, projectile: ProjectileKind.Missile, projectileSpeed: 256, travelLimit: 8192);
-            var world = new SimulationWorld([Armed("launcher", missile), new("body", 100)], 32768, 16384);
+            using var world = new SimulationWorld([Armed("launcher", missile), new("body", 100)], 32768, 16384);
             world.AddInitialUnit(0, new(1024, 4096), 1); world.AddInitialUnit(1, new(4096, 4096), 2);
             world.Step([Attack(world)]); world.Step([new(2, 0, 1, CommandKind.Move, new(2), new(4096, 8192))]);
             for (int t = 0; t < 35; t++) world.Step(); NavigationChecks.Check(Pose(world, 2).Health == 70, "Homing missile missed a slower moving target");
-            var escape = new SimulationWorld([Armed("launcher", missile), new("body", 100)], 32768, 16384, speedPerTick: 512);
+            using var escape = new SimulationWorld([Armed("launcher", missile), new("body", 100)], 32768, 16384, speedPerTick: 512);
             escape.AddInitialUnit(0, new(1024, 4096), 1); escape.AddInitialUnit(1, new(7168, 4096), 2); escape.Step([Attack(escape)]);
             escape.Step([new(2, 0, 1, CommandKind.Move, new(2), new(30000, 4096))]); bool expired = false;
             for (int t = 0; t < 40; t++) { escape.Step(); expired |= escape.Events.ToArray().Any(e => e.Kind == WorldEventKind.ProjectileExpired); }
@@ -83,11 +83,11 @@ internal static class WeaponChecks
         });
         test("Weapons: launched shots survive their source and homing handles destroyed targets", () =>
         {
-            var world = new SimulationWorld([Armed("gun", new(8192, 8192, 30, 1000, 0, projectile: ProjectileKind.Cannon)), new("body", 100)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("gun", new(8192, 8192, 30, 1000, 0, projectile: ProjectileKind.Cannon)), new("body", 100)], 16384, 8192);
             world.AddInitialUnit(0, new(1024, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 2); world.Step([Attack(world)]);
             world.Step([new(2, 0, 1, CommandKind.Destroy, new(1))]); for (int t = 0; t < 16; t++) world.Step();
             NavigationChecks.Check(Pose(world, 2).Health == 70, "Destroyed shooter erased a launched projectile");
-            var missile = new SimulationWorld([Armed("gun", new(8192, 8192, 30, 1000, 0, projectile: ProjectileKind.Missile)), new("body", 100)], 16384, 8192);
+            using var missile = new SimulationWorld([Armed("gun", new(8192, 8192, 30, 1000, 0, projectile: ProjectileKind.Missile)), new("body", 100)], 16384, 8192);
             missile.AddInitialUnit(0, new(1024, 2048), 1); missile.AddInitialUnit(1, new(4096, 2048), 2); missile.Step([Attack(missile)]);
             missile.Step([new(2, 0, 1, CommandKind.Destroy, new(2))]); NavigationChecks.Check(missile.ProjectileCount == 0, "Homing retained a missing target");
         });
@@ -95,7 +95,7 @@ internal static class WeaponChecks
         {
             var grenade = new WeaponDefinition(8192, 8192, 20, 1000, 0, projectile: ProjectileKind.Grenade, projectileSpeed: 1024,
                 splashRadius: 1200, livingModifier: 150, mechanicalModifier: 20, buildingModifier: 200);
-            var world = new SimulationWorld([Armed("g", grenade), new("living", 100), new("machine", 100, armor: ArmorKind.Mechanical), new("building", 100, armor: ArmorKind.Building)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("g", grenade), new("living", 100), new("machine", 100, armor: ArmorKind.Mechanical), new("building", 100, armor: ArmorKind.Building)], 16384, 8192);
             world.AddInitialUnit(0, new(1024, 2048), 1); world.AddInitialUnit(1, new(6144, 2048), 2);
             world.AddInitialUnit(2, new(6144, 2600), 2); world.AddInitialUnit(3, new(7000, 2048), 2);
             world.AddInitialUnit(1, new(6144, 1500), 1); world.AddInitialUnit(1, new(7500, 2048), 2);
@@ -106,7 +106,7 @@ internal static class WeaponChecks
         {
             var repair = new WeaponDefinition(2048, 2048, 25, 2, 0, effect: WeaponEffect.Repair, livingModifier: 0);
             var gun = new WeaponDefinition(4096, 4096, 60, 1000, 0);
-            var world = new SimulationWorld([Armed("engineer", repair), new("machine", 100, armor: ArmorKind.Mechanical), Armed("enemy", gun), new("living", 100)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("engineer", repair), new("machine", 100, armor: ArmorKind.Mechanical), Armed("enemy", gun), new("living", 100)], 16384, 8192);
             world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 1); world.AddInitialUnit(2, new(7168, 2048), 2); world.AddInitialUnit(3, new(2048, 4096), 1);
             world.Step([Attack(world, 3, 2)]); NavigationChecks.Check(Pose(world, 2).Health == 40, "Damage fixture failed");
             world.Step([new(2, 0, 1, CommandKind.RepairTarget, new(1), TargetEntity: new(3))]); NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.InvalidOrder), "Repair accepted an enemy");
@@ -117,7 +117,7 @@ internal static class WeaponChecks
         });
         test("Weapons: simultaneous lethal damage cannot be undone by repair", () =>
         {
-            var world = new SimulationWorld([Armed("repair", new(4096, 4096, 1000, 1, 0, effect: WeaponEffect.Repair)), new("ally", 200, armor: ArmorKind.Mechanical), Armed("enemy", new(4096, 4096, 100, 1, 0))], 16384, 8192);
+            using var world = new SimulationWorld([Armed("repair", new(4096, 4096, 1000, 1, 0, effect: WeaponEffect.Repair)), new("ally", 200, armor: ArmorKind.Mechanical), Armed("enemy", new(4096, 4096, 100, 1, 0))], 16384, 8192);
             world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 1); world.AddInitialUnit(2, new(6144, 2048), 2);
             world.Step([Attack(world, 3, 2)]); world.Step([new(2, 0, 1, CommandKind.RepairTarget, new(1), TargetEntity: new(2))]);
             NavigationChecks.Check(world.Count == 2 && !world.Events.ToArray().Any(e => e.Kind == WorldEventKind.Repaired), "Healing resurrected a lethal hit");
@@ -126,7 +126,7 @@ internal static class WeaponChecks
         {
             var type = new UnitDefinition("dual", 1000, ["idle", "move", "fire", "missiles"], weapons: [
                 new("cannon", new(8192, 8192, 1, 5, 0), "fire", true), new("rocket", new(8192, 8192, 1, 11, 0), "missiles", true)]);
-            var world = new SimulationWorld([type, new("target", 1000)], 16384, 16384);
+            using var world = new SimulationWorld([type, new("target", 1000)], 16384, 16384);
             world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 2);
             int[] shots = new int[2];
             for (int t = 1; t <= 13; t++)
@@ -135,7 +135,7 @@ internal static class WeaponChecks
                 foreach (var e in world.Events) if (e.Kind == WorldEventKind.WeaponFired) shots[e.Mount]++;
             }
             NavigationChecks.Check(shots.SequenceEqual(new[] {3, 2}) && world.MovingCount == 1 && Mounts(world)[0].ReadyTick != Mounts(world)[1].ReadyTick, "Mount clocks shared state or Move blocked firing");
-            var pedestrian = new SimulationWorld([Armed("soldier", new(8192, 8192, 10, 20, 3)), new("t", 1000)], 16384, 16384);
+            using var pedestrian = new SimulationWorld([Armed("soldier", new(8192, 8192, 10, 20, 3)), new("t", 1000)], 16384, 16384);
             pedestrian.AddInitialUnit(0, new(2048, 2048), 1); pedestrian.AddInitialUnit(1, new(4096, 2048), 2); pedestrian.Step([Attack(pedestrian)]);
             pedestrian.Step([new(2, 0, 1, CommandKind.Move, new(1), new(2048, 12000))]); for (int t = 0; t < 5; t++) pedestrian.Step();
             NavigationChecks.Check(Pose(pedestrian, 2).Health == 1000, "Moving stationary mount fired");
@@ -143,7 +143,7 @@ internal static class WeaponChecks
         test("Weapons: splash friendly fire is explicit and does not allow hostile repair", () =>
         {
             var grenade = new WeaponDefinition(4096, 4096, 10, 100, 0, projectile: ProjectileKind.Grenade, projectileSpeed: 4096, splashRadius: 1024, friendlyFire: true);
-            var world = new SimulationWorld([Armed("g", grenade), new("t", 100)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("g", grenade), new("t", 100)], 16384, 8192);
             world.AddInitialUnit(0, new(1024, 2048), 1); world.AddInitialUnit(1, new(4096, 2048), 2); world.AddInitialUnit(1, new(4096, 2600), 1);
             world.Step([Attack(world)]); world.Step();
             NavigationChecks.Check(Pose(world, 2).Health == 90 && Pose(world, 3).Health == 90, "Explicit friendly fire failed");
@@ -153,7 +153,7 @@ internal static class WeaponChecks
             var onlyBuildings = UnitCatalog.Load([new("u", "u: {Health: {HP: 1}, Movement: {Locomotor: infantry, Enabled: false}}")], LocomotionChecks.Catalog());
             NavigationChecks.Reject<ArgumentException>(() => DiagnosticScenario.Create(onlyBuildings, 1));
             NavigationChecks.Reject<ArgumentException>(() => NavigationScenario.Create(onlyBuildings, 1));
-            var world = new SimulationWorld([Armed("bunker", new(2048, 4096, 1, 10, 0), movable: false), new("unit", 100)], 16384, 8192, navigationGrid: new(16, 8));
+            using var world = new SimulationWorld([Armed("bunker", new(2048, 4096, 1, 10, 0), movable: false), new("unit", 100)], 16384, 8192, navigationGrid: new(16, 8));
             world.AddInitialUnit(0, new(4096, 4096), 1); world.AddInitialUnit(1, new(6144, 4096), 2);
             var position = Pose(world, 1).Current; world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(8192, 4096))]);
             NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.InvalidOrder) && Pose(world, 1).Current == position, "Bunker moved");
@@ -163,7 +163,7 @@ internal static class WeaponChecks
         });
         test("Weapons: pinned weapon/projectile frames survive packed removal and skip publication", () =>
         {
-            var world = new SimulationWorld([Armed("u", new(8192, 8192, 10, 1000, 0, projectile: ProjectileKind.Missile)), new("t", 100)], 16384, 8192);
+            using var world = new SimulationWorld([Armed("u", new(8192, 8192, 10, 1000, 0, projectile: ProjectileKind.Missile)), new("t", 100)], 16384, 8192);
             world.AddInitialUnit(0, new(1024, 2048), 1); world.AddInitialUnit(1, new(6144, 2048), 2); world.Step([Attack(world)]);
             var exchange = new FrameExchange(); exchange.TryPublish(world); using var old = exchange.AcquireLatest()!;
             var original = old.Projectiles[0]; var mount = old.Weapons[0];
@@ -175,7 +175,7 @@ internal static class WeaponChecks
         {
             string Run(int workers)
             {
-                var world = new SimulationWorld([Armed("gun", new(4096, 6144, 7, 7, 1, projectile: ProjectileKind.Missile, burst: 2)), new("body", 100)], 16384, 8192, navigationGrid: new(16, 8), navigationWorkers: workers, reverseNavigationJobs: workers > 1);
+                using var world = new SimulationWorld([Armed("gun", new(4096, 6144, 7, 7, 1, projectile: ProjectileKind.Missile, burst: 2)), new("body", 100)], 16384, 8192, navigationGrid: new(16, 8), navigationWorkers: workers, reverseNavigationJobs: workers > 1);
                 world.AddInitialUnit(0, new(2048, 2048), 1); world.AddInitialUnit(1, new(6144, 2048), 2);
                 for (int t = 1; t <= 80; t++) world.Step(t == 1 ? [Attack(world)] : []);
                 return world.Report().StateHash;
@@ -184,7 +184,7 @@ internal static class WeaponChecks
         });
         test("Weapons: 10000 active shooters use spatial targets and measured combat ticks", () =>
         {
-            var world = new SimulationWorld([Armed("u", new(2048, 2048, 1, 3, 0))], 1253376, 327680, initialCapacity: 10000);
+            using var world = new SimulationWorld([Armed("u", new(2048, 2048, 1, 3, 0))], 1253376, 327680, initialCapacity: 10000);
             for (int i = 0; i < 5000; i++)
             { int x = (i % 100) * 12288 + 2048, y = (i / 100) * 6144 + 2048; world.AddInitialUnit(0, new(x, y), 1); world.AddInitialUnit(0, new(x + 1024, y), 2); }
             for (int t = 0; t < 8; t++) world.Step();
@@ -196,7 +196,7 @@ internal static class WeaponChecks
         });
         test("Weapons: 10000 live projectiles retain bounded spatial collision work", () =>
         {
-            var world = new SimulationWorld([Armed("u", new(2048, 2048, 1, 1000, 0, projectile: ProjectileKind.Missile, projectileSpeed: 16))], 1253376, 327680, initialCapacity: 10000);
+            using var world = new SimulationWorld([Armed("u", new(2048, 2048, 1, 1000, 0, projectile: ProjectileKind.Missile, projectileSpeed: 16))], 1253376, 327680, initialCapacity: 10000);
             for (int i = 0; i < 5000; i++)
             { int x = (i % 100) * 12288 + 2048, y = (i / 100) * 6144 + 2048; world.AddInitialUnit(0, new(x, y), 1); world.AddInitialUnit(0, new(x + 1024, y), 2); }
             for (int t = 0; t < 8; t++) world.Step();

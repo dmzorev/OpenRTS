@@ -21,20 +21,20 @@ internal static class ExactMovementChecks
         test("Terrain sample scale is validated and survives immutable revisions", () =>
         {
             NavigationChecks.Reject<ArgumentOutOfRangeException>(() => new NavigationGrid(2, 2, cellSize: 0));
-            var fine = Exact(new NavigationGrid(12, 12, cellSize: 128), new WorldPosition(768, 768));
+            using var fine = Exact(new NavigationGrid(12, 12, cellSize: 128), new WorldPosition(768, 768));
             fine.Step([new(1, 0, 1, CommandKind.Move, new(1), new(800, 800))]); Finish(fine);
             NavigationChecks.Check(Poses(fine)[0].Current == new WorldPosition(800, 800), "Body spanning small terrain cells cannot move");
             var grid = new NavigationGrid(3, 3, cellSize: 514);
             var modified = grid.WithBlocked(4, true);
             NavigationChecks.Check(modified.CellSize == 514 && modified.Center(0) == new WorldPosition(257, 257), "Grid revision lost the sampling scale");
-            var world = Exact(modified, modified.Center(0));
+            using var world = Exact(modified, modified.Center(0));
             NavigationChecks.Check(world.Count == 1, "Minimum supported scale has no center clearance");
         });
         test("Exact spawns and subcell orders preserve arbitrary fixed-point coordinates", () =>
         {
             var grid = new NavigationGrid(4, 4, cellSize: 4096);
             var start = new WorldPosition(1300, 1900); var goal = new WorldPosition(1423, 1967);
-            var world = Exact(grid, start);
+            using var world = Exact(grid, start);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), goal)]);
             var first = Poses(world)[0];
             NavigationChecks.Check(first.Current.X > start.X && first.Current.Y > start.Y && first.Current != goal, "Order snapped or moved on a cardinal axis");
@@ -44,8 +44,8 @@ internal static class ExactMovementChecks
         });
         test("Terrain sampling resolution does not quantize unobstructed movement", () =>
         {
-            var a = Exact(new NavigationGrid(16, 16), new WorldPosition(1123, 2345));
-            var b = Exact(new NavigationGrid(4, 4, cellSize: 4096), new WorldPosition(1123, 2345));
+            using var a = Exact(new NavigationGrid(16, 16), new WorldPosition(1123, 2345));
+            using var b = Exact(new NavigationGrid(4, 4, cellSize: 4096), new WorldPosition(1123, 2345));
             WorldCommand[] move = [new(1, 0, 1, CommandKind.Move, new(1), new(14678, 9765))];
             a.Step(move); b.Step(move);
             for (int i = 0; i < 180; i++)
@@ -59,7 +59,7 @@ internal static class ExactMovementChecks
         test("Several bodies can occupy one navigation sample without overlapping", () =>
         {
             var grid = new NavigationGrid(4, 4, cellSize: 4096);
-            var world = Exact(grid, new WorldPosition(900, 900), new(1600, 900), new(900, 1600));
+            using var world = Exact(grid, new WorldPosition(900, 900), new(1600, 900), new(900, 1600));
             NavigationChecks.Check(Poses(world).Select(p => grid.CellAt(p.Current)).Distinct().Count() == 1, "Initial bodies should share a nav sample");
             NavigationChecks.Reject<ArgumentException>(() => world.AddInitialUnit(0, new(1100, 1000)));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1900, 2400)),
@@ -70,7 +70,7 @@ internal static class ExactMovementChecks
         test("Non-cardinal and non-diagonal headings have a bounded Euclidean speed and exact arrival", () =>
         {
             var start = new WorldPosition(1234, 1890); var goal = new WorldPosition(11237, 7311);
-            var world = Exact(new NavigationGrid(16, 12), start);
+            using var world = Exact(new NavigationGrid(16, 12), start);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), goal)]);
             var p = Poses(world)[0];
             NavigationChecks.Check(p.Current.X != p.Previous.X && p.Current.Y != p.Previous.Y &&
@@ -85,7 +85,7 @@ internal static class ExactMovementChecks
         });
         test("A short retarget reverses immediately without finishing a route-cell transition", () =>
         {
-            var start = new WorldPosition(1500, 1800); var world = Exact(new NavigationGrid(12, 8), start);
+            var start = new WorldPosition(1500, 1800); using var world = Exact(new NavigationGrid(12, 8), start);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(10000, 4500))]);
             var previous = Poses(world)[0].Current;
             var goal = new WorldPosition(start.X - 37, start.Y - 19);
@@ -96,7 +96,7 @@ internal static class ExactMovementChecks
         test("Swept terrain checks reject a diagonal corner gap narrower than a body", () =>
         {
             var grid = new NavigationGrid(2, 2, [new(1, 0), new(0, 1)]);
-            var world = Exact(grid, new WorldPosition(512, 512));
+            using var world = Exact(grid, new WorldPosition(512, 512));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1536, 1536))]);
             NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Missing near-side correction");
             Finish(world); NavigationChecks.Check(Poses(world)[0].Current.X < 768 && Poses(world)[0].Current.Y < 768, "A finite body crossed touching obstacle corners");
@@ -104,7 +104,7 @@ internal static class ExactMovementChecks
         test("An angled route around a wall reaches an exact off-center endpoint", () =>
         {
             var grid = new NavigationGrid(9, 7, Enumerable.Range(0, 7).Where(y => y != 3).Select(y => new GridCell(4, y)));
-            var world = Exact(grid, new WorldPosition(1234, 1456)); var goal = new WorldPosition(7891, 5678);
+            using var world = Exact(grid, new WorldPosition(1234, 1456)); var goal = new WorldPosition(7891, 5678);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), goal)]);
             bool diagonal = false;
             for (int i = 0; i < 512 && world.MovingCount > 0; i++)
@@ -125,13 +125,13 @@ internal static class ExactMovementChecks
             var grid = new NavigationGrid(6, 6, [new(2, 2)]);
             NavigationChecks.Reject<ArgumentException>(() => Exact(grid, new WorldPosition(240, 1200)));
             NavigationChecks.Reject<ArgumentException>(() => Exact(grid, new WorldPosition(2000, 2500)));
-            var world = Exact(grid, new WorldPosition(1200, 1200));
+            using var world = Exact(grid, new WorldPosition(1200, 1200));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(2000, 2500))]);
             NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.DestinationAdjusted), "Invalid body clearance was accepted as a target");
         });
         test("An occupied destination waits without changing terrain reachability", () =>
         {
-            var grid = new NavigationGrid(8, 3); var world = Exact(grid, new WorldPosition(1500, 1500), new(6500, 1500));
+            var grid = new NavigationGrid(8, 3); using var world = Exact(grid, new WorldPosition(1500, 1500), new(6500, 1500));
             var nav = new GridNavigator(grid); int goal = grid.CellAt(new(6500, 1500));
             nav.Prepare([goal]); NavigationChecks.Check(nav.TryDistance(goal, grid.CellAt(new(1500, 1500)), out int distance) && distance >= 0, "Terrain route missing");
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(6500, 1500))]);
@@ -146,7 +146,7 @@ internal static class ExactMovementChecks
         {
             var grid = new NavigationGrid(18, 14);
             var starts = Enumerable.Range(0, 9).Select(i => new WorldPosition((2 + i % 3) * 1024 + 613, (2 + i / 3) * 1024 + 477)).ToArray();
-            var world = Exact(grid, starts); var click = new WorldPosition(12 * 1024 + 613, 8 * 1024 + 477);
+            using var world = Exact(grid, starts); var click = new WorldPosition(12 * 1024 + 613, 8 * 1024 + 477);
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: click)]); Finish(world);
             var expected = Enumerable.Range(0, 9).Select(i => new WorldPosition((11 + i % 3) * 1024 + 613, (7 + i / 3) * 1024 + 477));
             NavigationChecks.Check(expected.ToHashSet().SetEquals(Poses(world).Select(p => p.Current)), "The group click was rounded to terrain centers");
@@ -154,8 +154,8 @@ internal static class ExactMovementChecks
         test("Compact packing and group trajectories are independent of terrain sample size", () =>
         {
             var starts = Enumerable.Range(0, 25).Select(i => new WorldPosition((1 + i % 5) * 1024 + 512, (1 + i / 5) * 1024 + 512)).ToArray();
-            var a = Exact(new NavigationGrid(16, 16), starts);
-            var b = Exact(new NavigationGrid(4, 4, cellSize: 4096), starts);
+            using var a = Exact(new NavigationGrid(16, 16), starts);
+            using var b = Exact(new NavigationGrid(4, 4, cellSize: 4096), starts);
             WorldCommand[] command = [new(1, 0, 1, CommandKind.MoveGroup, Position: new(10 * 1024 + 512, 10 * 1024 + 512))];
             a.Step(command); b.Step(command);
             NavigationChecks.Check(b.GroupSlotCount == 25 && b.GroupSlotCount > b.NavigationGrid!.CellCount, "Packing is still limited to one destination per nav sample");
@@ -169,7 +169,7 @@ internal static class ExactMovementChecks
         test("Crossing swept trajectories cannot both be accepted despite safe endpoints", () =>
         {
             var grid = new NavigationGrid(6, 6);
-            var world = new SimulationWorld([new("u", 100)], 6144, 6144, navigationGrid: grid, speedPerTick: 1024);
+            using var world = new SimulationWorld([new("u", 100)], 6144, 6144, navigationGrid: grid, speedPerTick: 1024);
             world.AddInitialUnit(0, new(1200, 1700)); world.AddInitialUnit(0, new(1700, 1200));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(2200, 1700)),
                 new(1, 0, 2, CommandKind.Move, new(2), new(1700, 2200))]);
@@ -179,7 +179,7 @@ internal static class ExactMovementChecks
         });
         test("Terrain edits invalidate exact group goals with body clearance outside their goal sample", () =>
         {
-            var world = Exact(new NavigationGrid(8, 4), new WorldPosition(512, 1536));
+            using var world = Exact(new NavigationGrid(8, 4), new WorldPosition(512, 1536));
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: new(2948, 1536))]);
             world.Step([new(2, 0, 1, CommandKind.BlockCell, Position: new(3584, 1536))]);
             NavigationChecks.Check(world.NavigationGrid!.IsBlocked(world.NavigationGrid.Index(new(3, 1))), "Terrain edit was not applied");
@@ -191,7 +191,7 @@ internal static class ExactMovementChecks
             var free = Enumerable.Range(0, 7).Select(x => new GridCell(x, 1)).Append(new(5, 0)).ToHashSet();
             var grid = new NavigationGrid(7, 3, from y in Enumerable.Range(0, 3) from x in Enumerable.Range(0, 7)
                 where !free.Contains(new(x, y)) select new GridCell(x, y));
-            var world = World(grid, [new(2, 1), new(3, 1)], speed: 256);
+            using var world = World(grid, [new(2, 1), new(3, 1)], speed: 256);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(grid.Index(new(6, 1)))),
                 new(1, 0, 2, CommandKind.Move, new(2), grid.Center(grid.Index(new(0, 1))))]);
             for (int i = 0; i < 64 && world.NavigationYields == 0; i++) world.Step();
@@ -206,7 +206,7 @@ internal static class ExactMovementChecks
         {
             var grid = new NavigationGrid(50, 44, Enumerable.Range(0, 44).Where(y => y < 20 || y >= 24).Select(y => new GridCell(22, y)));
             var starts = Enumerable.Range(0, 36).Select(i => grid.Center(grid.Index(new(4 + i % 6, 4 + i / 6)), i * 101)).ToArray();
-            var world = Exact(grid, starts);
+            using var world = Exact(grid, starts);
             world.Step([new(1, 0, 1, CommandKind.MoveGroup, Position: grid.Center(grid.Index(new(42, 22))))]);
             int exchanges = 0;
             for (int i = 0; i < 1400 && world.MovingCount > 0; i++)

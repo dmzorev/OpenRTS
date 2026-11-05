@@ -30,22 +30,26 @@ public static class ShowcaseScenario
     {
         var world = new SimulationWorld(catalog.Units, Width * 1024, Height * 1024,
             initialCapacity: UnitCount, navigationGrid: Grid(catalog.Locomotion));
-        string[] order = ["rifleman", "rocketeer", "apc-mg", "apc-rocket", "tank"];
-        for (int team = 0; team < 2; team++) for (int i = 0; i < order.Length; i++)
+        try
         {
-            int type = catalog.Units.ToList().FindIndex(u => u.Id == order[i]);
-            if (type < 0) throw new ArgumentException("Showcase unit is missing: " + order[i]);
-            int x = team == 0 && i == 3 ? 42 : 7 + i * 6, y = team == 0 ? 12 : 23;
-            uint states = team == 0 && i == 3 ? catalog.Units[type].StateMask("swimming") : 0;
-            world.AddInitialUnit(type, new(x * 1024, y * 1024), (uint)(team + 1), states);
+            string[] order = ["rifleman", "rocketeer", "apc-mg", "apc-rocket", "tank"];
+            for (int team = 0; team < 2; team++) for (int i = 0; i < order.Length; i++)
+            {
+                int type = catalog.Units.ToList().FindIndex(u => u.Id == order[i]);
+                if (type < 0) throw new ArgumentException("Showcase unit is missing: " + order[i]);
+                int x = team == 0 && i == 3 ? 42 : 7 + i * 6, y = team == 0 ? 12 : 23;
+                uint states = team == 0 && i == 3 ? catalog.Units[type].StateMask("swimming") : 0;
+                world.AddInitialUnit(type, new(x * 1024, y * 1024), (uint)(team + 1), states);
+            }
+            string[] extras = ["rifleman", "engineer", "tank-mixed", "bunker-cannon", "bunker-mixed"];
+            for (int team = 0; team < 2; team++) for (int i = 0; i < extras.Length; i++)
+            {
+                int type = catalog.Units.ToList().FindIndex(u => u.Id == extras[i]);
+                world.AddInitialUnit(type, new((18 + i * 4) * 1024, (team == 0 ? 6 : 25) * 1024), (uint)(team + 1));
+            }
+            return world;
         }
-        string[] extras = ["rifleman", "engineer", "tank-mixed", "bunker-cannon", "bunker-mixed"];
-        for (int team = 0; team < 2; team++) for (int i = 0; i < extras.Length; i++)
-        {
-            int type = catalog.Units.ToList().FindIndex(u => u.Id == extras[i]);
-            world.AddInitialUnit(type, new((18 + i * 4) * 1024, (team == 0 ? 6 : 25) * 1024), (uint)(team + 1));
-        }
-        return world;
+        catch { world.Dispose(); throw; }
     }
     public static WorldCommand[] VerificationCommands(UnitCatalog catalog)
     {

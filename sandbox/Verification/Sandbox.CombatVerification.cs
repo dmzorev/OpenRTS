@@ -9,7 +9,7 @@ public partial class Sandbox
 {
     private async Task VerifyCombatPresentation()
     {
-        var catalog = _catalog!; var world = new SimulationWorld(catalog.Units, 48 * 1024, 32 * 1024);
+        var catalog = _catalog!; using var world = new SimulationWorld(catalog.Units, 48 * 1024, 32 * 1024);
         int Type(string id) => catalog.Units.ToList().FindIndex(u => u.Id == id);
         void Spawn(string id, int x, int y, uint owner) => world.AddInitialUnit(Type(id), new(x * 1024, y * 1024), owner);
         Spawn("tank-mixed", 12, 10, 1); Spawn("bunker-cannon", 17, 10, 2);

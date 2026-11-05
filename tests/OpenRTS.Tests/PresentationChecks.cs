@@ -10,7 +10,7 @@ internal static class PresentationChecks
     {
         test("Walking follows actual displacement and stops on arrival or Stop", () =>
         {
-            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
+            var type = Unit(); using var world = new SimulationWorld([type], 10000, 10000);
             world.AddInitialUnit(0, new(1000, 1000));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1256, 1000))]);
             NavigationChecks.Check(Poses(world)[0].Presentation.Body.Animation == type.MoveAnimation, "Moving unit did not walk");
@@ -18,7 +18,7 @@ internal static class PresentationChecks
             var idle = Poses(world)[0];
             NavigationChecks.Check(idle.Previous == idle.Current && idle.Presentation.Body.Animation == type.IdleAnimation, "Arrival left the walking cycle active");
             var grid = new NavigationGrid(5, 5, Enumerable.Range(0, 5).Select(y => new GridCell(2, y)));
-            var blocked = new SimulationWorld([type], 5120, 5120, navigationGrid: grid);
+            using var blocked = new SimulationWorld([type], 5120, 5120, navigationGrid: grid);
             blocked.AddInitialUnit(0, grid.Center(grid.Index(new(1, 2))));
             blocked.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(grid.Index(new(3, 2))))]);
             blocked.Step([new(2, 0, 1, CommandKind.Stop, new(1))]);
@@ -43,7 +43,7 @@ internal static class PresentationChecks
             UnitCatalog Load(string model, string animations) => UnitCatalog.Load([new("u", $"u: {{Health: {{HP: 100}}, Presentation: {{Model: {model}, Animations: [{animations}], States: [damaged]}}}}")]);
             var a = Load("sprite-model", "fire, idle, move"); var b = Load("rig-model", "move, idle, fire");
             NavigationChecks.Check(a.Summary == b.Summary && a.Presentations[0].Model != b.Presentations[0].Model, "Adapter choice changed gameplay fingerprint");
-            var first = new SimulationWorld(a.Units, 10000, 10000); var second = new SimulationWorld(b.Units, 10000, 10000);
+            using var first = new SimulationWorld(a.Units, 10000, 10000); using var second = new SimulationWorld(b.Units, 10000, 10000);
             first.AddInitialUnit(0, new(1000, 1000)); second.AddInitialUnit(0, new(1000, 1000));
             WorldCommand[] commands = [new(1, 0, 1, CommandKind.PlayAnimation, new(1), Animation: 0, DurationTicks: 8)];
             first.Step(commands); second.Step(commands);
@@ -51,7 +51,7 @@ internal static class PresentationChecks
         });
         test("Movement, independent weapon aim, firing and two states coexist", () =>
         {
-            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
+            var type = Unit(); using var world = new SimulationWorld([type], 10000, 10000);
             world.AddInitialUnit(0, new(2000, 2000), owner: 1); world.AddInitialUnit(0, new(2000, 6000), owner: 2);
             uint states = type.StateMask("damaged") | type.StateMask("swimming");
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(6000, 2000)),
@@ -69,7 +69,7 @@ internal static class PresentationChecks
         });
         test("Body and weapon animation tracks expire independently", () =>
         {
-            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
+            var type = Unit(); using var world = new SimulationWorld([type], 10000, 10000);
             world.AddInitialUnit(0, new(1000, 1000));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(8000, 1000)),
                 new(1, 0, 2, CommandKind.PlayAnimation, new(1), Animation: type.AnimationIndex("deploy"), DurationTicks: 3, Track: AnimationTrack.Body),
@@ -82,7 +82,7 @@ internal static class PresentationChecks
         });
         test("Queued toggles, invalid cues and destroyed aim targets are deterministic", () =>
         {
-            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000);
+            var type = Unit(); using var world = new SimulationWorld([type], 10000, 10000);
             world.AddInitialUnit(0, new(1000, 1000)); world.AddInitialUnit(0, new(4000, 4000));
             var before = world.Report();
             NavigationChecks.Reject<ArgumentException>(() => world.Step([new(1, 0, 1, CommandKind.PlayAnimation, new(1), DurationTicks: 0)]));
@@ -98,7 +98,7 @@ internal static class PresentationChecks
         });
         test("Skipped frames retain loop phase and pinned presentation snapshots", () =>
         {
-            var type = Unit(); var world = new SimulationWorld([type], 10000, 10000); world.AddInitialUnit(0, new(1000, 1000));
+            var type = Unit(); using var world = new SimulationWorld([type], 10000, 10000); world.AddInitialUnit(0, new(1000, 1000));
             var exchange = new FrameExchange();
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(8000, 1000)),
                 new(1, 0, 2, CommandKind.PlayAnimation, new(1), Animation: type.AnimationIndex("fire"), DurationTicks: 3)]);

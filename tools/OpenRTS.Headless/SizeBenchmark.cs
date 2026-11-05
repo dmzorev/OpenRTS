@@ -25,11 +25,11 @@ internal static class SizeBenchmark
             new((i % columns * 2 + 4) * 1024, (i / columns * 2 + 20) * 1024))).ToArray();
         var obstacle = new WorldCommand(20, 0, 1, CommandKind.Spawn, Position: new((columns + 4) * 1024, (rows * 2 + 15) * 1024), UnitType: 4);
         // JIT is warmed on a smaller world with the same shapes; graph construction remains measured cold.
-        var warm = new SimulationWorld(types, 16384, 16384, navigationGrid: new(16, 16, Enumerable.Range(0, 11).Select(x => new GridCell(x, 5))));
+        using var warm = new SimulationWorld(types, 16384, 16384, navigationGrid: new(16, 16, Enumerable.Range(0, 11).Select(x => new GridCell(x, 5))));
         for (int i = 0; i < 4; i++) warm.AddInitialUnit(i, new((i * 2 + 2) * 1024, 2048));
         warm.Step(Enumerable.Range(0, 4).Select(i => new WorldCommand(1, 0, i + 1, CommandKind.Move, new((uint)i + 1), new((i * 2 + 2) * 1024, 8192))).ToArray());
         for (int i = 0; i < 64; i++) warm.Step(i == 18 ? [new(20, 0, 1, CommandKind.Spawn, Position: new(12288, 12288), UnitType: 4)] : []);
-        long started = Stopwatch.GetTimestamp(); var world = Create(); double initialization = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        long started = Stopwatch.GetTimestamp(); using var world = Create(); double initialization = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
         double[] samples = new double[ticks]; long allocation = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < ticks; i++)
         {

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Friflo.Engine.ECS": {
+        "type": "Direct",
+        "requested": "[3.6.0, 3.6.0]",
+        "resolved": "3.6.0",
+        "contentHash": "Fj1ZExQzUuNLILSMviZE7B7r8U/0KBbXmTWr9+2Qut3yjyv2EVEky6Tzt40PbjTkc9/perkVBFn7uKr1sbt6Ag==",
+        "dependencies": {
+          "Friflo.Json.Fliox": "1.0.4"
+        }
+      },
+      "Friflo.Json.Burst": {
+        "type": "Transitive",
+        "resolved": "1.0.4",
+        "contentHash": "fMZ76Dx2W0rk9mpVqU8onl/fTydnJDks5wc9Dy19pReG4yv/joFvqvUWKVLl39y9O58yCt08o/w4DICrQbAZQg=="
+      },
+      "Friflo.Json.Fliox": {
+        "type": "Transitive",
+        "resolved": "1.0.4",
+        "contentHash": "yjhgryueSU/ZinDyJcFLx6Cd7FVz7M6ZJEHiQHQpG6FxGmGvYOvxRKVfrrz9kr7d2eXRk9oYfVUCI4vViS9CCA==",
+        "dependencies": {
+          "Friflo.Json.Burst": "1.0.4",
+          "Friflo.Json.Fliox.Annotation": "1.0.4"
+        }
+      },
+      "Friflo.Json.Fliox.Annotation": {
+        "type": "Transitive",
+        "resolved": "1.0.4",
+        "contentHash": "0ZNQ1fFYQSkDYCPBX9oxUfMJMSnp8sBnDYT4Q8kFSnOt3UM27eOKbuINm5Qak1qLEMlHD7GrS83yhRfN2Az2Cw=="
+      }
+    }
+  }
+}

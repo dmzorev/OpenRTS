@@ -52,6 +52,8 @@ OrderChecks.Run(Test);
 WeaponChecks.Run(Test);
 FootprintChecks.Run(Test);
 ActionProductionChecks.Run(Test);
+EcsMigrationChecks.Run(Test);
+EcsStorageChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

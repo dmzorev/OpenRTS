@@ -105,6 +105,7 @@ public sealed partial class SimulationWorld
     }
     public void CopyProjectilePoses(Span<ProjectilePose> destination)
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < _projectiles.Count) throw new ArgumentException("Destination is too small.", nameof(destination));
         for (int i = 0; i < _projectiles.Count; i++)

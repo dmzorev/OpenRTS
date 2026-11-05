@@ -1,0 +1,21 @@
+{
+  "id": "Frent",
+  "version": "0.9.1-beta",
+  "license": {
+    "type": "file",
+    "value": "LICENSE.md"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsBuggingMe/Frent",
+    "commit": "189532826c235fc240665204498cf5006ed3967e"
+  },
+  "nupkg_url": "https://api.nuget.org/v3-flatcontainer/frent/0.9.1-beta/frent.0.9.1-beta.nupkg",
+  "sha256_nupkg": "d1105faf9771f800791009bf68481170ec94016e02b33f17223364b2f951e61f",
+  "sha256_nuspec": "42bf676eb750a2c331afebfb19da2cf5d9b96b92e6012b0d13e1182b5daa5663",
+  "license_file_sha256": "ce03fa69cca635344af519665997acb490515cb55813641c8fbd111889bd4f34",
+  "purpose": "ECS unit identity storage and production state; no Godot/YAML in Core",
+  "checked_on": "2026-11-05",
+  "license_file": "docs/vendor/frent-license.txt",
+  "content_hash_sha512_base64": "VFqCigbLFeK4vsjKIAkUBF/AO27VLbM/rjplE45DwXu6vUW87FfuQRqQz0Khtt0dV2eKkOVsgadcgNFxft2hiA=="
+}

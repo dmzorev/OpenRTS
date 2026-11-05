@@ -47,7 +47,7 @@ internal static class SimulationChecks
     {
         test("Integer movement arrives exactly and keeps elevation", () =>
         {
-            var world = World();
+            using var world = World();
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(1024, 0))]);
             Check(Poses(world)[0].Current == new WorldPosition(128, 0, 512), "First fixed step");
             for (int i = 0; i < 20; i++) world.Step();
@@ -55,14 +55,14 @@ internal static class SimulationChecks
         });
         test("Minimum speed does not stall diagonally", () =>
         {
-            var world = World(speed: 1);
+            using var world = World(speed: 1);
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: new(3, 3))]);
             for (int i = 0; i < 10; i++) world.Step();
             Check(Poses(world)[0].Current == new WorldPosition(3, 3, 512), "Diagonal arrival");
         });
         test("Large-coordinate movement stays bounded and respects step length", () =>
         {
-            var world = World(speed: 1 << 20);
+            using var world = World(speed: 1 << 20);
             var previous = Poses(world)[0].Current;
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: new(WorldPosition.MaximumExtent, WorldPosition.MaximumExtent))]);
             for (int i = 0; i < 20; i++)
@@ -76,7 +76,7 @@ internal static class SimulationChecks
         });
         test("Command order is issuer/sequence, independent of input order", () =>
         {
-            var first = World(); var second = World();
+            using var first = World(); using var second = World();
             WorldCommand[] commands = [new(1, 1, 2, CommandKind.MoveAll, Position: new(0, 1024)),
                 new(1, 0, 99, CommandKind.MoveAll, Position: new(1024, 0))];
             first.Step(commands); second.Step(commands.Reverse().ToArray());
@@ -85,7 +85,7 @@ internal static class SimulationChecks
         });
         test("Invalid command batches do not advance authoritative state", () =>
         {
-            var world = World(); var before = world.Report();
+            using var world = World(); var before = world.Report();
             Reject<ArgumentException>(() => world.Step([new(2, 0, 1, CommandKind.MoveAll)]));
             Reject<ArgumentException>(() => world.Step([new(1, 0, 1, CommandKind.MoveAll), new(1, 0, 1, CommandKind.MoveAll)]));
             Reject<ArgumentOutOfRangeException>(() => world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: new(-1, 0))]));
@@ -94,7 +94,7 @@ internal static class SimulationChecks
         });
         test("Packed removal preserves stable IDs and self-contained events", () =>
         {
-            var world = World(2);
+            using var world = World(2);
             world.Step([new(1, 0, 1, CommandKind.Destroy, new(1)), new(1, 0, 2, CommandKind.Spawn, Position: new(3000, 4000))]);
             Check(Poses(world).Select(p => p.Id.Value).SequenceEqual([2u, 3u]), "IDs must not be reused");
             Check(world.Events[0].Kind == WorldEventKind.Destroyed && world.Events[0].Position.Elevation == 512, "Destroy event retains position");
@@ -113,7 +113,7 @@ internal static class SimulationChecks
         });
         test("Random targets and state hash do not depend on packed storage order", () =>
         {
-            var first = World(4); var second = World(4);
+            using var first = World(4); using var second = World(4);
             first.Step([new(1, 0, 1, CommandKind.Destroy, new(1)), new(1, 0, 2, CommandKind.Destroy, new(2))]);
             second.Step([new(1, 0, 1, CommandKind.Destroy, new(2)), new(1, 0, 2, CommandKind.Destroy, new(1))]);
             Check(!Poses(first).Select(p => p.Id).SequenceEqual(Poses(second).Select(p => p.Id)), "Fixture must have different packed order");
@@ -124,7 +124,7 @@ internal static class SimulationChecks
         });
         test("Steady movement of 10000 entities allocates no managed memory in Step", () =>
         {
-            var world = World(10000);
+            using var world = World(10000);
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: new(30000000, 30000000))]);
             for (int i = 0; i < 10; i++) world.Step();
             long before = GC.GetAllocatedBytesForCurrentThread();
@@ -134,7 +134,7 @@ internal static class SimulationChecks
         });
         test("Leases protect published frames and saturated exchange drops only frames", () =>
         {
-            var world = World(); var exchange = new FrameExchange();
+            using var world = World(); var exchange = new FrameExchange();
             Check(exchange.TryPublish(world), "Initial publication");
             using var first = exchange.AcquireLatest()!;
             var original = first.Poses[0];
@@ -153,7 +153,7 @@ internal static class SimulationChecks
         test("Worker matches direct execution and final frame survives reader delays", () =>
         {
             WorldCommand[] commands = [new(1, 0, 1, CommandKind.Scatter, Position: new(20000000, 20000000))];
-            var direct = World(10000); direct.Step(commands);
+            using var direct = World(10000); direct.Step(commands);
             while (direct.Tick < 64) direct.Step();
             using var session = new SimulationSession(() => World(10000), commands, 64, realtime: false);
             int observations = 0;
@@ -202,7 +202,7 @@ internal static class SimulationChecks
                 Until(() => session.GetCommandLog().Length > 0);
                 session.Dispose(); session.Dispose();
                 var report = Completed(session);
-                var direct = World(100); var journal = session.GetCommandLog();
+                using var direct = World(100); var journal = session.GetCommandLog();
                 while (direct.Tick < report.Tick)
                     direct.Step(journal.Where(c => c.Tick == direct.Tick + 1).ToArray());
                 Check(report == direct.Report(), "Recorded live input did not replay");

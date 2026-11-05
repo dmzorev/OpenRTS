@@ -90,7 +90,7 @@ internal static class LocomotionChecks
             for (int x = 3; x <= 7; x++) terrain[3 * 11 + x] = 1;
             var grid = new NavigationGrid(11, 7, terrain: terrain);
             var profile = new Locomotor("detour", [TerrainRule.Ground, new(true, true, 128, 16384)]);
-            var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 3584));
+            using var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 3584));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(9728, 3584))]);
             for (int tick = 1; tick < 200; tick++)
             {
@@ -107,7 +107,7 @@ internal static class LocomotionChecks
             foreach (int factor in new[] { 1024, 768, 512, 1 })
             {
                 var profile = new Locomotor("speed", [new(true, true, factor, 1024)]);
-                var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 1536));
+                using var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 1536));
                 world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(6656, 1536))]);
                 for (int tick = 1; tick < 8; tick++) world.Step();
                 NavigationChecks.Check(Poses(world)[0].Current.X == 1536 + factor, "Fractional speed lost distance: " + factor);
@@ -117,7 +117,7 @@ internal static class LocomotionChecks
         {
             var grid = new NavigationGrid(7, 5, terrain: Enumerable.Range(0, 35).Select(i => i % 7 == 3 ? (byte)1 : (byte)0));
             var profile = new Locomotor("bridge", [TerrainRule.Ground, new(true, false, 1024, 1024)]);
-            var world = World(grid, profile);
+            using var world = World(grid, profile);
             NavigationChecks.Reject<ArgumentException>(() => world.AddInitialUnit(0, new(3584, 2560)));
             world.AddInitialUnit(0, new(1536, 2560));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(5632, 2560))]);
@@ -131,7 +131,7 @@ internal static class LocomotionChecks
         {
             var grid = new NavigationGrid(6, 5, terrain: Enumerable.Range(0, 30).Select(i => i % 6 >= 3 ? (byte)1 : (byte)0));
             var profile = new Locomotor("land", [TerrainRule.Ground, TerrainRule.Blocked]);
-            var world = World(grid, profile);
+            using var world = World(grid, profile);
             NavigationChecks.Reject<ArgumentException>(() => world.AddInitialUnit(0, new(3000, 1536)));
             world.AddInitialUnit(0, new(1536, 1536));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(3000, 1536))]);
@@ -146,7 +146,7 @@ internal static class LocomotionChecks
                 var w = new SimulationWorld([new("land", 100, locomotor: land), new("amphibian", 100, locomotor: amphibian)], 12288, 8192, navigationGrid: grid, navigationWorkers: workers);
                 w.AddInitialUnit(0, new(1536, 2560)); w.AddInitialUnit(1, new(1536, 4608)); return w;
             }
-            var a = Create(1); var b = Create(4);
+            using var a = Create(1); using var b = Create(4);
             for (int tick = 1; tick <= 80; tick++)
             {
                 WorldCommand[] commands = tick == 1 ? [new(1, 0, 1, CommandKind.MoveGroup, Position: new(9728, 3584))] :
@@ -168,7 +168,7 @@ internal static class LocomotionChecks
                 for (int i = 0; i < 8; i++) world.AddInitialUnit(i % 2, new(2560 + i % 4 * 2048, 2560 + i / 4 * 2048));
                 return world;
             }
-            var a = Create(1, false); var b = Create(4, true);
+            using var a = Create(1, false); using var b = Create(4, true);
             for (int tick = 1; tick <= 64; tick++)
             {
                 WorldCommand[] commands = tick == 1 ? [new(1, 0, 1, CommandKind.MoveAll, Position: new(20992, 12800))] : [];
@@ -181,7 +181,7 @@ internal static class LocomotionChecks
         {
             var grid = new NavigationGrid(7, 5, terrain: Enumerable.Range(0, 35).Select(i => i % 7 == 3 ? (byte)1 : (byte)0));
             var profile = new Locomotor("bridge", [TerrainRule.Ground, new(true, false, 1024, 1024)]);
-            var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 2560));
+            using var world = World(grid, profile); world.AddInitialUnit(0, new(1536, 2560));
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), new(5632, 2560))]);
             for (int i = 1; i < 13; i++) world.Step();
             var position = Poses(world)[0].Current;
@@ -194,7 +194,7 @@ internal static class LocomotionChecks
             var catalog = Units(); var ground = catalog.Locomotion!;
             var grid = new NavigationGrid(240, 132, terrain: Enumerable.Range(0, 240 * 132).Select(i =>
                 i % 240 is >= 115 and <= 122 && i / 240 is not (>= 64 and <= 68) ? ground.TerrainIndex("mud") : (byte)0));
-            var world = new SimulationWorld(catalog.Units, 240 * 1024, 132 * 1024, initialCapacity: 10000, navigationGrid: grid);
+            using var world = new SimulationWorld(catalog.Units, 240 * 1024, 132 * 1024, initialCapacity: 10000, navigationGrid: grid);
             int[] types = new[] { "apc-mg", "apc-rocket", "rifleman", "rocketeer", "tank" }.Select(id => catalog.Units.ToList().FindIndex(u => u.Id == id)).ToArray();
             for (int i = 0; i < 10000; i++) world.AddInitialUnit(types[i % types.Length], new((i % 100 + 4) * 1024 + 512, (i / 100 + 4) * 1024 + 512));
             int trees = 0, fields = 0; double elapsed = 0; var samples = new double[8]; long allocated = GC.GetTotalAllocatedBytes(true);

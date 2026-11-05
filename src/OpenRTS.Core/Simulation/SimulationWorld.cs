@@ -1,15 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using OpenRTS.Core.Production;
 
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld
+public sealed partial class SimulationWorld : IDisposable
 {
     private struct EntityState
     {
         public EntityId Id;
+        // shortcut: keep handles in packed state until E4 moves hot components into unit storage.
+        public Frent.Entity StorageEntity;
         public int UnitType, Health;
         public WorldPosition Previous, Position, Target;
         public bool Moving, TerrainStranded;
@@ -115,6 +118,7 @@ public sealed partial class SimulationWorld
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
     {
+        ThrowIfDisposed();
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
@@ -126,13 +130,18 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
         }
         if ((states & ~_types[unitType].AllowedStateMask) != 0) throw new ArgumentOutOfRangeException(nameof(states));
-        var id = Spawn(unitType, position, owner, states);
-        if (footprintGrid is not null) CommitGrid(footprintGrid);
-        return id;
+        try
+        {
+            var id = Spawn(unitType, position, owner, states);
+            if (footprintGrid is not null) CommitGrid(footprintGrid);
+            return id;
+        }
+        catch { _failed = true; throw; }
     }
 
     public void Step(ReadOnlySpan<WorldCommand> commands = default, CancellationToken cancellationToken = default)
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot be advanced.");
         cancellationToken.ThrowIfCancellationRequested();
         long nextTick = checked(Tick + 1);
@@ -195,13 +204,14 @@ public sealed partial class SimulationWorld
 
     public void CopyPoses(Span<EntityPose> destination)
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < Count) throw new ArgumentException("Destination is too small.", nameof(destination));
         int weaponOffset = 0;
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i];
-            _producers.TryGetValue(entity.Id, out var producer);
+            TryGetProducer(i, out var producer);
             uint states = entity.VisualStates;
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entity.UnitType].TaskQueues[q].WorkingState is { } state)
@@ -216,6 +226,7 @@ public sealed partial class SimulationWorld
 
     public SimulationReport Report()
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world has no completed state.");
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
@@ -271,8 +282,8 @@ public sealed partial class SimulationWorld
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
-            { foreach (int i in members) if (!_types[_entities[i].UnitType].Movable && _producers.ContainsKey(_entities[i].Id)) SetRally(i, command.Position);
-                members = members.Where(i => _types[_entities[i].UnitType].Movable || !_producers.ContainsKey(_entities[i].Id)).ToArray(); }
+            { foreach (int i in members) if (!_types[_entities[i].UnitType].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
+                members = members.Where(i => _types[_entities[i].UnitType].Movable || !TryGetProducer(i, out _)).ToArray(); }
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair,
                 CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
@@ -331,7 +342,10 @@ public sealed partial class SimulationWorld
 
     private void DestroyIndex(int index, bool wreck = true)
     {
-        var id = _entities[index].Id; if (_producers.Remove(id)) _producersDirty = true; bool stamped = _footprints.Remove(id);
+        var id = _entities[index].Id;
+        if (_entities[index].StorageEntity.Has<ProducerState>()) _producersDirty = true;
+        _entities[index].StorageEntity.Delete();
+        bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Owner));
         _groupRoutes.Remove(id); _indices.Remove(id); _orderDirty = true; Count--;
         if (index != Count)
@@ -379,8 +393,8 @@ public sealed partial class SimulationWorld
             Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
             if (_navigation is not null) Array.Resize(ref _localPaths, checked(_entities.Length * LocalMotionSearch.PathCapacity));
         }
-        var id = new EntityId(_nextId++);
-        _entities[Count] = new() { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
+        var id = new EntityId(_nextId);
+        var state = new EntityState { Id = id, UnitType = unitType, Health = _types[unitType].MaxHealth,
             Previous = position, Position = position, Target = position, Owner = owner, VisualStates = states,
             Weapons = _types[unitType].Weapons.Select(_ => new WeaponState { Facing = FacingDirection.North, PreviousFacing = FacingDirection.North, Animation = AnimationPlayback.None }).ToArray(),
             BodyFacing = FacingDirection.North, PreviousBodyFacing = FacingDirection.North,
@@ -388,10 +402,16 @@ public sealed partial class SimulationWorld
             BodyAnimation = new(_types[unitType].IdleAnimation, Tick, 0), WeaponAnimation = AnimationPlayback.None,
             GoalCell = _navigation?.Grid.CellAt(position) ?? -1 };
         var type = _types[unitType];
+        _unitStorage ??= new();
+        state.StorageEntity = type.TaskQueues.Count == 0
+            ? _unitStorage.Create(new UnitIdentity { Id = id })
+            : _unitStorage.Create(new UnitIdentity { Id = id }, new ProducerState(type.TaskQueues.Count));
+        _entities[Count] = state;
+        _nextId++;
         (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);
-        RegisterProducer(id, unitType);
+        if (type.TaskQueues.Count > 0) _producersDirty = true;
         for (int a = 0; a < type.Abilities.Count; a++) _entities[_indices[id]].Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;

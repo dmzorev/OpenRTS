@@ -175,41 +175,45 @@ public sealed class SimulationSession : IDisposable
     {
         try
         {
-            var world = createWorld() ?? throw new InvalidOperationException("World factory returned null.");
-            if (world.Tick != 0) throw new InvalidOperationException("A session must start from an initialized tick-zero world.");
-            lock (_clockGate) { _period = 1.0 / world.TickRate; _clockTimestamp = Stopwatch.GetTimestamp(); _accumulated = 0; }
-            Publish(world);
-            int cursor = 0;
-            var batch = new List<WorldCommand>();
-            while (!_stop.IsCancellationRequested && (!_endTick.HasValue || world.Tick < _endTick.Value))
+            SimulationReport report;
+            using (var world = createWorld() ?? throw new InvalidOperationException("World factory returned null."))
             {
-                if (!AwaitTick()) break;
-                batch.Clear();
-                while (cursor < script.Length && script[cursor].Tick == world.Tick + 1) batch.Add(script[cursor++]);
-                int pending = Volatile.Read(ref _pendingInput);
-                for (int i = 0; i < pending && _input.TryDequeue(out var command); i++)
-                {
-                    Interlocked.Decrement(ref _pendingInput);
-                    batch.Add(command with { Tick = world.Tick + 1 });
-                }
-                world.Step(CollectionsMarshal.AsSpan(batch), _stop.Token);
-                if (world.AppliedCommands.Length > 0)
-                    lock (_journalGate)
-                        foreach (var command in world.AppliedCommands) _journal.Add(command);
-                foreach (var value in world.Events)
-                {
-                    if (Interlocked.Increment(ref _eventCount) > _maximumEventBacklog)
-                    {
-                        Interlocked.Decrement(ref _eventCount);
-                        throw new InvalidOperationException("Event backlog exceeded; simulation stopped instead of losing events.");
-                    }
-                    _events.Enqueue(value);
-                }
+                if (world.Tick != 0) throw new InvalidOperationException("A session must start from an initialized tick-zero world.");
+                lock (_clockGate) { _period = 1.0 / world.TickRate; _clockTimestamp = Stopwatch.GetTimestamp(); _accumulated = 0; }
                 Publish(world);
+                int cursor = 0;
+                var batch = new List<WorldCommand>();
+                while (!_stop.IsCancellationRequested && (!_endTick.HasValue || world.Tick < _endTick.Value))
+                {
+                    if (!AwaitTick()) break;
+                    batch.Clear();
+                    while (cursor < script.Length && script[cursor].Tick == world.Tick + 1) batch.Add(script[cursor++]);
+                    int pending = Volatile.Read(ref _pendingInput);
+                    for (int i = 0; i < pending && _input.TryDequeue(out var command); i++)
+                    {
+                        Interlocked.Decrement(ref _pendingInput);
+                        batch.Add(command with { Tick = world.Tick + 1 });
+                    }
+                    world.Step(CollectionsMarshal.AsSpan(batch), _stop.Token);
+                    if (world.AppliedCommands.Length > 0)
+                        lock (_journalGate)
+                            foreach (var command in world.AppliedCommands) _journal.Add(command);
+                    foreach (var value in world.Events)
+                    {
+                        if (Interlocked.Increment(ref _eventCount) > _maximumEventBacklog)
+                        {
+                            Interlocked.Decrement(ref _eventCount);
+                            throw new InvalidOperationException("Event backlog exceeded; simulation stopped instead of losing events.");
+                        }
+                        _events.Enqueue(value);
+                    }
+                    Publish(world);
+                }
+                // A finite verification run must publish its final tick even if readers pin all slots temporarily.
+                while (!Frames.TryPublish(world) && !_stop.IsCancellationRequested) _stop.Token.WaitHandle.WaitOne(1);
+                report = world.Report();
             }
-            // A finite verification run must publish its final tick even if readers pin all slots temporarily.
-            while (!Frames.TryPublish(world) && !_stop.IsCancellationRequested) _stop.Token.WaitHandle.WaitOne(1);
-            _completion.TrySetResult(world.Report());
+            _completion.TrySetResult(report);
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { _completion.TrySetCanceled(); }
         catch (Exception error) { _completion.TrySetException(error); }

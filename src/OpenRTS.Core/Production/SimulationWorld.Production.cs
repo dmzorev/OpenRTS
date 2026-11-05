@@ -1,20 +1,9 @@
+using OpenRTS.Core.Production;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private sealed class ProductionTask(long id, int product, bool repeat)
-    {
-        public long Id = id;
-        public int Product = product, Progress;
-        public bool Repeat = repeat, Ready, Blocked;
-    }
-    private sealed class ProducerState(int queues)
-    {
-        public List<ProductionTask>[] Queues = Enumerable.Range(0, queues).Select(_ => new List<ProductionTask>()).ToArray();
-        public bool HasRally; public WorldPosition Rally;
-    }
-    private readonly SortedDictionary<EntityId, ProducerState> _producers = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
-    private EntityId[] _producerOrder = []; private bool _producersDirty;
     private int[][] _productTypes = []; private BuildDefinition[][] _builds = [];
     private long _nextTaskId = 1;
     private void InitializeProduction()
@@ -33,14 +22,12 @@ public sealed partial class SimulationWorld
             }
         }
     }
-    private void RegisterProducer(EntityId id, int type)
-    { if (_types[type].TaskQueues.Count > 0) { _producers.Add(id, new(_types[type].TaskQueues.Count)); _producersDirty = true; } }
     private int ProductIndex(int type, string? id) { for (int p = 0; p < _types[type].Products.Count; p++) if (_types[type].Products[p].Id == id) return p; return -1; }
     private int QueueIndex(int type, string id) { for (int q = 0; q < _types[type].TaskQueues.Count; q++) if (_types[type].TaskQueues[q].Id == id) return q; return -1; }
     private void SetRally(int index, WorldPosition point)
     {
         ref var actor = ref _entities[index];
-        if (!_producers.TryGetValue(actor.Id, out var producer)) { RejectAction(actor.Id); return; }
+        if (!TryGetProducer(index, out var producer)) { RejectAction(actor.Id); return; }
         producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actor.Id, point));
     }
     private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
@@ -56,13 +43,13 @@ public sealed partial class SimulationWorld
                 foreach (int i in recipients)
                 {
                     ref var e = ref _entities[i]; int p = ProductIndex(e.UnitType, command.Action);
-                    if (p < 0 || e.Owner == 0 || !_producers.TryGetValue(e.Id, out var state)) continue;
+                    if (p < 0 || e.Owner == 0 || !TryGetProducer(i, out var state)) continue;
                     int q = QueueIndex(e.UnitType, _types[e.UnitType].Products[p].Queue), size = state.Queues[q].Count;
                     if (size >= _types[e.UnitType].TaskQueues[q].Capacity || size >= length) continue;
                     chosen = i; product = p; queue = q; length = size;
                 }
                 if (chosen < 0) { RejectAction(); break; }
-                var actor = _entities[chosen]; _producers[actor.Id].Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat));
+                var actor = _entities[chosen]; Producer(actor.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat));
                 _events.Add(new(Tick, WorldEventKind.TaskAdded, actor.Id, UnitType: _productTypes[actor.UnitType][product]));
             }
             return;
@@ -73,19 +60,19 @@ public sealed partial class SimulationWorld
             var matching = new List<(long Id, EntityId Producer, int Queue, ProductionTask Task)>();
             foreach (int i in recipients)
             {
-                var e = _entities[i]; if (!_producers.TryGetValue(e.Id, out var state)) continue;
+                var e = _entities[i]; if (!TryGetProducer(i, out var state)) continue;
                 for (int q = 0; q < state.Queues.Length; q++)
                     if (command.Queue is null || _types[e.UnitType].TaskQueues[q].Id == command.Queue)
                         foreach (var task in state.Queues[q])
                             if (_types[e.UnitType].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, e.Id, q, task));
             }
             foreach (var item in matching.OrderByDescending(x => x.Id).Take(command.Amount))
-            { _producers[item.Producer].Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
+            { Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
             return;
         }
         foreach (int i in recipients)
         {
-            var e = _entities[i]; if (!_producers.TryGetValue(e.Id, out var state)) continue;
+            var e = _entities[i]; if (!TryGetProducer(i, out var state)) continue;
             for (int q = 0; q < state.Queues.Length; q++)
             {
                 var tasks = state.Queues[q]; if (tasks.Count == 0) continue; var task = tasks[0];
@@ -101,19 +88,20 @@ public sealed partial class SimulationWorld
     }
     private void FinishTask(EntityId producer, int queue, ProductionTask task, EntityId created)
     {
-        var tasks = _producers[producer].Queues[queue]; tasks.RemoveAt(0);
+        var tasks = Producer(producer).Queues[queue]; tasks.RemoveAt(0);
         if (task.Repeat) tasks.Add(new(checked(_nextTaskId++), task.Product, true));
         _events.Add(new(Tick, WorldEventKind.Produced, producer, TargetEntity: created));
     }
     private void UpdateProduction()
     {
-        if (_producers.Count == 0) return;
-        if (_producersDirty) { _producerOrder = _producers.Keys.ToArray(); _producersDirty = false; }
+        // The ECS query is closed before processing: every spawn must be visible to the next producer.
+        var order = ProducerOrder();
+        if (order.Length == 0) return;
         bool rebuilt = false; int completed = 0;
-        foreach (var id in _producerOrder)
+        foreach (var id in order)
         {
             _stepCancellation.ThrowIfCancellationRequested();
-            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _entities[i]; var producer = _producers[id]; var type = _types[actor.UnitType];
+            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _entities[i]; var producer = actor.StorageEntity.Get<ProducerState>(); var type = _types[actor.UnitType];
             for (int q = 0; q < producer.Queues.Length; q++)
             {
                 var tasks = producer.Queues[q]; if (tasks.Count == 0) continue;
@@ -152,22 +140,35 @@ public sealed partial class SimulationWorld
         }
         return found;
     }
-    public int TaskCount => _producers.Values.Sum(p => p.Queues.Sum(q => q.Count));
+    public int TaskCount
+    {
+        get
+        {
+            ThrowIfDisposed();
+            int count = 0;
+            foreach (var id in ProducerOrder()) foreach (var tasks in Producer(id).Queues) count += tasks.Count;
+            return count;
+        }
+    }
     public void CopyTaskPoses(Span<TaskPose> destination)
     {
+        ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < TaskCount) throw new ArgumentException("Destination is too small."); int at = 0;
-        foreach (var (id, state) in _producers)
+        foreach (var id in ProducerOrder())
         {
+            var state = Producer(id);
             int t = _entities[_indices[id]].UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
             { var build = _builds[t][task.Product]; destination[at++] = new(id, q, task.Id, task.Product, _productTypes[t][task.Product], task.Progress, build.Ticks, build.Cost, task.Repeat, task.Ready); }
         }
     }
     private void WriteProduction(BinaryWriter w)
     {
-        w.Write(_nextTaskId); w.Write(_producers.Count);
-        foreach (var (id, state) in _producers)
+        var order = ProducerOrder();
+        w.Write(_nextTaskId); w.Write(order.Length);
+        foreach (var id in order)
         {
+            var state = Producer(id);
             w.Write(id.Value); w.Write(state.HasRally); w.Write(state.Rally.X); w.Write(state.Rally.Y); w.Write(state.Rally.Elevation); w.Write(state.Queues.Length);
             foreach (var tasks in state.Queues) { w.Write(tasks.Count); foreach (var t in tasks) { w.Write(t.Id); w.Write(t.Product); w.Write(t.Progress); w.Write(t.Repeat); w.Write(t.Ready); w.Write(t.Blocked); } }
         }

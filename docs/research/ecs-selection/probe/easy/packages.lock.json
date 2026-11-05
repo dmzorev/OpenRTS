@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "EasyEcs": {
+        "type": "Direct",
+        "requested": "[4.7.0, 4.7.0]",
+        "resolved": "4.7.0",
+        "contentHash": "P2UVwNNHi5WOar6WsY/mie5OZFn8+Cf6GGY3+iIpkSyVyz0Tu8VCVxI/tOXL+OKMeTp9kmmYngPbRt45aUB82A==",
+        "dependencies": {
+          "Nino": "4.0.0-rc.6"
+        }
+      },
+      "Nino": {
+        "type": "Transitive",
+        "resolved": "4.0.0-rc.6",
+        "contentHash": "ikvlcds74hLJuXXSa3Duv2UeHRfZNywSC3nQfniCtea+jT4Jrv0BvpnBKRyHUDGMemG79ufQXgPzmUw1mQHGkw==",
+        "dependencies": {
+          "Nino.Generator": "4.0.0-rc.6",
+          "Nino.Serialization": "4.0.0-rc.6"
+        }
+      },
+      "Nino.Generator": {
+        "type": "Transitive",
+        "resolved": "4.0.0-rc.6",
+        "contentHash": "esiHpGVd8RedxcaEiUKwUQNu1YM/cBGzMOnukGrSkxJE1CGXb3M4LqXArKtvcENctx5yTWJRpK3kzSewPgpQAQ=="
+      },
+      "Nino.Serialization": {
+        "type": "Transitive",
+        "resolved": "4.0.0-rc.6",
+        "contentHash": "3XI32qUf/zoEmobK7qvmbHrSLehdM0jelRcxmqvHaup5coUqn0ErjcnrkBZgW9zELbf25vRyhhV5WRZARAbBNw=="
+      }
+    }
+  }
+}

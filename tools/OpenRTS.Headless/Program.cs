@@ -7,11 +7,12 @@ using OpenRTS.Core;
 try
 {
     var path = "sandbox/content/units.yaml";
-    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false;
+    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--size-benchmark") sizeBenchmark = true;
+        if (argument == "--ecs-benchmark") ecsBenchmark = true;
+        else if (argument == "--size-benchmark") sizeBenchmark = true;
         else if (argument == "--simulate") simulate = true;
         else if (argument == "--benchmark") { simulate = true; benchmark = true; }
         else if (argument == "--production") { simulate = true; buildings = true; production = true; }
@@ -23,8 +24,9 @@ try
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) ticks = value;
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
+    if (ecsBenchmark) { EcsBenchmark.Run(count, ticks); return 0; }
     if (sizeBenchmark) { SizeBenchmark.Run(count, ticks, workers, reverseJobs); return 0; }
     if (buildings && (showcase || navigation || benchmark)) throw new ArgumentException("Buildings is a separate fixture.");
     if (showcase && (navigation || benchmark)) throw new ArgumentException("Showcase is a presentation fixture; use navigation/benchmark separately.");
@@ -38,7 +40,7 @@ try
     if (simulate)
     {
         SimulationWorld Create() => buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
-        var world = Create();
+        using var world = Create();
         var commands = production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
@@ -46,7 +48,7 @@ try
         if (benchmark)
         {
             // Warm JIT on a separate world; measured ticks exclude initialization, snapshots and state hashing.
-            var warmup = Create();
+            using var warmup = Create();
             DiagnosticScenario.Run(warmup, 64, commands);
             var samples = new double[ticks];
             long allocated = GC.GetAllocatedBytesForCurrentThread();

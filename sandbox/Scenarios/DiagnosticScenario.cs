@@ -20,10 +20,14 @@ public static class DiagnosticScenario
         int columns = (int)Math.Ceiling(Math.Sqrt(count));
         var world = new SimulationWorld(catalog.Units, 4096 * WorldPosition.UnitsPerCell,
             4096 * WorldPosition.UnitsPerCell, initialCapacity: count, seed: 12345);
-        for (int i = 0; i < count; i++)
-            world.AddInitialUnit(movableTypes[i % movableTypes.Length], new((i % columns + 4) * WorldPosition.UnitsPerCell,
-                (i / columns + 4) * WorldPosition.UnitsPerCell));
-        return world;
+        try
+        {
+            for (int i = 0; i < count; i++)
+                world.AddInitialUnit(movableTypes[i % movableTypes.Length], new((i % columns + 4) * WorldPosition.UnitsPerCell,
+                    (i / columns + 4) * WorldPosition.UnitsPerCell));
+            return world;
+        }
+        catch { world.Dispose(); throw; }
     }
 
     public static WorldCommand[] Commands(int count, long ticks)

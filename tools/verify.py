@@ -34,6 +34,14 @@ def main():
             raise RuntimeError("Vendored source differs from recorded import: " + source["path"])
     print("PASS DeclarativeContent import and documented local changes match SHA-256", flush=True)
 
+    frent = json.loads((ROOT / "docs/vendor/frent.json").read_text())
+    if hashlib.sha256((ROOT / frent["license_file"]).read_bytes()).hexdigest() != frent["license_file_sha256"]:
+        raise RuntimeError("Frent license differs from the verified package notice")
+    dependency = json.loads((ROOT / "src/OpenRTS.Core/packages.lock.json").read_text())["dependencies"]["net10.0"]["Frent"]
+    if dependency["resolved"] != frent["version"] or dependency["contentHash"] != frent["content_hash_sha512_base64"]:
+        raise RuntimeError("Frent dependency differs from the verified package provenance")
+    print("PASS pinned Frent MIT license notice matches the verified package", flush=True)
+
     art = json.loads((ROOT / "docs/assets/weapon-stage-art.json").read_text())
     for item in art["assets"]:
         for path_key, hash_key in (("source", "source_sha256"), ("asset", "sha256")):

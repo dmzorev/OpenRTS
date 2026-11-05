@@ -26,10 +26,14 @@ public static class NavigationScenario
         var world = new SimulationWorld(catalog.Units, grid.Width * 1024, grid.Height * 1024, seed: 12345,
             initialCapacity: count, navigationGrid: grid, navigationWorkers: workers, fieldsPerTick: 4,
             reverseNavigationJobs: reverseJobs);
-        int columns = (int)Math.Ceiling(Math.Sqrt(count));
-        for (int i = 0; i < count; i++)
-            world.AddInitialUnit(movableTypes[i % movableTypes.Length], grid.Center(grid.Index(new(i % columns + 4, i / columns + 4))));
-        return world;
+        try
+        {
+            int columns = (int)Math.Ceiling(Math.Sqrt(count));
+            for (int i = 0; i < count; i++)
+                world.AddInitialUnit(movableTypes[i % movableTypes.Length], grid.Center(grid.Index(new(i % columns + 4, i / columns + 4))));
+            return world;
+        }
+        catch { world.Dispose(); throw; }
     }
 
     public static WorldCommand[] Commands(int count, long ticks)

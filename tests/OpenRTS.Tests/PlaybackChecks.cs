@@ -40,7 +40,7 @@ internal static class PlaybackChecks
             session.SetPlayback(0.125, true); session.StepOnce(); AwaitTick(session, 3);
             session.SetPlayback(4, false);
             var result = session.Completion.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
-            var direct = Create();
+            using var direct = Create();
             for (int tick = 1; tick <= 24; tick++) direct.Step(tick == 1 ? commands : []);
             Check(result == direct.Report(), "Playback controls changed authoritative simulation");
             Check(session.GetCommandLog().SequenceEqual(commands), "Playback controls entered the game journal");

@@ -98,7 +98,7 @@ internal static class NavigationChecks
         test("A unit crosses a narrow opening without entering a wall", () =>
         {
             var grid = new NavigationGrid(7, 5, Enumerable.Range(0, 5).Where(y => y != 2).Select(y => new GridCell(3, y)));
-            var world = World(grid, [new(0, 0)], speed: 256);
+            using var world = World(grid, [new(0, 0)], speed: 256);
             var target = grid.Center(grid.Index(new(6, 4)));
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: target)]);
             for (int i = 0; i < 80; i++) { Separated(world); world.Step(); }
@@ -108,7 +108,7 @@ internal static class NavigationChecks
         {
             var grid = new NavigationGrid(7, 5, Enumerable.Range(0, 5).Where(y => y != 2).Select(y => new GridCell(3, y)));
             var starts = Enumerable.Range(0, 5).Select(y => new GridCell(0, y)).ToArray();
-            var a = World(grid, starts, 1, 256); var b = World(grid, starts, 4, 256, true);
+            using var a = World(grid, starts, 1, 256); using var b = World(grid, starts, 4, 256, true);
             var commands = Enumerable.Range(0, 5).Select(i => new WorldCommand(1, 0, i + 1, CommandKind.Move,
                 new((uint)i + 1), grid.Center(grid.Index(new(6, i))))).ToArray();
             a.Step(commands); b.Step(commands);
@@ -125,7 +125,7 @@ internal static class NavigationChecks
         test("Unreachable goals project to shore and opening terrain permits a new order", () =>
         {
             var grid = new NavigationGrid(3, 3, Enumerable.Range(0, 3).Select(y => new GridCell(1, y)));
-            var world = World(grid, [new(0, 1)]); var goal = grid.Center(grid.Index(new(2, 1)));
+            using var world = World(grid, [new(0, 1)]); var goal = grid.Center(grid.Index(new(2, 1)));
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: goal)]);
             Check(world.Events.Length == 1 && world.Events[0].Kind == WorldEventKind.DestinationAdjusted && Poses(world)[0].Order.Destination.X < 1024, "Missing reachable-shore correction");
             world.Step([new(2, 0, 1, CommandKind.UnblockCell, Position: grid.Center(grid.Index(new(1, 1))))]);
@@ -135,20 +135,20 @@ internal static class NavigationChecks
         });
         test("Units cannot occupy the same point or cross through one another", () =>
         {
-            var grid = new NavigationGrid(3, 3); var world = World(grid, [new(0, 1), new(2, 1)]);
+            var grid = new NavigationGrid(3, 3); using var world = World(grid, [new(0, 1), new(2, 1)]);
             world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: grid.Center(grid.Index(new(1, 1))))]);
             Separated(world);
             Check(world.MovingCount == 1, "Exactly one unit should occupy the common goal");
             for (int i = 0; i < 8; i++) { world.Step(); Separated(world); }
             Check(world.NavigationWaitingCount == 1, "Occupied goal must cause waiting");
-            var headOn = World(grid, [new(0, 1), new(1, 1)]);
+            using var headOn = World(grid, [new(0, 1), new(1, 1)]);
             var before = Poses(headOn);
             headOn.Step([new(1, 0, 1, CommandKind.Move, new(1), before[1].Current), new(1, 0, 2, CommandKind.Move, new(2), before[0].Current)]);
             Check(Poses(headOn).Select(p => p.Current).SequenceEqual(before.Select(p => p.Current)), "Head-on cell swap was allowed");
         });
         test("Perpendicular movement through nearby samples stays safe throughout interpolation", () =>
         {
-            var grid = new NavigationGrid(3, 3); var world = World(grid, [new(0, 1), new(0, 0)]);
+            var grid = new NavigationGrid(3, 3); using var world = World(grid, [new(0, 1), new(0, 0)]);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(0)),
                 new(1, 0, 2, CommandKind.Move, new(2), grid.Center(1))]);
             Separated(world);
@@ -157,7 +157,7 @@ internal static class NavigationChecks
         });
         test("Mid-segment retargeting is immediate and terrain cannot overlap the current body", () =>
         {
-            var grid = new NavigationGrid(5, 2); var world = World(grid, [new(0, 0), new(2, 0)], speed: 128);
+            var grid = new NavigationGrid(5, 2); using var world = World(grid, [new(0, 0), new(2, 0)], speed: 128);
             var origin = grid.Center(0);
             world.Step([new(1, 0, 1, CommandKind.Move, new(1), grid.Center(4))]);
             world.Step([new(2, 0, 1, CommandKind.Move, new(1), origin),
@@ -170,7 +170,7 @@ internal static class NavigationChecks
         });
         test("Blocked and occupied spawns are rejected; destroy releases reservations", () =>
         {
-            var grid = new NavigationGrid(4, 2, [new(3, 1)]); var world = World(grid, [new(0, 0)]);
+            var grid = new NavigationGrid(4, 2, [new(3, 1)]); using var world = World(grid, [new(0, 0)]);
             world.Step([new(1, 0, 1, CommandKind.Spawn, Position: grid.Center(0)),
                 new(1, 0, 2, CommandKind.Spawn, Position: grid.Center(grid.Index(new(3, 1))))]);
             Check(world.Count == 1 && world.Events[0].Kind == WorldEventKind.CellOccupied && world.Events[1].Kind == WorldEventKind.CellBlocked, "Invalid spawn accepted");
@@ -180,8 +180,8 @@ internal static class NavigationChecks
         test("Cache readiness and map changes are authoritative, worker count is not", () =>
         {
             var grid = new NavigationGrid(8, 5);
-            var a = World(grid, [new(0, 1)], 1); var b = World(grid, [new(0, 1)], 4, reverse: true);
-            var differentBudget = World(grid, [new(0, 1)], budget: 1);
+            using var a = World(grid, [new(0, 1)], 1); using var b = World(grid, [new(0, 1)], 4, reverse: true);
+            using var differentBudget = World(grid, [new(0, 1)], budget: 1);
             Check(a.Report() == b.Report() && a.Report() != differentBudget.Report(), "Execution settings leaked into hash or work budget was omitted");
             for (int tick = 1; tick <= 20; tick++)
             {
@@ -193,7 +193,7 @@ internal static class NavigationChecks
         test("Navigation remains canonical after packed removals", () =>
         {
             var grid = new NavigationGrid(8, 5); GridCell[] starts = [new(0, 1), new(1, 1), new(2, 1), new(3, 1)];
-            var a = World(grid, starts); var b = World(grid, starts, 4);
+            using var a = World(grid, starts); using var b = World(grid, starts, 4);
             a.Step([new(1, 0, 1, CommandKind.Destroy, new(1)), new(1, 0, 2, CommandKind.Destroy, new(2))]);
             b.Step([new(1, 0, 1, CommandKind.Destroy, new(2)), new(1, 0, 2, CommandKind.Destroy, new(1))]);
             Check(a.Report() == b.Report(), "Equivalent navigation states differ");
@@ -216,14 +216,14 @@ internal static class NavigationChecks
         });
         test("Pre-cancelled navigation does not advance a world", () =>
         {
-            var world = World(new NavigationGrid(8, 8), [new(1, 1)]); var before = world.Report();
+            using var world = World(new NavigationGrid(8, 8), [new(1, 1)]); var before = world.Report();
             using var stop = new CancellationTokenSource(); stop.Cancel();
             Reject<OperationCanceledException>(() => world.Step(cancellationToken: stop.Token));
             Check(world.Report() == before, "Pre-cancelled step changed state");
         });
         test("Immutable terrain snapshots survive edits and parallel sessions stop promptly", () =>
         {
-            var grid = new NavigationGrid(8, 8); var world = World(grid, [new(0, 0)]); var exchange = new FrameExchange();
+            var grid = new NavigationGrid(8, 8); using var world = World(grid, [new(0, 0)]); var exchange = new FrameExchange();
             exchange.TryPublish(world);
             using var old = exchange.AcquireLatest()!;
             world.Step([new(1, 0, 1, CommandKind.BlockCell, Position: grid.Center(10))]); exchange.TryPublish(world);
@@ -248,9 +248,9 @@ internal static class NavigationChecks
         test("10000-unit navigation matches 1/2/4 workers and reverse execution", () =>
         {
             var catalog = UnitCatalog.Load([new("test", "unit: {Health: {HP: 100}}")]);
-            var a = NavigationScenario.Create(catalog, 10000, 1);
-            var b = NavigationScenario.Create(catalog, 10000, 2);
-            var c = NavigationScenario.Create(catalog, 10000, 4, true);
+            using var a = NavigationScenario.Create(catalog, 10000, 1);
+            using var b = NavigationScenario.Create(catalog, 10000, 2);
+            using var c = NavigationScenario.Create(catalog, 10000, 4, true);
             var commands = NavigationScenario.Commands(10000, 64);
             for (int tick = 1; tick <= 64; tick++)
             {

@@ -1,0 +1,11 @@
+config_version=5
+
+[application]
+config/name="OpenRTS ECS compatibility probe"
+run/main_scene="res://Smoke.tscn"
+
+[dotnet]
+project/assembly_name="GodotProbe"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
