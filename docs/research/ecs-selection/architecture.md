@@ -1,6 +1,6 @@
 # Архитектура OpenRTS поверх Frent
 
-Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, горячие данные ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
+Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health уже в struct-компонентах ECS, оставшиеся горячие поля ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
 
 ## Entity и Actor
 
@@ -105,3 +105,6 @@ Core и игровые systems могут использовать нативн�
 Сохраняем каноническую схему игрового состояния по стабильным domain IDs. В hash не входят archetype order, component type numbers, recycled slots, делегаты и внутренние caches Frent. RNG, активные приказы, cooldown, задачи, остатки движения, cache cursors/бюджеты, влияющие на будущий результат, остаются authoritative независимо от места хранения.
 
 На этапе parity сначала требуем прежний hash при прежних правилах. Если разбиение требует новой схемы, добавляем нормализованное сравнение полей со старой реализацией; новый номер формата вводим явно и не обновляем golden hashes без объяснения. Полный save/restore всё ещё отдельный будущий этап: ECS snapshot или копия ссылок не заменяет его.
+
+
+Реализация E4a: [Spatial/Health](../../decisions/016-spatial-health-components.md). Переходный EntityState теперь не хранит их значения; readonly getters читают живую ECS entity. Копия EntityState не является snapshot spatial/health. После Native Delete использовать её getters нельзя; нужные value-данные копируются до удаления.

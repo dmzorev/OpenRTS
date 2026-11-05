@@ -66,3 +66,6 @@ FrameExchange публикует независимые массивы EntityPos
 
 
 **E3 реализован:** [составные определения и действия](decisions/015-composed-definitions-and-actions.md), [проверки и замеры](verification/016-composed-definitions.md). EntityDefinition — optional typed recipe; UnitDefinition — совместимый пространственный view. Unit storage хранит общий immutable рецепт отдельным class-component, состояние экземпляров отдельно. Actions.Definitions не зависит от ActionPanel.Buttons; legacy Actions.Buttons поддерживается. UnitCatalog пока остаётся unit frontend; сам рецепт не требует Health/Spatial/Presentation. Следующий этап E4 переносит горячие состояния, без обязательного общего ECS store для всех доменов.
+
+
+**E4a реализован:** [SpatialState/HealthState](decisions/016-spatial-health-components.md), [проверки и стоимость](verification/017-spatial-health-ecs.md). Mutable поля Position/Previous/Health удалены из EntityState[]. Записи выполняются в ECS; временные legacy getters только читают живые компоненты. Previous копируется batch query после команд; события смерти получают позицию до удаления entity. Orders/Motion/NavigationAgent/Combat/Presentation и packed mapping ещё переносятся.

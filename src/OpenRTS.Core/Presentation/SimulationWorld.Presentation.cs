@@ -1,3 +1,5 @@
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -34,7 +36,8 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i]; var type = _types[entity.UnitType];
-            int dx = entity.Position.X - entity.Previous.X, dy = entity.Position.Y - entity.Previous.Y;
+            ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
+            int dx = spatial.Position.X - spatial.Previous.X, dy = spatial.Position.Y - spatial.Previous.Y;
             if (dx != 0 || dy != 0) entity.BodyFacing = new(dx, dy);
             if (entity.BodyAnimationOverride && !entity.BodyAnimation.IsActive(Tick)) entity.BodyAnimationOverride = false;
             if (!entity.BodyAnimationOverride)
@@ -56,7 +59,7 @@ public sealed partial class SimulationWorld
             }
             if (entity.HasAim || entity.Moving)
             {
-                dx = aim.X - entity.Position.X; dy = aim.Y - entity.Position.Y;
+                dx = aim.X - spatial.Position.X; dy = aim.Y - spatial.Position.Y;
                 if (dx != 0 || dy != 0) entity.WeaponFacing = new(dx, dy);
             }
             else entity.WeaponFacing = entity.BodyFacing;

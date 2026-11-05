@@ -47,11 +47,12 @@ public sealed partial class SimulationWorld
     private WorldPosition TerrainStep(int index, WorldPosition target)
     {
         ref var entity = ref _entities[index];
-        if (_weighted is null) return StepTowards(entity.Position, target);
-        int factor = _types[entity.UnitType].Locomotor.At(_navigation!.Grid, _navigation.Grid.CellAt(entity.Position)).Speed;
+        var position = entity.Position;
+        if (_weighted is null) return StepTowards(position, target);
+        int factor = _types[entity.UnitType].Locomotor.At(_navigation!.Grid, _navigation.Grid.CellAt(position)).Speed;
         int budget = SpeedPerTick * factor + entity.MovementRemainder;
         entity.MovementRemainder = budget % 1024;
-        var result = budget < 1024 ? entity.Position : StepTowards(entity.Position, target, budget / 1024);
+        var result = budget < 1024 ? position : StepTowards(position, target, budget / 1024);
         return _navigation.Grid.HasSurface ? result with { Elevation = _navigation.Grid.SurfaceAt(_navigation.Grid.CellAt(result)).Elevation } : result;
     }
 

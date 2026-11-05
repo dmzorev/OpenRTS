@@ -1,3 +1,5 @@
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -150,12 +152,12 @@ public sealed partial class SimulationWorld
         foreach (var id in _affected)
         {
             if (!_indices.TryGetValue(id, out int i)) continue;
-            ref var entity = ref _entities[i]; int before = entity.Health;
-            _damage.TryGetValue(id, out long damage); entity.Health = (int)Math.Max(0, entity.Health - damage);
-            if (before != entity.Health) _events.Add(new(Tick, WorldEventKind.Damaged, id, entity.Position, entity.UnitType, Amount: before - entity.Health));
-            if (entity.Health == 0) { _dead.Add(id); continue; }
-            before = entity.Health; _healing.TryGetValue(id, out long healing); entity.Health = (int)Math.Min(_types[entity.UnitType].MaxHealth, entity.Health + healing);
-            if (before != entity.Health) _events.Add(new(Tick, WorldEventKind.Repaired, id, entity.Position, entity.UnitType, Amount: entity.Health - before));
+            ref var entity = ref _entities[i]; ref var health = ref entity.StorageEntity.Get<HealthState>(); int before = health.Current;
+            _damage.TryGetValue(id, out long damage); health.Current = (int)Math.Max(0, health.Current - damage);
+            if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Damaged, id, entity.Position, entity.UnitType, Amount: before - health.Current));
+            if (health.Current == 0) { _dead.Add(id); continue; }
+            before = health.Current; _healing.TryGetValue(id, out long healing); health.Current = (int)Math.Min(_types[entity.UnitType].MaxHealth, health.Current + healing);
+            if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Repaired, id, entity.Position, entity.UnitType, Amount: health.Current - before));
         }
         foreach (var id in _dead) DestroyIndex(_indices[id]);
         if (_dead.Count > 0) RebuildMotionIndex();

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -115,10 +117,11 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++) if (_cohort[i])
         {
             ref var entity = ref _entities[i];
-            entity.Position = StepTowards(entity.Position, entity.Target);
+            ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
+            spatial.Position = StepTowards(spatial.Position, entity.Target);
             entity.LastProgressTick = Tick;
-            entity.Moving = entity.Position != entity.Target; entity.WaitTicks = 0;
-            _motion!.SetEnd(i, entity.Position); _handled[i] = true;
+            entity.Moving = spatial.Position != entity.Target; entity.WaitTicks = 0;
+            _motion!.SetEnd(i, spatial.Position); _handled[i] = true;
         }
     }
 

@@ -1,3 +1,5 @@
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -186,8 +188,9 @@ public sealed partial class SimulationWorld
     private void MoveTo(int index, WorldPosition next)
     {
         ref var entity = ref _entities[index];
-        entity.Position = next; entity.LastProgressTick = Tick; _motion!.SetEnd(index, next);
-        if (entity.YieldFor.Value == 0 && entity.Position == entity.Target) { entity.Moving = false; entity.WaitTicks = 0; }
+        ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
+        spatial.Position = next; entity.LastProgressTick = Tick; _motion!.SetEnd(index, next);
+        if (entity.YieldFor.Value == 0 && spatial.Position == entity.Target) { entity.Moving = false; entity.WaitTicks = 0; }
     }
 
     private bool IsFollowing(int requesterIndex, int blockerIndex)

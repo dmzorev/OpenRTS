@@ -1,3 +1,5 @@
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -9,7 +11,8 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i]; var type = _types[entity.UnitType];
-            motion.Add(i, entity.Id, entity.Position, entity.Owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+            var position = entity.StorageEntity.Get<SpatialState>().Position;
+            motion.Add(i, entity.Id, position, entity.Owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         }
     }
     private void EnsureMovementOrder()

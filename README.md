@@ -10,6 +10,8 @@
 - [Первый ECS-перенос: lifecycle, производство и проверки](docs/verification/015-ecs-production.md)
 - [Составные definitions и независимые UI Actions](docs/decisions/015-composed-definitions-and-actions.md)
 - [Проверки и стоимость E3](docs/verification/016-composed-definitions.md)
+- [Spatial/Health в ECS: первый срез E4](docs/decisions/016-spatial-health-components.md)
+- [Проверки и стоимость E4a](docs/verification/017-spatial-health-ecs.md)
 - [Actor и traits: исходное исследование связности](docs/research/actor-composition/README.md)
 - [Референсы для исследования систем](docs/references.md)
 - [Решения первого каркаса](docs/decisions/001-foundation.md)
@@ -45,7 +47,7 @@ OpenRTS создаётся независимо от OpenRA. Совместим�
 
 Из Hyperfleets перенесена самостоятельная MIT библиотека DeclarativeContent с тестами и уведомлением о лицензии. [Происхождение и SHA-256](docs/vendor/declarative-content.json) фиксируют точную версию импорта. Проект не требует наличия Hyperfleets для сборки.
 
-Core использует закреплённый MIT пакет Frent0.9.1-beta: identity/lifecycle юнитов и состояние производства уже в ECS, остальные горячие данные переносятся постепенно. EntityDefinition объединяет необязательные immutable capabilities, UnitDefinition сохраняет прежний пространственный API. YAML Actions.Definitions объявляет механику отдельно от ActionPanel.Buttons. Frent.World рассматривается как хранилище; разные домены игры могут использовать разные stores или обычные структуры. Прямой потребитель создаёт SimulationWorld через `using`; SimulationSession освобождает принадлежащий ей мир сама. [Лицензия зависимости](docs/vendor/frent-license.txt).
+Core использует закреплённый MIT пакет Frent0.9.1-beta: identity/lifecycle, производство, текущие/предыдущие координаты и HP уже в ECS; остальные горячие данные переносятся постепенно. EntityDefinition объединяет необязательные immutable capabilities, UnitDefinition сохраняет прежний пространственный API. YAML Actions.Definitions объявляет механику отдельно от ActionPanel.Buttons. Frent.World рассматривается как хранилище; разные домены игры могут использовать разные stores или обычные структуры. Прямой потребитель создаёт SimulationWorld через `using`; SimulationSession освобождает принадлежащий ей мир сама. [Лицензия зависимости](docs/vendor/frent-license.txt).
 
 Godot служит для ввода, сцены, интерфейса и звука. Headless и Godot используют одни определения и ту же симуляцию. Выделенный поток владеет миром; представление читает закреплённые кадры и интерполирует позиции. События передаются отдельно. Поля маршрутов строятся через ограниченный Parallel.For; результат пакета применяется после общего барьера.
 

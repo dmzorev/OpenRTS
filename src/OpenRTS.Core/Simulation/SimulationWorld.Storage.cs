@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Frent;
 using OpenRTS.Core.Production;
+using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
 
@@ -34,6 +35,13 @@ public sealed partial class SimulationWorld
         _producerOrder = ids.ToArray();
         _producersDirty = false;
         return _producerOrder;
+    }
+
+    private void CapturePreviousPositions()
+    {
+        if (_unitStorage is null) return;
+        foreach (ref var spatial in _unitStorage.Query<SpatialState>())
+            spatial.Previous = spatial.Position;
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
