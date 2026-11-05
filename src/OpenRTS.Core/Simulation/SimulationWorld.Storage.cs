@@ -44,6 +44,33 @@ public sealed partial class SimulationWorld
             spatial.Previous = spatial.Position;
     }
 
+    private int CountMoving()
+    {
+        int count = 0;
+        if (_unitStorage is not null)
+            foreach (ref var motion in _unitStorage.Query<MotionState>()) if (motion.Moving) count++;
+        return count;
+    }
+
+    private void UpdateDirectMovement()
+    {
+        if (_unitStorage is null) return;
+        foreach (var (spatial, motion, definition) in _unitStorage.Query<SpatialState, MotionState, EntityDefinition>())
+        {
+            ref var state = ref motion.Value;
+            if (!state.Moving) continue;
+            int factor = definition.Value.Spatial!.Locomotor.Rules[0].Speed;
+            if (factor == 1024) spatial.Value.Position = StepTowards(spatial.Value.Position, state.Target);
+            else
+            {
+                int budget = SpeedPerTick * factor + state.MovementRemainder;
+                state.MovementRemainder = budget % 1024;
+                if (budget >= 1024) spatial.Value.Position = StepTowards(spatial.Value.Position, state.Target, budget / 1024);
+            }
+            state.Moving = spatial.Value.Position != state.Target;
+        }
+    }
+
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
     /// <summary>Release storage on the world owner after all jobs have joined. Published frames remain valid.</summary>

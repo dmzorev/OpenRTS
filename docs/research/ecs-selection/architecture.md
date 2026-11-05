@@ -1,6 +1,6 @@
 # Архитектура OpenRTS поверх Frent
 
-Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health уже в struct-компонентах ECS, оставшиеся горячие поля ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
+Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health и Orders/Motion/NavigationAgent уже в struct-компонентах ECS; Combat/Presentation ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
 
 ## Entity и Actor
 
@@ -108,3 +108,6 @@ Core и игровые systems могут использовать нативн�
 
 
 Реализация E4a: [Spatial/Health](../../decisions/016-spatial-health-components.md). Переходный EntityState теперь не хранит их значения; readonly getters читают живую ECS entity. Копия EntityState не является snapshot spatial/health. После Native Delete использовать её getters нельзя; нужные value-данные копируются до удаления.
+
+
+Реализация E4b: [приказы, движение, навигационный агент](../../decisions/017-orders-motion-navigation-components.md). OrderState владеет FIFO, NavigationAgentState — локальным массивом пути. EntityState временно предоставляет ref-return доступ к этим компонентам; второй mutable копии нет. Direct movement обрабатывается закрытой query независимо по строкам. Group routes остаются per-ID вспомогательной структурой, MotionIndex — derived packed индексом до следующего переноса. Стоимость переходного доступа и памяти: [измерения E4b](../../verification/018-orders-motion-navigation-ecs.md).

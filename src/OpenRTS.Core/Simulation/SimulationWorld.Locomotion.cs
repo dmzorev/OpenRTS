@@ -47,11 +47,12 @@ public sealed partial class SimulationWorld
     private WorldPosition TerrainStep(int index, WorldPosition target)
     {
         ref var entity = ref _entities[index];
+        ref var entityMotion = ref entity.Motion;
         var position = entity.Position;
         if (_weighted is null) return StepTowards(position, target);
         int factor = _types[entity.UnitType].Locomotor.At(_navigation!.Grid, _navigation.Grid.CellAt(position)).Speed;
-        int budget = SpeedPerTick * factor + entity.MovementRemainder;
-        entity.MovementRemainder = budget % 1024;
+        int budget = SpeedPerTick * factor + entityMotion.MovementRemainder;
+        entityMotion.MovementRemainder = budget % 1024;
         var result = budget < 1024 ? position : StepTowards(position, target, budget / 1024);
         return _navigation.Grid.HasSurface ? result with { Elevation = _navigation.Grid.SurfaceAt(_navigation.Grid.CellAt(result)).Elevation } : result;
     }
@@ -66,21 +67,23 @@ public sealed partial class SimulationWorld
         {
             token.ThrowIfCancellationRequested();
             int i = _movementOrder[order]; ref var entity = ref _entities[i];
-            if (!entity.Moving || entity.YieldFor.Value != 0 || _groupRoutes.TryGetValue(entity.Id, out var old) && old.Revision == grid.Revision) continue;
+            ref var entityMotion = ref entity.Motion;
+            ref var entityNavigation = ref entity.Navigation;
+            if (!entityMotion.Moving || entityNavigation.YieldFor.Value != 0 || _groupRoutes.TryGetValue(entity.Id, out var old) && old.Revision == grid.Revision) continue;
             int profile = _profileIndices[entity.UnitType]; var resolver = navigation.Resolver(profile);
-            if (!StopAllowed(entity.UnitType, entity.Target)) { RejectRoute(ref entity); continue; }
+            if (!StopAllowed(entity.UnitType, entityMotion.Target)) { RejectRoute(ref entity); continue; }
             var locomotor = _types[entity.UnitType].Locomotor;
-            long dx = (long)entity.Target.X - entity.Position.X, dy = (long)entity.Target.Y - entity.Position.Y;
+            long dx = (long)entityMotion.Target.X - entity.Position.X, dy = (long)entityMotion.Target.Y - entity.Position.Y;
             long length = (long)SquareRoot((ulong)(dx * dx + dy * dy)); if (length * length < dx * dx + dy * dy) length++;
             int cheapest = locomotor.MinimumCost;
-            if (ClearTerrain(i, entity.Position, entity.Target) &&
-                TerrainCost.Segment(grid, locomotor, entity.Position, entity.Target) <= length * cheapest * 2)
-            { _groupRoutes[entity.Id] = new([entity.Target], grid.Revision); continue; }
+            if (ClearTerrain(i, entity.Position, entityMotion.Target) &&
+                TerrainCost.Segment(grid, locomotor, entity.Position, entityMotion.Target) <= length * cheapest * 2)
+            { _groupRoutes[entity.Id] = new([entityMotion.Target], grid.Revision); continue; }
             // An exact clear segment proves reachability without constructing a full-map clearance mask.
-            int start = resolver.NodeAt(entity.Position, token), goal = resolver.NodeAt(entity.Target, token);
+            int start = resolver.NodeAt(entity.Position, token), goal = resolver.NodeAt(entityMotion.Target, token);
             if (start < 0 || goal < 0 || !navigation.CanReach(profile, start, goal, token))
             { RejectRoute(ref entity); continue; }
-            if (entity.GroupMember)
+            if (entityNavigation.GroupMember)
             {
                 long before = Stopwatch.GetTimestamp();
                 if (!_weightedTrees.TryGetValue(profile, out var tree) || !ReferenceEquals(tree.Grid, grid))
@@ -90,7 +93,7 @@ public sealed partial class SimulationWorld
                 }
                 var turns = tree.Route(start, goal, token);
                 if (turns is null) RejectRoute(ref entity);
-                else _groupRoutes[entity.Id] = new(WeightedPoints(turns, entity.Target), grid.Revision);
+                else _groupRoutes[entity.Id] = new(WeightedPoints(turns, entityMotion.Target), grid.Revision);
                 GroupRouteBuildMilliseconds += Stopwatch.GetElapsedTime(before).TotalMilliseconds;
             }
             else _weightedRequests[requests++] = new(profile, goal);
@@ -99,15 +102,17 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             token.ThrowIfCancellationRequested(); ref var entity = ref _entities[i];
-            if (!entity.Moving || entity.GroupMember || entity.YieldFor.Value != 0 ||
+            ref var entityMotion = ref entity.Motion;
+            ref var entityNavigation = ref entity.Navigation;
+            if (!entityMotion.Moving || entityNavigation.GroupMember || entityNavigation.YieldFor.Value != 0 ||
                 _groupRoutes.TryGetValue(entity.Id, out var old) && old.Revision == grid.Revision) continue;
             int profile = _profileIndices[entity.UnitType]; var resolver = navigation.Resolver(profile);
-            int goal = resolver.NodeAt(entity.Target, token), start = resolver.NodeAt(entity.Position, token);
+            int goal = resolver.NodeAt(entityMotion.Target, token), start = resolver.NodeAt(entity.Position, token);
             if (goal < 0 || start < 0) { RejectRoute(ref entity); continue; }
             var key = new RouteRequest(profile, goal);
             if (!navigation.TryCost(key, start, out long cost)) continue;
             if (cost == long.MaxValue) RejectRoute(ref entity);
-            else _groupRoutes[entity.Id] = new(WeightedPoints(navigation.Path(key, start, token), entity.Target), grid.Revision);
+            else _groupRoutes[entity.Id] = new(WeightedPoints(navigation.Path(key, start, token), entityMotion.Target), grid.Revision);
         }
     }
 }

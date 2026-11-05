@@ -48,7 +48,7 @@ public sealed partial class SimulationWorld
         if (members.Length == 0) return;
         var assignments = members.Select(i => new GroupDestinations.Member(_entities[i].Id, _entities[i].Position, i)).ToArray();
         WorldPosition[]? slots;
-        if (queued && members.Any(i => _entities[i].HasOrder))
+        if (queued && members.Any(i => _entities[i].Orders.HasOrder))
         {
             int pitch = Math.Max(1024, members.Max(i => Math.Max(_types[_entities[i].UnitType].Body.HalfWidth, _types[_entities[i].UnitType].Body.HalfHeight)) * 2 + 2);
             int columns = (int)Math.Ceiling(Math.Sqrt(members.Length));
@@ -97,9 +97,11 @@ public sealed partial class SimulationWorld
         for (int order = 0; order < Count; order++)
         {
             int i = _movementOrder[order]; ref var entity = ref _entities[i];
-            if (!entity.GroupMember) continue;
-            if (entity.YieldFor.Value != 0) { _bulkAllowed = false; return; }
-            int x = entity.Target.X - entity.Position.X, y = entity.Target.Y - entity.Position.Y;
+            ref var entityNavigation = ref entity.Navigation;
+            ref var entityMotion = ref entity.Motion;
+            if (!entityNavigation.GroupMember) continue;
+            if (entityNavigation.YieldFor.Value != 0) { _bulkAllowed = false; return; }
+            int x = entityMotion.Target.X - entity.Position.X, y = entityMotion.Target.Y - entity.Position.Y;
             if (members++ == 0) { dx = x; dy = y; }
             else if (x != dx || y != dy) { _bulkAllowed = false; return; }
             _cohort[i] = true;
@@ -109,7 +111,9 @@ public sealed partial class SimulationWorld
         for (int order = 0; order < Count; order++)
         {
             int i = _movementOrder[order]; if (!_cohort[i]) continue;
-            ref var entity = ref _entities[i]; var next = StepTowards(entity.Position, entity.Target);
+            ref var entity = ref _entities[i];
+            ref var entityMotion = ref entity.Motion;
+            var next = StepTowards(entity.Position, entityMotion.Target);
             if (!TerrainGeometry.Clear(grid, entity.Position, next, MotionIndex.BodyRadius) ||
                 !_motion!.ClearMove(i, next, out _, _cohort)) { _bulkAllowed = false; return; }
         }
@@ -117,10 +121,12 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++) if (_cohort[i])
         {
             ref var entity = ref _entities[i];
+            ref var entityMotion = ref entity.Motion;
+            ref var entityNavigation = ref entity.Navigation;
             ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
-            spatial.Position = StepTowards(spatial.Position, entity.Target);
-            entity.LastProgressTick = Tick;
-            entity.Moving = spatial.Position != entity.Target; entity.WaitTicks = 0;
+            spatial.Position = StepTowards(spatial.Position, entityMotion.Target);
+            entityNavigation.LastProgressTick = Tick;
+            entityMotion.Moving = spatial.Position != entityMotion.Target; entityNavigation.WaitTicks = 0;
             _motion!.SetEnd(i, spatial.Position); _handled[i] = true;
         }
     }
@@ -131,7 +137,7 @@ public sealed partial class SimulationWorld
         var grid = _navigation!.Grid;
         bool needed = false;
         for (int i = 0; i < Count; i++)
-            if (_entities[i].GroupMember && _entities[i].Moving &&
+            if (_entities[i].Navigation.GroupMember && _entities[i].Motion.Moving &&
                 (!_groupRoutes.TryGetValue(_entities[i].Id, out var route) || route.Revision != grid.Revision)) { needed = true; break; }
         if (!needed) return;
         long started = Stopwatch.GetTimestamp();
@@ -139,10 +145,12 @@ public sealed partial class SimulationWorld
         {
             token.ThrowIfCancellationRequested();
             int i = _movementOrder[order]; ref var entity = ref _entities[i];
-            if (!entity.GroupMember || !entity.Moving || _groupRoutes.TryGetValue(entity.Id, out var existing) && existing.Revision == grid.Revision) continue;
-            if (!TerrainGeometry.Clear(grid, entity.Target, entity.Target, MotionIndex.BodyRadius)) { RejectRoute(ref entity); continue; }
-            if (TerrainGeometry.Clear(grid, entity.Position, entity.Target, MotionIndex.BodyRadius))
-                _groupRoutes[entity.Id] = new([entity.Target], grid.Revision);
+            ref var entityNavigation = ref entity.Navigation;
+            ref var entityMotion = ref entity.Motion;
+            if (!entityNavigation.GroupMember || !entityMotion.Moving || _groupRoutes.TryGetValue(entity.Id, out var existing) && existing.Revision == grid.Revision) continue;
+            if (!TerrainGeometry.Clear(grid, entityMotion.Target, entityMotion.Target, MotionIndex.BodyRadius)) { RejectRoute(ref entity); continue; }
+            if (TerrainGeometry.Clear(grid, entity.Position, entityMotion.Target, MotionIndex.BodyRadius))
+                _groupRoutes[entity.Id] = new([entityMotion.Target], grid.Revision);
             else
             {
                 if (_routeTree is null || !ReferenceEquals(_routeTree.Grid, grid))
@@ -150,9 +158,9 @@ public sealed partial class SimulationWorld
                     _routeTree = new(grid, _treeRoot, token);
                     GroupRouteBuilds++; GroupRouteVisitedCells += _routeTree.VisitedCells;
                 }
-                var route = _routeTree.Route(grid.CellAt(entity.Position), entity.GoalCell, token);
+                var route = _routeTree.Route(grid.CellAt(entity.Position), entityNavigation.GoalCell, token);
                 if (route is null) RejectRoute(ref entity);
-                else _groupRoutes[entity.Id] = new(RoutePoints(route, grid, entity.Target), grid.Revision);
+                else _groupRoutes[entity.Id] = new(RoutePoints(route, grid, entityMotion.Target), grid.Revision);
             }
         }
         GroupRouteBuildMilliseconds += Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -160,22 +168,29 @@ public sealed partial class SimulationWorld
 
     private bool TryExchangeGoals(int requesterIndex, int blockerIndex)
     {
-        ref var requester = ref _entities[requesterIndex]; ref var blocker = ref _entities[blockerIndex];
+        ref var requester = ref _entities[requesterIndex];
+        ref var requesterNavigation = ref requester.Navigation;
+        ref var requesterMotion = ref requester.Motion;
+        ref var requesterOrders = ref requester.Orders;
+        ref var blocker = ref _entities[blockerIndex];
+        ref var blockerNavigation = ref blocker.Navigation;
+        ref var blockerMotion = ref blocker.Motion;
+        ref var blockerOrders = ref blocker.Orders;
         var grid = _navigation!.Grid;
-        if (!requester.GroupMember || !blocker.GroupMember || requester.Owner != blocker.Owner || requester.OrderGroup != blocker.OrderGroup || blocker.YieldFor.Value != 0 || requester.WaitTicks < 16) return false;
-        long oldCost = DistanceSquared(requester.Position, requester.Target) + DistanceSquared(blocker.Position, blocker.Target);
-        long newCost = DistanceSquared(requester.Position, blocker.Target) + DistanceSquared(blocker.Position, requester.Target);
-        if (newCost >= oldCost || !StopAllowed(requester.UnitType, blocker.Target) || !ClearTerrain(requesterIndex, requester.Position, blocker.Target) ||
-            !StopAllowed(blocker.UnitType, requester.Target) || !ClearTerrain(blockerIndex, blocker.Position, requester.Target)) return false;
-        var oldTarget = requester.Target;
-        requester.Target = blocker.Target with { Elevation = requester.Position.Elevation };
-        blocker.Target = oldTarget with { Elevation = blocker.Position.Elevation };
-        (requester.GoalCell, blocker.GoalCell) = (blocker.GoalCell, requester.GoalCell);
-        requester.ActiveOrder = requester.ActiveOrder with { Position = requester.Target };
-        blocker.ActiveOrder = blocker.ActiveOrder with { Position = blocker.Target };
-        requester.WaitTicks = blocker.WaitTicks = 0;
-        requester.PathLength = requester.PathCursor = blocker.PathLength = blocker.PathCursor = 0;
-        requester.Moving = requester.Position != requester.Target; blocker.Moving = blocker.Position != blocker.Target;
+        if (!requesterNavigation.GroupMember || !blockerNavigation.GroupMember || requester.Owner != blocker.Owner || requesterNavigation.OrderGroup != blockerNavigation.OrderGroup || blockerNavigation.YieldFor.Value != 0 || requesterNavigation.WaitTicks < 16) return false;
+        long oldCost = DistanceSquared(requester.Position, requesterMotion.Target) + DistanceSquared(blocker.Position, blockerMotion.Target);
+        long newCost = DistanceSquared(requester.Position, blockerMotion.Target) + DistanceSquared(blocker.Position, requesterMotion.Target);
+        if (newCost >= oldCost || !StopAllowed(requester.UnitType, blockerMotion.Target) || !ClearTerrain(requesterIndex, requester.Position, blockerMotion.Target) ||
+            !StopAllowed(blocker.UnitType, requesterMotion.Target) || !ClearTerrain(blockerIndex, blocker.Position, requesterMotion.Target)) return false;
+        var oldTarget = requesterMotion.Target;
+        requesterMotion.Target = blockerMotion.Target with { Elevation = requester.Position.Elevation };
+        blockerMotion.Target = oldTarget with { Elevation = blocker.Position.Elevation };
+        (requesterNavigation.GoalCell, blockerNavigation.GoalCell) = (blockerNavigation.GoalCell, requesterNavigation.GoalCell);
+        requesterOrders.ActiveOrder = requesterOrders.ActiveOrder with { Position = requesterMotion.Target };
+        blockerOrders.ActiveOrder = blockerOrders.ActiveOrder with { Position = blockerMotion.Target };
+        requesterNavigation.WaitTicks = blockerNavigation.WaitTicks = 0;
+        requesterNavigation.PathLength = requesterNavigation.PathCursor = blockerNavigation.PathLength = blockerNavigation.PathCursor = 0;
+        requesterMotion.Moving = requester.Position != requesterMotion.Target; blockerMotion.Moving = blocker.Position != blockerMotion.Target;
         _groupRoutes.Remove(requester.Id); _groupRoutes.Remove(blocker.Id);
         NavigationGoalExchanges++;
         return true;

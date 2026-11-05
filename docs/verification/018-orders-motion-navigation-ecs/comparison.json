@@ -1,0 +1,343 @@
+{
+  "Method": "Medians of three serial Release trials, TieredCompilation=0; preserved E4a binary c857b0a207084dbdd5796917ab1c5906006e4429; all gameplay states equal",
+  "EcsWorkloads": [
+    {
+      "Count": 1000,
+      "Workload": "units",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 1000,
+        "StateHash": "53301BE93CAF9C9145C043637A02C8B5097564F901AED125612CAAA6086B4560"
+      },
+      "InitializationMilliseconds": {
+        "Before": 0.5879,
+        "After": 0.6457
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 957432,
+        "After": 1150024
+      },
+      "RetainedManagedBytes": {
+        "Before": 801472,
+        "After": 993760
+      },
+      "FirstTickMilliseconds": {
+        "Before": 0.5505,
+        "After": 0.5654
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 0.1495,
+        "After": 0.1714
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 0.2217,
+        "After": 0.2325
+      },
+      "StepAllocatedBytes": {
+        "Before": 5208,
+        "After": 5992
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.0213,
+        "After": 0.0313
+      },
+      "HashMilliseconds": {
+        "Before": 0.35,
+        "After": 0.3925
+      },
+      "P95ChangePercent": 4.8714479025710355
+    },
+    {
+      "Count": 1000,
+      "Workload": "mixed",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 2524,
+        "StateHash": "D76C3D3CAA414C0E56836FC5E632A9CB39A02DD9C738F1C49E10022B8C1EEB2D"
+      },
+      "InitializationMilliseconds": {
+        "Before": 0.6054,
+        "After": 0.64
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 998056,
+        "After": 1212080
+      },
+      "RetainedManagedBytes": {
+        "Before": 831888,
+        "After": 1033896
+      },
+      "FirstTickMilliseconds": {
+        "Before": 0.5034,
+        "After": 0.5093
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 0.8957,
+        "After": 0.9248
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 1.6824,
+        "After": 1.7681
+      },
+      "StepAllocatedBytes": {
+        "Before": 3265560,
+        "After": 3410120
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.0866,
+        "After": 0.107
+      },
+      "HashMilliseconds": {
+        "Before": 1.2225,
+        "After": 1.2537
+      },
+      "P95ChangePercent": 5.093913456966237
+    },
+    {
+      "Count": 1000,
+      "Workload": "production",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 8968,
+        "StateHash": "D7E6D05C2FA831151EE0FAC2BC59E4C12BE1E7BF0451B67DBF7AB2BFE82AD0AC"
+      },
+      "InitializationMilliseconds": {
+        "Before": 0.7167,
+        "After": 0.7929
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 1550096,
+        "After": 1742688
+      },
+      "RetainedManagedBytes": {
+        "Before": 1136432,
+        "After": 1328752
+      },
+      "FirstTickMilliseconds": {
+        "Before": 0.6605,
+        "After": 0.6839
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 3.7532,
+        "After": 3.8114
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 6.8588,
+        "After": 6.9847
+      },
+      "StepAllocatedBytes": {
+        "Before": 14792968,
+        "After": 13154648
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.2045,
+        "After": 0.2715
+      },
+      "HashMilliseconds": {
+        "Before": 3.5342,
+        "After": 3.4362
+      },
+      "P95ChangePercent": 1.835598063801247
+    },
+    {
+      "Count": 10000,
+      "Workload": "units",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 10000,
+        "StateHash": "76273D92B866C6B0825734591571C5EFFC9AD0B5C1CE66FA960D2CC31B3FA3CF"
+      },
+      "InitializationMilliseconds": {
+        "Before": 18.3882,
+        "After": 19.5538
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 12906080,
+        "After": 16841080
+      },
+      "RetainedManagedBytes": {
+        "Before": 7748816,
+        "After": 8995992
+      },
+      "FirstTickMilliseconds": {
+        "Before": 17.2879,
+        "After": 17.6999
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 4.0485,
+        "After": 4.2252
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 5.2901,
+        "After": 5.5547
+      },
+      "StepAllocatedBytes": {
+        "Before": 41208,
+        "After": 41992
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.2115,
+        "After": 0.3413
+      },
+      "HashMilliseconds": {
+        "Before": 3.8576,
+        "After": 3.8357
+      },
+      "P95ChangePercent": 5.001795807262632
+    },
+    {
+      "Count": 10000,
+      "Workload": "mixed",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 17968,
+        "StateHash": "90DC0E39F82F7FC43621C8652C65547409F4AEDCE3AFCAC377947CD456120C86"
+      },
+      "InitializationMilliseconds": {
+        "Before": 18.5325,
+        "After": 19.9399
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 13250992,
+        "After": 17357384
+      },
+      "RetainedManagedBytes": {
+        "Before": 8015032,
+        "After": 9430600
+      },
+      "FirstTickMilliseconds": {
+        "Before": 16.6508,
+        "After": 17.1285
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 40.7139,
+        "After": 41.2688
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 47.9708,
+        "After": 48.8687
+      },
+      "StepAllocatedBytes": {
+        "Before": 10815840,
+        "After": 13310664
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.6221,
+        "After": 0.7987
+      },
+      "HashMilliseconds": {
+        "Before": 9.1434,
+        "After": 6.6924
+      },
+      "P95ChangePercent": 1.8717636562242124
+    },
+    {
+      "Count": 10000,
+      "Workload": "production",
+      "State": {
+        "Tick": 256,
+        "EntityCount": 17968,
+        "StateHash": "C3376373F4D84B32BF97F7C881FE77CD2033F47E9F27A836A1804A1CE008AB96"
+      },
+      "InitializationMilliseconds": {
+        "Before": 20.2213,
+        "After": 22.225
+      },
+      "InitializationAllocatedBytes": {
+        "Before": 20332312,
+        "After": 24267280
+      },
+      "RetainedManagedBytes": {
+        "Before": 11063536,
+        "After": 12310640
+      },
+      "FirstTickMilliseconds": {
+        "Before": 18.9365,
+        "After": 19.617
+      },
+      "SteadyP50Milliseconds": {
+        "Before": 41.5611,
+        "After": 43.0086
+      },
+      "SteadyP95Milliseconds": {
+        "Before": 50.1406,
+        "After": 51.4875
+      },
+      "StepAllocatedBytes": {
+        "Before": 18172112,
+        "After": 17980832
+      },
+      "SnapshotMilliseconds": {
+        "Before": 0.7026,
+        "After": 0.9293
+      },
+      "HashMilliseconds": {
+        "Before": 11.2991,
+        "After": 7.5169
+      },
+      "P95ChangePercent": 2.6862462754733585
+    }
+  ],
+  "Navigation": [
+    {
+      "Count": 1000,
+      "Ticks": 128,
+      "State": {
+        "Tick": 128,
+        "EntityCount": 1000,
+        "StateHash": "D9C04AC445AD821B0840891D684133796B4AE644335CDA197216B6165FB31925"
+      },
+      "P50Milliseconds": {
+        "Before": 1.1696,
+        "After": 1.2161
+      },
+      "P95Milliseconds": {
+        "Before": 1.4074,
+        "After": 1.482
+      },
+      "FirstTickMilliseconds": {
+        "Before": 8.9577,
+        "After": 9.2466
+      },
+      "MaximumTickMilliseconds": {
+        "Before": 13.3299,
+        "After": 14.0231
+      },
+      "AllocatedBytes": {
+        "Before": 1359920,
+        "After": 1360928
+      },
+      "P95ChangePercent": 5.30055421344322
+    },
+    {
+      "Count": 10000,
+      "Ticks": 64,
+      "State": {
+        "Tick": 64,
+        "EntityCount": 10000,
+        "StateHash": "D8B832069893B5013BFF2AAF86479193E3CF9CE9A3CCEEF59317AF34E8E23EC8"
+      },
+      "P50Milliseconds": {
+        "Before": 36.9316,
+        "After": 38.393
+      },
+      "P95Milliseconds": {
+        "Before": 40.6473,
+        "After": 42.3847
+      },
+      "FirstTickMilliseconds": {
+        "Before": 205.6756,
+        "After": 211.1296
+      },
+      "MaximumTickMilliseconds": {
+        "Before": 205.6756,
+        "After": 211.1296
+      },
+      "AllocatedBytes": {
+        "Before": 7709840,
+        "After": 7710512
+      },
+      "P95ChangePercent": 4.274330644347835
+    }
+  ]
+}

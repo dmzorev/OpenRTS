@@ -109,22 +109,28 @@ internal static class GroupNavigationChecks
             }
             NavigationChecks.Check(a.MovingCount == 0, "Retargeted group failed to settle");
         });
-        test("Packed removal copies active detours independently of storage order", () =>
+        foreach (bool grow in new[] { false, true })
+        test($"Navigation ECS: removal preserves active detours independently of storage order (growth={grow})", () =>
         {
-            var grid = new NavigationGrid(7, 3);
+            var grid = new NavigationGrid(7, grow ? 20 : 3);
             GridCell[] starts = [new(0, 0), new(6, 2), new(1, 1), new(5, 1)];
             using var a = World(grid, starts, speed: 128); using var b = World(grid, starts, workers: 4, speed: 128, reverse: true);
             WorldCommand[] move = [new(1, 0, 1, CommandKind.Move, new(3), grid.Center(grid.Index(new(5, 1)))),
                 new(1, 0, 2, CommandKind.Move, new(4), grid.Center(grid.Index(new(1, 1))))];
             a.Step(move); b.Step(move);
+            bool searched = a.NavigationLocalSearches > 0;
             for (int tick = 2; tick <= 200; tick++)
             {
-                a.Step(tick == 24 ? [new(tick, 0, 1, CommandKind.Destroy, new(1)), new(tick, 0, 2, CommandKind.Destroy, new(2))] : []);
-                b.Step(tick == 24 ? [new(tick, 0, 1, CommandKind.Destroy, new(2)), new(tick, 0, 2, CommandKind.Destroy, new(1))] : []);
+                WorldCommand[] growth = tick == 24 && grow ? Enumerable.Range(0, 40).Select(i => new WorldCommand(tick, 0, i + 3,
+                    CommandKind.Spawn, Position: grid.Center(grid.Index(new(i % 7, 8 + i / 7))))).ToArray() : [];
+                a.Step(tick == 24 ? [new(tick, 0, 1, CommandKind.Destroy, new(1)), new(tick, 0, 2, CommandKind.Destroy, new(2)), .. growth] : []);
+                b.Step(tick == 24 ? [new(tick, 0, 1, CommandKind.Destroy, new(2)), new(tick, 0, 2, CommandKind.Destroy, new(1)), .. growth] : []);
                 NavigationChecks.Check(a.Report() == b.Report(), "Packed active paths differ");
+                searched |= a.NavigationLocalSearches > 0;
                 Separated(a); Separated(b);
             }
             NavigationChecks.Check(a.MovingCount == 0, "Detour lost after packed removal");
+            NavigationChecks.Check(searched && a.Count == (grow ? 42 : 2), "Fixture did not exercise local search or expected storage growth");
         });
         test("Groups reach their own shoreline and public goals remain cell-bounded", () =>
         {

@@ -11,12 +11,15 @@ public sealed partial class SimulationWorld
         bool toggling = command.Kind == CommandKind.SetAutoCast;
         foreach (int i in Recipients(command))
         {
-            ref var e = ref _entities[i]; int ability = AbilityIndex(e.UnitType, command.Action);
+            ref var e = ref _entities[i];
+            ref var eOrders = ref e.Orders;
+            ref var eNavigation = ref e.Navigation;
+            int ability = AbilityIndex(e.UnitType, command.Action);
             if (ability < 0 || e.Owner == 0) continue;
             int mount = AbilityMount(e.UnitType, ability); ref var state = ref e.Weapons[mount];
             if (toggling) { state.AutoCast = command.Enabled; continue; }
             var definition = _types[e.UnitType].Abilities[ability]; var weapon = _types[e.UnitType].Weapons[mount].Weapon;
-            if (state.ReadyTick > Tick || state.FireAtTick > 0 || e.HasOrder && e.ActiveOrder.Kind == UnitActionKind.Ability || e.TerrainStranded) continue;
+            if (state.ReadyTick > Tick || state.FireAtTick > 0 || eOrders.HasOrder && eOrders.ActiveOrder.Kind == UnitActionKind.Ability || eNavigation.TerrainStranded) continue;
             bool target = ValidTarget(i, command.TargetEntity, weapon, out _);
             if (!target && (!definition.GroundTarget || command.TargetEntity.Value != 0)) continue;
             IssueOrder(i, new(UnitActionKind.Ability, command.Position, command.TargetEntity, Ability: ability), command.Queued);
@@ -32,13 +35,16 @@ public sealed partial class SimulationWorld
     }
     private void UpdateAbilityOrder(int i)
     {
-        ref var e = ref _entities[i]; var order = e.ActiveOrder; int mount = AbilityMount(e.UnitType, order.Ability); var weapon = _types[e.UnitType].Weapons[mount].Weapon;
-        if (order.Target.Value != 0 && !ValidTarget(i, order.Target, weapon, out _)) { e.HasOrder = false; Halt(i); return; }
+        ref var e = ref _entities[i];
+        ref var eOrders = ref e.Orders;
+        ref var eMotion = ref e.Motion;
+        var order = eOrders.ActiveOrder; int mount = AbilityMount(e.UnitType, order.Ability); var weapon = _types[e.UnitType].Weapons[mount].Weapon;
+        if (order.Target.Value != 0 && !ValidTarget(i, order.Target, weapon, out _)) { eOrders.HasOrder = false; Halt(i); return; }
         var aim = order.Target.Value != 0 ? _entities[_indices[order.Target]].Position : order.Position;
         e.HasAim = true; e.AimEntity = order.Target; e.AimPoint = aim;
-        if (AbilityInRange(i, order, weapon)) { Halt(i); e.OrderPhase = OrderPhase.Engaging; }
+        if (AbilityInRange(i, order, weapon)) { Halt(i); eOrders.OrderPhase = OrderPhase.Engaging; }
         else if (_types[e.UnitType].Movable)
-        { if (!e.Moving || (Tick + e.Id.Value) % 4 == 0) SetTarget(i, aim); e.OrderPhase = e.Moving ? OrderPhase.Approaching : OrderPhase.Waiting; }
-        else e.OrderPhase = OrderPhase.Waiting;
+        { if (!eMotion.Moving || (Tick + e.Id.Value) % 4 == 0) SetTarget(i, aim); eOrders.OrderPhase = eMotion.Moving ? OrderPhase.Approaching : OrderPhase.Waiting; }
+        else eOrders.OrderPhase = OrderPhase.Waiting;
     }
 }

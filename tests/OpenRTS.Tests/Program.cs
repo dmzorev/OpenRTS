@@ -56,6 +56,7 @@ DefinitionChecks.Run(Test);
 EcsMigrationChecks.Run(Test);
 EcsStorageChecks.Run(Test);
 SpatialHealthChecks.Run(Test);
+OrdersMotionChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

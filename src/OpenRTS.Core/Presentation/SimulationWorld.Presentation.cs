@@ -35,7 +35,9 @@ public sealed partial class SimulationWorld
     {
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i]; var type = _types[entity.UnitType];
+            ref var entity = ref _entities[i];
+            ref var entityMotion = ref entity.Motion;
+            var type = _types[entity.UnitType];
             ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
             int dx = spatial.Position.X - spatial.Previous.X, dy = spatial.Position.Y - spatial.Previous.Y;
             if (dx != 0 || dy != 0) entity.BodyFacing = new(dx, dy);
@@ -47,7 +49,7 @@ public sealed partial class SimulationWorld
                     entity.BodyAnimation = new(animation, Tick, 0);
             }
             if (!entity.WeaponAnimation.IsActive(Tick)) entity.WeaponAnimation = AnimationPlayback.None;
-            var aim = entity.Target;
+            var aim = entityMotion.Target;
             if (entity.HasAim)
             {
                 if (entity.AimEntity.Value != 0)
@@ -57,7 +59,7 @@ public sealed partial class SimulationWorld
                 }
                 else aim = entity.AimPoint;
             }
-            if (entity.HasAim || entity.Moving)
+            if (entity.HasAim || entityMotion.Moving)
             {
                 dx = aim.X - spatial.Position.X; dy = aim.Y - spatial.Position.Y;
                 if (dx != 0 || dy != 0) entity.WeaponFacing = new(dx, dy);

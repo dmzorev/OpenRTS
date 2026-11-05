@@ -23,19 +23,23 @@ public sealed partial class SimulationWorld
     private void IssueOrder(int index, UnitOrder order, bool queued)
     {
         ref var entity = ref _entities[index];
-        if (queued && entity.HasOrder)
+        ref var entityOrders = ref entity.Orders;
+        if (queued && entityOrders.HasOrder)
         {
-            entity.PendingOrders ??= new();
-            if (entity.PendingOrders.Count == MaximumQueuedOrders) _events.Add(new(Tick, WorldEventKind.QueueFull, entity.Id));
-            else entity.PendingOrders.Enqueue(order);
+            entityOrders.PendingOrders ??= new();
+            if (entityOrders.PendingOrders.Count == MaximumQueuedOrders) _events.Add(new(Tick, WorldEventKind.QueueFull, entity.Id));
+            else entityOrders.PendingOrders.Enqueue(order);
             return;
         }
-        if (StartOrder(index, order) && !queued) entity.PendingOrders?.Clear();
+        if (StartOrder(index, order) && !queued) entityOrders.PendingOrders?.Clear();
     }
 
     private bool StartOrder(int index, UnitOrder order)
     {
         ref var entity = ref _entities[index];
+        ref var entityNavigation = ref entity.Navigation;
+        ref var entityOrders = ref entity.Orders;
+        ref var entityMotion = ref entity.Motion;
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entity.UnitType].Movable ||
@@ -43,24 +47,26 @@ public sealed partial class SimulationWorld
             order.Kind is UnitActionKind.Attack or UnitActionKind.Repair && !ValidTarget(index, order.Target, weapon!, out _))
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entity.Id)); return false; }
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove)
-        { if (!SetTarget(index, order.Position)) return false; entity.GroupMember = order.Group; entity.OrderGroup = order.Cohort; }
+        { if (!SetTarget(index, order.Position)) return false; entityNavigation.GroupMember = order.Group; entityNavigation.OrderGroup = order.Cohort; }
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { if (!_types[entity.UnitType].Movable) Halt(index); else if (!SetTarget(index, entity.Position)) return false; }
         else Halt(index);
-        if (entity.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
+        if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entity.HasAim = false; entity.AimEntity = default; }
-        entity.CombatTarget = default; CancelWindups(index);
-        entity.ActiveOrder = order; entity.HasOrder = order.Kind != UnitActionKind.Stop || entity.Moving;
-        entity.OrderStarted = Tick;
-        entity.OrderPhase = order.Kind == UnitActionKind.HoldPosition ? OrderPhase.Holding : entity.Moving ? OrderPhase.Moving : OrderPhase.Idle;
+        entityOrders.CombatTarget = default; CancelWindups(index);
+        entityOrders.ActiveOrder = order; entityOrders.HasOrder = order.Kind != UnitActionKind.Stop || entityMotion.Moving;
+        entityOrders.OrderStarted = Tick;
+        entityOrders.OrderPhase = order.Kind == UnitActionKind.HoldPosition ? OrderPhase.Holding : entityMotion.Moving ? OrderPhase.Moving : OrderPhase.Idle;
         return true;
     }
 
     private void Halt(int index)
     {
         ref var entity = ref _entities[index];
-        entity.Moving = false; entity.Target = entity.Position; entity.GroupMember = false;
-        entity.PathLength = entity.PathCursor = entity.WaitTicks = 0; entity.YieldFor = default; entity.YieldDeadline = 0;
+        ref var entityMotion = ref entity.Motion;
+        ref var entityNavigation = ref entity.Navigation;
+        entityMotion.Moving = false; entityMotion.Target = entity.Position; entityNavigation.GroupMember = false;
+        entityNavigation.PathLength = entityNavigation.PathCursor = entityNavigation.WaitTicks = 0; entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
         _groupRoutes.Remove(entity.Id);
     }
     private void UpdateOrders()
@@ -69,56 +75,61 @@ public sealed partial class SimulationWorld
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
             int i = _movementOrder[orderIndex]; ref var entity = ref _entities[i];
-            if (entity.TerrainStranded) { entity.OrderPhase = OrderPhase.Waiting; continue; }
-            if (entity.HasOrder && !entity.Moving && entity.CombatTarget.Value == 0 && entity.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
-                entity.HasOrder = false;
-            while (!entity.HasOrder && entity.PendingOrders is { Count: > 0 }) StartOrder(i, entity.PendingOrders.Dequeue());
-            if (!entity.HasOrder && entity.CombatTarget.Value == 0) entity.OrderPhase = OrderPhase.Idle;
-            if (entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
-            bool repair = entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Repair;
-            var weapon = OrderWeapon(i, repair, entity.HasOrder ? entity.ActiveOrder.Target : entity.CombatTarget);
-            if (entity.Moving && entity.HasOrder && entity.ActiveOrder.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition) continue;
-            if (weapon is null || entity.Owner == 0 || entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Move) continue;
-            bool attack = entity.HasOrder && entity.ActiveOrder.Kind is UnitActionKind.Attack or UnitActionKind.Repair;
-            bool aggressive = entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.AttackMove;
+            ref var entityNavigation = ref entity.Navigation;
+            ref var entityOrders = ref entity.Orders;
+            ref var entityMotion = ref entity.Motion;
+            if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
+            if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
+                entityOrders.HasOrder = false;
+            while (!entityOrders.HasOrder && entityOrders.PendingOrders is { Count: > 0 }) StartOrder(i, entityOrders.PendingOrders.Dequeue());
+            if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
+            bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
+            var weapon = OrderWeapon(i, repair, entityOrders.HasOrder ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget);
+            if (entityMotion.Moving && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition) continue;
+            if (weapon is null || entity.Owner == 0 || entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move) continue;
+            bool attack = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Attack or UnitActionKind.Repair;
+            bool aggressive = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.AttackMove;
             int range = aggressive ? weapon.AcquireRange : weapon.Range;
-            if (attack) entity.CombatTarget = entity.ActiveOrder.Target;
-            if (!ValidTarget(i, entity.CombatTarget, weapon, out int target) || !attack && !InWeaponRange(i, target, range))
+            if (attack) entityOrders.CombatTarget = entityOrders.ActiveOrder.Target;
+            if (!ValidTarget(i, entityOrders.CombatTarget, weapon, out int target) || !attack && !InWeaponRange(i, target, range))
             {
-                if (entity.CombatTarget.Value != 0)
+                if (entityOrders.CombatTarget.Value != 0)
                 {
-                    entity.CombatTarget = default; entity.HasAim = false; entity.AimEntity = default;
-                    if (attack) { entity.HasOrder = false; Halt(i); entity.OrderPhase = OrderPhase.Idle; continue; }
+                    entityOrders.CombatTarget = default; entity.HasAim = false; entity.AimEntity = default;
+                    if (attack) { entityOrders.HasOrder = false; Halt(i); entityOrders.OrderPhase = OrderPhase.Idle; continue; }
                     if (aggressive)
-                    { SetTarget(i, entity.ActiveOrder.Position); entity.GroupMember = entity.ActiveOrder.Group; entity.OrderGroup = entity.ActiveOrder.Cohort; entity.OrderPhase = entity.Moving ? OrderPhase.Moving : OrderPhase.Idle; }
-                    else entity.OrderPhase = entity.HasOrder ? OrderPhase.Holding : OrderPhase.Idle;
+                    { SetTarget(i, entityOrders.ActiveOrder.Position); entityNavigation.GroupMember = entityOrders.ActiveOrder.Group; entityNavigation.OrderGroup = entityOrders.ActiveOrder.Cohort; entityOrders.OrderPhase = entityMotion.Moving ? OrderPhase.Moving : OrderPhase.Idle; }
+                    else entityOrders.OrderPhase = entityOrders.HasOrder ? OrderPhase.Holding : OrderPhase.Idle;
                 }
-                if ((Tick + entity.Id.Value) % 4 != 0 && entity.OrderStarted != Tick) continue;
+                if ((Tick + entity.Id.Value) % 4 != 0 && entityOrders.OrderStarted != Tick) continue;
                 target = AcquireWeaponTarget(i, weapon, range);
                 if (target < 0 || !InWeaponRange(i, target, range)) continue;
-                entity.CombatTarget = _entities[target].Id;
+                entityOrders.CombatTarget = _entities[target].Id;
             }
-            entity.HasAim = true; entity.AimEntity = entity.CombatTarget;
-            if (InWeaponRange(i, target, weapon.Range) && (_types[entity.UnitType].Footprint is not null || StopAllowed(entity.UnitType, entity.Position))) { Halt(i); entity.OrderPhase = OrderPhase.Engaging; }
+            entity.HasAim = true; entity.AimEntity = entityOrders.CombatTarget;
+            if (InWeaponRange(i, target, weapon.Range) && (_types[entity.UnitType].Footprint is not null || StopAllowed(entity.UnitType, entity.Position))) { Halt(i); entityOrders.OrderPhase = OrderPhase.Engaging; }
             else if ((aggressive || attack) && _types[entity.UnitType].Movable)
             {
-                if (!entity.Moving || (Tick + entity.Id.Value) % 4 == 0)
+                if (!entityMotion.Moving || (Tick + entity.Id.Value) % 4 == 0)
                 {
                     var goal = AimPoint(i, target);
-                    if (entity.Target != goal) SetTarget(i, goal);
+                    if (entityMotion.Target != goal) SetTarget(i, goal);
                 }
-                entity.OrderPhase = entity.Moving ? OrderPhase.Approaching : OrderPhase.Waiting;
+                entityOrders.OrderPhase = entityMotion.Moving ? OrderPhase.Approaching : OrderPhase.Waiting;
             }
-            else entity.OrderPhase = OrderPhase.Waiting;
+            else entityOrders.OrderPhase = OrderPhase.Waiting;
         }
     }
 
     private static void WriteOrders(BinaryWriter writer, EntityState entity)
     {
-        writer.Write(entity.OrderGroup); writer.Write(entity.HasOrder); Write(entity.ActiveOrder); writer.Write((int)entity.OrderPhase); writer.Write(entity.OrderStarted);
-        writer.Write(entity.CombatTarget.Value);
-        writer.Write(entity.PendingOrders?.Count ?? 0);
-        if (entity.PendingOrders is not null) foreach (var order in entity.PendingOrders) Write(order);
+        ref var entityNavigation = ref entity.Navigation;
+        ref var entityOrders = ref entity.Orders;
+        writer.Write(entityNavigation.OrderGroup); writer.Write(entityOrders.HasOrder); Write(entityOrders.ActiveOrder); writer.Write((int)entityOrders.OrderPhase); writer.Write(entityOrders.OrderStarted);
+        writer.Write(entityOrders.CombatTarget.Value);
+        writer.Write(entityOrders.PendingOrders?.Count ?? 0);
+        if (entityOrders.PendingOrders is not null) foreach (var order in entityOrders.PendingOrders) Write(order);
         void Write(UnitOrder order) { writer.Write((int)order.Kind); writer.Write(order.Position.X); writer.Write(order.Position.Y); writer.Write(order.Position.Elevation); writer.Write(order.Target.Value); writer.Write(order.Group); writer.Write(order.Cohort); writer.Write(order.Ability); }
     }
 }

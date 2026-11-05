@@ -42,10 +42,12 @@ public sealed partial class SimulationWorld
         occupant = default;
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i]; var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
+            ref var entity = ref _entities[i];
+            ref var entityMotion = ref entity.Motion;
+            var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
             bool clear = TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
             bool newNoStop = !TerrainGeometry.CanStop(candidate, entity.Position, type.Body, type.Locomotor) &&
-                TerrainGeometry.CanStop(_navigation!.Grid, entity.Position, type.Body, type.Locomotor) && !entity.Moving;
+                TerrainGeometry.CanStop(_navigation!.Grid, entity.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
             if ((!clear || newNoStop) && (occupant.Value == 0 || entity.Id.Value < occupant.Value)) occupant = entity.Id;
         }
         return occupant.Value == 0;
@@ -66,21 +68,25 @@ public sealed partial class SimulationWorld
         // Local paths and exact destinations are also invalidated, not only shared global fields.
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i]; entity.PathLength = entity.PathCursor = 0;
-            entity.YieldFor = default; entity.YieldDeadline = 0;
+            ref var entity = ref _entities[i];
+            ref var entityNavigation = ref entity.Navigation;
+            ref var entityMotion = ref entity.Motion;
+            ref var entityOrders = ref entity.Orders;
+            entityNavigation.PathLength = entityNavigation.PathCursor = 0;
+            entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
             var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
-            bool wasStranded = entity.TerrainStranded;
-            entity.TerrainStranded = !TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
-            if (entity.TerrainStranded)
+            bool wasStranded = entityNavigation.TerrainStranded;
+            entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
+            if (entityNavigation.TerrainStranded)
             {
-                entity.Moving = false; entity.OrderPhase = OrderPhase.Waiting;
+                entityMotion.Moving = false; entityOrders.OrderPhase = OrderPhase.Waiting;
                 if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entity.Id, entity.Position, entity.UnitType));
             }
-            else if ((wasStranded || entity.Moving) && type.Movable)
+            else if ((wasStranded || entityMotion.Moving) && type.Movable)
             {
-                var goal = entity.Target;
+                var goal = entityMotion.Target;
                 if (!StopAllowed(entity.UnitType, goal)) SetTarget(i, goal);
-                else entity.Moving = entity.Position != goal;
+                else entityMotion.Moving = entity.Position != goal;
             }
         }
     }
