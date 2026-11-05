@@ -12,11 +12,13 @@ public sealed partial class SimulationWorld
         foreach (int i in Recipients(command))
         {
             ref var e = ref _entities[i];
+            ref var eOwnership = ref e.Ownership;
+            ref var eCombat = ref e.Combat;
             ref var eOrders = ref e.Orders;
             ref var eNavigation = ref e.Navigation;
             int ability = AbilityIndex(e.UnitType, command.Action);
-            if (ability < 0 || e.Owner == 0) continue;
-            int mount = AbilityMount(e.UnitType, ability); ref var state = ref e.Weapons[mount];
+            if (ability < 0 || eOwnership.Owner == 0) continue;
+            int mount = AbilityMount(e.UnitType, ability); ref var state = ref eCombat.Weapons[mount];
             if (toggling) { state.AutoCast = command.Enabled; continue; }
             var definition = _types[e.UnitType].Abilities[ability]; var weapon = _types[e.UnitType].Weapons[mount].Weapon;
             if (state.ReadyTick > Tick || state.FireAtTick > 0 || eOrders.HasOrder && eOrders.ActiveOrder.Kind == UnitActionKind.Ability || eNavigation.TerrainStranded) continue;
@@ -36,12 +38,13 @@ public sealed partial class SimulationWorld
     private void UpdateAbilityOrder(int i)
     {
         ref var e = ref _entities[i];
+        ref var ePresentation = ref e.Presentation;
         ref var eOrders = ref e.Orders;
         ref var eMotion = ref e.Motion;
         var order = eOrders.ActiveOrder; int mount = AbilityMount(e.UnitType, order.Ability); var weapon = _types[e.UnitType].Weapons[mount].Weapon;
         if (order.Target.Value != 0 && !ValidTarget(i, order.Target, weapon, out _)) { eOrders.HasOrder = false; Halt(i); return; }
         var aim = order.Target.Value != 0 ? _entities[_indices[order.Target]].Position : order.Position;
-        e.HasAim = true; e.AimEntity = order.Target; e.AimPoint = aim;
+        ePresentation.HasAim = true; ePresentation.AimEntity = order.Target; ePresentation.AimPoint = aim;
         if (AbilityInRange(i, order, weapon)) { Halt(i); eOrders.OrderPhase = OrderPhase.Engaging; }
         else if (_types[e.UnitType].Movable)
         { if (!eMotion.Moving || (Tick + e.Id.Value) % 4 == 0) SetTarget(i, aim); eOrders.OrderPhase = eMotion.Moving ? OrderPhase.Approaching : OrderPhase.Waiting; }

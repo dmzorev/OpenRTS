@@ -10,9 +10,11 @@ public sealed partial class SimulationWorld
         motion.Clear(_entities.Length);
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i]; var type = _types[entity.UnitType];
+            ref var entity = ref _entities[i];
+            ref var entityOwnership = ref entity.Ownership;
+            var type = _types[entity.UnitType];
             var position = entity.StorageEntity.Get<SpatialState>().Position;
-            motion.Add(i, entity.Id, position, entity.Owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+            motion.Add(i, entity.Id, position, entityOwnership.Owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         }
     }
     private void EnsureMovementOrder()

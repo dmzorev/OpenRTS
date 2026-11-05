@@ -44,11 +44,31 @@ public sealed partial class SimulationWorld
             spatial.Previous = spatial.Position;
     }
 
+    private void CapturePreviousFacings()
+    {
+        if (_unitStorage is null) return;
+        foreach (var (presentation, combat) in _unitStorage.Query<PresentationState, CombatState>())
+        {
+            ref var state = ref presentation.Value;
+            state.PreviousBodyFacing = state.BodyFacing;
+            state.PreviousWeaponFacing = state.WeaponFacing;
+            foreach (ref var mount in combat.Value.Weapons.AsSpan()) mount.PreviousFacing = mount.Facing;
+        }
+    }
+
     private int CountMoving()
     {
         int count = 0;
         if (_unitStorage is not null)
             foreach (ref var motion in _unitStorage.Query<MotionState>()) if (motion.Moving) count++;
+        return count;
+    }
+
+    private int CountWeapons()
+    {
+        int count = 0;
+        if (_unitStorage is not null)
+            foreach (ref var combat in _unitStorage.Query<CombatState>()) count += combat.Weapons.Length;
         return count;
     }
 

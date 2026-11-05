@@ -32,13 +32,15 @@ public sealed record PresentationDefinition
 {
     public ReadOnlyCollection<string> Animations { get; }
     public ReadOnlyCollection<string> States { get; }
-    public int IdleAnimation => AnimationIndex("idle");
-    public int MoveAnimation => AnimationIndex("move");
+    public int IdleAnimation { get; }
+    public int MoveAnimation { get; }
     public uint AllowedStateMask => States.Count == 32 ? uint.MaxValue : (1u << States.Count) - 1;
     public PresentationDefinition(IEnumerable<string>? animations = null, IEnumerable<string>? states = null)
     {
         Animations = Names(animations ?? ["idle", "move"], 64);
         States = Names(states ?? [], 32);
+        IdleAnimation = AnimationIndex("idle");
+        MoveAnimation = AnimationIndex("move");
     }
     public int AnimationIndex(string name) => Animations.IndexOf(name);
     public uint StateMask(string name)

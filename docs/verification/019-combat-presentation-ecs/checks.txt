@@ -1,0 +1,288 @@
+E4c final verification — 2026-11-05
+
+./tools/dev.sh test (final, including batched presentation query and cached semantic IDs)
+PASS Local overrides win even when Inherits is written last; origin survives
+PASS Cross-file inheritance and multiple-parent precedence
+PASS Removal, nested removal, and independent named instances
+PASS Sequences replace instead of silently concatenate
+PASS Quoted # and colon, Unicode, comments, block text
+PASS Unknown parent gives location
+PASS Cycles show inheritance chain
+PASS Duplicate definitions across files rejected
+PASS Duplicate YAML fields rejected
+PASS Missing removal is an error
+PASS Anchors and aliases rejected deliberately
+PASS Custom CLR tags rejected
+PASS Tabs and multiple documents rejected
+PASS Missing and unknown option fields fail loudly
+PASS Validation uses invariant finite numbers and strict named enums
+PASS Named traits get distinct mutable instances per entity
+PASS Required traits, singleton multiplicity and unknown trait checks
+PASS Factories follow dependencies, not YAML order
+PASS Trait dependency cycles rejected before spawning
+PASS Generated schema contains enums, limits and field help
+20 DeclarativeContent checks passed.
+PASS Core definition rejects invalid IDs and health
+PASS Inherited content becomes typed gameplay definitions
+PASS Fingerprint ignores file order and YAML formatting
+PASS Invalid concrete and abstract definitions fail before use
+PASS Walking follows actual displacement and stops on arrival or Stop
+PASS Presentation capabilities are immutable, canonical and bounded
+PASS Adapter model bindings do not enter gameplay definitions or state hashes
+PASS Movement, independent weapon aim, firing and two states coexist
+PASS Body and weapon animation tracks expire independently
+PASS Queued toggles, invalid cues and destroyed aim targets are deterministic
+PASS Skipped frames retain loop phase and pinned presentation snapshots
+PASS Layered model content validates references, cycles, dimensions and semantics
+PASS Terrain catalog validates complete profiles and canonical gameplay fingerprints
+PASS Profile components distinguish water, forest, swamp and static edits
+PASS Reverse weighted fields match an independent Dijkstra oracle for every cell
+PASS Weighted keys include locomotor and FIFO budgets survive parallel completion order
+PASS World follows the cheap detour instead of smoothing through expensive swamp
+PASS Physical speed is independent of route price and retains fractional movement
+PASS Transit-only ground permits crossing, redirects goals and rejects spawning
+PASS Profile-aware geometry keeps a tracked body's edge out of water
+PASS Mixed groups project incompatible stop areas and preserve worker parity
+PASS Weighted point orders retain tick hashes with parallel and reversed field jobs
+PASS Clicking the current transit cell resolves a legal stopping point
+PASS 10000 weighted group members share terrain trees instead of individual global fields
+PASS Orders: a tank clicks water and reaches its own shoreline, not a disconnected island
+PASS Orders: selected recipients leave unselected orders intact
+PASS Orders: immutable recipients, FIFO and valid replacement behave identically through Session
+PASS Orders: invalid replacement preserves the pending queue, bounded to 32
+PASS Orders: AttackMove engages an enemy and resumes its original destination
+PASS Orders: moving cancels windup and never resets a fired weapon's cooldown
+PASS Orders: Hold fires in place and simultaneous lethal hits resolve together
+PASS Orders: acquisition ignores hidden nearer enemies and combat respects walls
+PASS Orders: queued targets are revalidated after terrain changes
+PASS Orders: missing queued attack targets are skipped without losing later waypoints
+PASS Orders: Hold leaves transit-only ground before acquiring and firing
+PASS Orders: independent groups never exchange each other's final goals
+PASS Orders: selections spanning disconnected islands resolve on both islands
+PASS Orders: combat and packed removals preserve sequential/parallel tick hashes
+PASS Orders: multi-recipient Move and AttackMove work without a navigation host
+PASS Orders: an enemy blocker never yields as an allied unit
+PASS Weapons: named YAML mounts validate references and canonical gameplay fingerprints
+PASS Weapons: burst intervals and reload survive interruption without replenishing shots
+PASS Weapons: cannon is delayed and a moving target can dodge the fixed impact point
+PASS Weapons: fast cannon collision chooses the first intercepted body instead of the ordered target
+PASS Weapons: swept collision detects a crossing target and static edits stop a shot
+PASS Weapons: missile follows a maneuvering target and has a bounded travel budget
+PASS Weapons: launched shots survive their source and homing handles destroyed targets
+PASS Weapons: armor matrix and circular grenade splash affect eligible targets only
+PASS Weapons: repair rejects enemies/living, heals allies, clamps HP and completes
+PASS Weapons: simultaneous lethal damage cannot be undone by repair
+PASS Weapons: independent mounts fire while maneuvering and stationary mounts cancel windup
+PASS Weapons: splash friendly fire is explicit and does not allow hostile repair
+PASS Weapons: immobile units reject move/group/yield and attack without chasing
+PASS Weapons: pinned weapon/projectile frames survive packed removal and skip publication
+PASS Weapons: canonical battle matches workers and reversed navigation scheduling
+PASS Weapons: 10000 active shooters use spatial targets and measured combat ticks
+PASS Weapons: 10000 live projectiles retain bounded spatial collision work
+PASS N2: shape and footprint declarations validate physical dimensions and semantics
+PASS N2: a cursor query from blocked geometry returns no stopping terrain without indexing an absent component
+PASS N2: overlay removal preserves lower layers and stable placement priority after packed removal
+PASS N2: removing a hidden lower overlay never resurrects it
+PASS N2: hidden base edits are hashed and survive removal of a covering object
+PASS N2: passable footprints have no blocking center circle and transit cells forbid stopping
+PASS N2: placing a blocking footprint after route calculation forces a safe detour
+PASS N2: unsafe placement is rejected atomically without trapping an existing unit
+PASS N2: forced platform removal restores terrain and strands rather than teleports a unit
+PASS N2: circle and box clearance distinguish a narrow passage
+PASS N2: partial geometry and exact route lattice agree across terrain sampling sizes
+PASS N2: rounded terrain corners no longer use square circle dilation
+PASS N2: locomotor slope, step and depth limits constrain geometry and elevation follows the surface
+PASS N2: weapon range reaches the nearest building cell rather than its center
+PASS N2: a projectile hits the front of a large footprint found outside the center query
+PASS N2: splash intersects body extents and multiple footprint cells cause one damage application
+PASS N2: lethal damage removes the building stamp while visual wrecks stay adapter-owned
+PASS N2: forest stamps change locomotor access on road and removal restores it
+PASS N2: different circle radii remain separated over complete swept moves
+PASS N2: large group destinations use body-dependent spacing
+PASS N2: dynamic clearance fields and overlays remain canonical across workers
+PASS N2: published terrain is immutable while stacked objects change
+PASS Actions: YAML separates UI bindings from gameplay and inherits/overrides build costs
+PASS Actions: twenty selected units cast once and pick the first ready stable ID
+PASS Actions: ground grenades land on a fixed point and inactive abilities never auto-fire
+PASS Actions: autocast toggles are per unit and authoritative
+PASS Actions: repair autocast heals only damaged allied mechanical targets
+PASS Actions: typed ability input crosses the live session boundary with one caster
+PASS Production: a multi-building move sets each rally without reporting a missing mobile route
+PASS Production: removing a lower packed producer preserves the surviving producer queue
+PASS Production: active tasks publish the configured working state without retaining it after completion
+PASS Production: recipe overrides enforce placement range, preserve price and play semantic exit clips
+PASS Production: batch5 distributes by shortest queue and stable producer ID
+PASS Production: independent queues progress together and buildings wait for explicit placement
+PASS Production: repeated tasks renew at the tail and stack cancellation is bounded
+PASS Production: blocked exits retain the completed task and retry without overlap
+PASS Production: queue caps, rally, destruction and published task leases stay valid
+PASS Production: task and ability commands replay unchanged through a threaded session
+PASS Production: workers and packed removals preserve the complete task state
+PASS Definitions: capabilities can describe nonspatial data without fake health or presentation
+PASS Definitions: unit facade and composed recipe preserve immutable physical and semantic capabilities
+PASS Definitions: missing capability dependencies fail during preparation
+PASS Definitions: removing or changing a panel leaves actions and gameplay fingerprint unchanged
+PASS Definitions: hidden actions execute through the public command boundary
+PASS Definitions: invalid action references and fields fail before a match
+PASS Definitions: legacy declarations keep gameplay and can use an independent replacement panel
+PASS Definitions: shared recipes do not share mutable production state
+PASS Definitions: inherited actions survive panel removal and reject UI fields in gameplay templates
+PASS ECS baseline: direct
+PASS ECS baseline: navigation
+PASS ECS baseline: combat
+PASS ECS baseline: buildings
+PASS ECS baseline: production
+PASS ECS: sequential producer commits protect a shared exit
+PASS ECS: producer creation changes membership after the current production pass
+PASS ECS: reused storage slots do not inherit queues or rally and publish in domain ID order
+PASS ECS: combat deaths remove producers before ready results are released
+PASS ECS: disposal is idempotent, rejects use and preserves pinned frames
+PASS ECS: unchanged producer membership adds no steady tick allocations
+PASS ECS: session releases its world before success or failure becomes observable
+PASS Spatial/health ECS: archetype removal and slot reuse preserve moving damaged actors and frozen frames
+PASS Spatial/health ECS: command spawns initialize previous position at the new tick
+PASS Orders/motion ECS: FIFO and fractional movement survive archetype removal, growth and slot reuse
+PASS Combat/presentation ECS: burst, autocast, animation and owner survive removal, growth and pinned frames
+PASS Integer movement arrives exactly and keeps elevation
+PASS Minimum speed does not stall diagonally
+PASS Large-coordinate movement stays bounded and respects step length
+PASS Command order is issuer/sequence, independent of input order
+PASS Invalid command batches do not advance authoritative state
+PASS Packed removal preserves stable IDs and self-contained events
+PASS SplitMix64 uses known vectors and validates bounds
+PASS Random targets and state hash do not depend on packed storage order
+PASS Steady movement of 10000 entities allocates no managed memory in Step
+PASS Leases protect published frames and saturated exchange drops only frames
+PASS Worker matches direct execution and final frame survives reader delays
+PASS Real-time pacing changes elapsed time, not state
+PASS Events survive skipped frames and backlog overflow is explicit
+PASS Worker faults reach caller and worker can be stopped and restarted
+PASS Terrain sample scale is validated and survives immutable revisions
+PASS Exact spawns and subcell orders preserve arbitrary fixed-point coordinates
+PASS Terrain sampling resolution does not quantize unobstructed movement
+PASS Several bodies can occupy one navigation sample without overlapping
+PASS Non-cardinal and non-diagonal headings have a bounded Euclidean speed and exact arrival
+PASS A short retarget reverses immediately without finishing a route-cell transition
+PASS Swept terrain checks reject a diagonal corner gap narrower than a body
+PASS An angled route around a wall reaches an exact off-center endpoint
+PASS A body near terrain or the map edge is rejected even if its center cell is free
+PASS An occupied destination waits without changing terrain reachability
+PASS Off-center group clicks produce exact compact destinations
+PASS Compact packing and group trajectories are independent of terrain sample size
+PASS Crossing swept trajectories cannot both be accepted despite safe endpoints
+PASS Terrain edits invalidate exact group goals with body clearance outside their goal sample
+PASS An interrupted yield times out en route and restores the original order
+PASS Local group target exchanges preserve each actor's independent elevation
+PASS Navigation maps are immutable, versioned and bounded
+PASS Shared BFS finds shortest cardinal routes around obstacles
+PASS Navigation job budget and rotating request cursor eventually serve distinct goals
+PASS Parallel fields and reversed task order match sequential fields
+PASS A unit crosses a narrow opening without entering a wall
+PASS A group with distinct destinations queues through a one-cell opening
+PASS Unreachable goals project to shore and opening terrain permits a new order
+PASS Units cannot occupy the same point or cross through one another
+PASS Perpendicular movement through nearby samples stays safe throughout interpolation
+PASS Mid-segment retargeting is immediate and terrain cannot overlap the current body
+PASS Blocked and occupied spawns are rejected; destroy releases reservations
+PASS Cache readiness and map changes are authoritative, worker count is not
+PASS Navigation remains canonical after packed removals
+PASS A fully traversed 1024-square navigation layer is worker-independent
+PASS Pre-cancelled navigation does not advance a world
+PASS Immutable terrain snapshots survive edits and parallel sessions stop promptly
+PASS 10000-unit navigation matches 1/2/4 workers and reverse execution
+PASS A bulk adjusted-destination event burst is delivered with an explicit host budget
+PASS A dense starting group completes its spatially assigned destinations
+PASS A group occupies distinct destinations and all members finish
+PASS A group clears a one-cell opening without individual global fields
+PASS Local detours pass opposing units in an open lane
+PASS A blocker retreats to a side pocket and both units resume their orders
+PASS A corridor without passing space waits safely
+PASS Group goals project atomically and legacy direct group commands reject before advancing
+PASS Group retarget, terrain changes, spawn and packed removal remain deterministic
+PASS Navigation ECS: removal preserves active detours independently of storage order (growth=False)
+PASS Navigation ECS: removal preserves active detours independently of storage order (growth=True)
+PASS Groups reach their own shoreline and public goals remain cell-bounded
+PASS Pause, queued single steps and tempo preserve the command log and world state
+PASS Playback validates controls, avoids interpolation rewind and stops while paused
+PASS 1000 crowded members all clear the diagnostic wall and fill the destination
+PASS A nearly filled compact area accepts an outside member without a physical permutation cycle
+PASS Free same-direction rows advance as a convoy when another row is blocked
+PASS A follower does not pull a queued forward-moving unit into a side pocket
+PASS An idle blocker leaves its own goal to yield and then returns
+PASS Diagnostic wall group completes its compact destination
+PASS A scattered crowd gathers at its center instead of preserving its original offsets
+PASS Compact regular groups keep spatial order and synchronized progress in eight directions
+PASS 10000 dense members advance together without backward gathering or cached allocations
+PASS A compact destination remains complete after a one-cell passage with local reassignment
+PASS Mid-segment retarget, destruction and spawn protect exact body occupancy
+PASS Boundary placement stays compact and blocked anchors project explicitly
+194 OpenRTS checks passed; 0 failed.
+
+./tools/dev.sh test --filter=ECS (after batched presentation query)
+PASS Local overrides win even when Inherits is written last; origin survives
+PASS Cross-file inheritance and multiple-parent precedence
+PASS Removal, nested removal, and independent named instances
+PASS Sequences replace instead of silently concatenate
+PASS Quoted # and colon, Unicode, comments, block text
+PASS Unknown parent gives location
+PASS Cycles show inheritance chain
+PASS Duplicate definitions across files rejected
+PASS Duplicate YAML fields rejected
+PASS Missing removal is an error
+PASS Anchors and aliases rejected deliberately
+PASS Custom CLR tags rejected
+PASS Tabs and multiple documents rejected
+PASS Missing and unknown option fields fail loudly
+PASS Validation uses invariant finite numbers and strict named enums
+PASS Named traits get distinct mutable instances per entity
+PASS Required traits, singleton multiplicity and unknown trait checks
+PASS Factories follow dependencies, not YAML order
+PASS Trait dependency cycles rejected before spawning
+PASS Generated schema contains enums, limits and field help
+20 DeclarativeContent checks passed.
+PASS ECS baseline: direct
+PASS ECS baseline: navigation
+PASS ECS baseline: combat
+PASS ECS baseline: buildings
+PASS ECS baseline: production
+PASS ECS: sequential producer commits protect a shared exit
+PASS ECS: producer creation changes membership after the current production pass
+PASS ECS: reused storage slots do not inherit queues or rally and publish in domain ID order
+PASS ECS: combat deaths remove producers before ready results are released
+PASS ECS: disposal is idempotent, rejects use and preserves pinned frames
+PASS ECS: unchanged producer membership adds no steady tick allocations
+PASS ECS: session releases its world before success or failure becomes observable
+PASS Spatial/health ECS: archetype removal and slot reuse preserve moving damaged actors and frozen frames
+PASS Spatial/health ECS: command spawns initialize previous position at the new tick
+PASS Orders/motion ECS: FIFO and fractional movement survive archetype removal, growth and slot reuse
+PASS Combat/presentation ECS: burst, autocast, animation and owner survive removal, growth and pinned frames
+PASS Navigation ECS: removal preserves active detours independently of storage order (growth=False)
+PASS Navigation ECS: removal preserves active detours independently of storage order (growth=True)
+18 OpenRTS checks passed; 0 failed.
+
+python3 tools/verify.py /Users/dmzorev/projects/games/Godot_mono.app/Contents/MacOS/Godot (final)
+PASS DeclarativeContent import and documented local changes match SHA-256
+PASS pinned Frent MIT license notice matches the verified package
+PASS weapon-stage sprite sources and normalized assets match SHA-256
+PASS building sources, open-door edits and normalized sprites match SHA-256
+PASS Godot/headless content parity; 1 static MultiMesh instances
+PASS Godot/headless content parity; 10000 static MultiMesh instances
+PASS Godot/headless content parity; 10001 static MultiMesh instances
+PASS 1 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10000 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10001 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS real-time worker pacing at 25 Hz with a 15 FPS presentation
+PASS 1 navigation entities: sequential/parallel/reverse/Godot parity
+PASS 10000 navigation entities: sequential/parallel/reverse/Godot parity
+PASS Godot wheel focus, zoom, pan and playback input handlers
+PASS SpriteFrames, layered presentation, combat effects, repair cursor, alpha, states and showcase input
+PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions
+PASS buildings, footprint masks, sizes, lifecycle states, doors, radar and 10000-building batches; host/worker parity
+PASS custom hotkeys/cursors, type tabs, autocast/cooldowns, task stacks, production/rally/placement and journal host parity
+PASS invalid content and preview arguments fail explicitly
+
+Performance: three paired AB/BA Release trials, TieredCompilation=0, no concurrent tests/Godot.
+Baseline9bc273b16d1b677fdd4e400b46d6fc20cdc2fc02; exact same Release test assembly for combat, distinct old/new Core.
+units/mixed/production1000/10000initial x256ticks; navigation1000x128/10000x64 workers1; combat10000actors,8warm/16measured ticks.
+All before/after gameplay states equal. p95 gate<=10% on selected workloads; worst+9.6%. Combat samples are total time, not p95.
+Final JSON, recorded Core SHA-256, documentation links and git diff --check passed.

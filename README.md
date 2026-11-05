@@ -14,6 +14,8 @@
 - [Проверки и стоимость E4a](docs/verification/017-spatial-health-ecs.md)
 - [Orders/Motion/NavigationAgent в ECS: E4b](docs/decisions/017-orders-motion-navigation-components.md)
 - [Проверки и стоимость E4b](docs/verification/018-orders-motion-navigation-ecs.md)
+- [Combat/Presentation/Ownership в ECS: E4c](docs/decisions/018-combat-presentation-components.md)
+- [Проверки и стоимость E4c](docs/verification/019-combat-presentation-ecs.md)
 - [Actor и traits: исходное исследование связности](docs/research/actor-composition/README.md)
 - [Референсы для исследования систем](docs/references.md)
 - [Решения первого каркаса](docs/decisions/001-foundation.md)

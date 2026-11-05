@@ -1,6 +1,6 @@
 # Архитектура OpenRTS поверх Frent
 
-Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health и Orders/Motion/NavigationAgent уже в struct-компонентах ECS; Combat/Presentation ещё в EntityState[]. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
+Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health, Orders/Motion/NavigationAgent и Combat/Presentation/Ownership уже в struct-компонентах ECS; EntityState[] содержит только временный mapping и live views. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
 
 ## Entity и Actor
 
@@ -111,3 +111,6 @@ Core и игровые systems могут использовать нативн�
 
 
 Реализация E4b: [приказы, движение, навигационный агент](../../decisions/017-orders-motion-navigation-components.md). OrderState владеет FIFO, NavigationAgentState — локальным массивом пути. EntityState временно предоставляет ref-return доступ к этим компонентам; второй mutable копии нет. Direct movement обрабатывается закрытой query независимо по строкам. Group routes остаются per-ID вспомогательной структурой, MotionIndex — derived packed индексом до следующего переноса. Стоимость переходного доступа и памяти: [измерения E4b](../../verification/018-orders-motion-navigation-ecs.md).
+
+
+Реализация E4c: [Combat/Presentation/Ownership](../../decisions/018-combat-presentation-components.md). Mount arrays и playback/aim/owner больше не лежат в packed EntityState. Previous facings и WeaponCount используют queries; залп/death/production сохраняют прежние commit barriers. [Измерения](../../verification/019-combat-presentation-ecs.md) дополнены отдельными Release combat/projectile samples с прежней Core assembly. Остаток миграции — mapping, MotionIndex и per-ID group routes, без пустого Player или обязательного ECS для projectile pool.

@@ -169,15 +169,17 @@ public sealed partial class SimulationWorld
     private bool TryExchangeGoals(int requesterIndex, int blockerIndex)
     {
         ref var requester = ref _entities[requesterIndex];
+        ref var requesterOwnership = ref requester.Ownership;
         ref var requesterNavigation = ref requester.Navigation;
         ref var requesterMotion = ref requester.Motion;
         ref var requesterOrders = ref requester.Orders;
         ref var blocker = ref _entities[blockerIndex];
+        ref var blockerOwnership = ref blocker.Ownership;
         ref var blockerNavigation = ref blocker.Navigation;
         ref var blockerMotion = ref blocker.Motion;
         ref var blockerOrders = ref blocker.Orders;
         var grid = _navigation!.Grid;
-        if (!requesterNavigation.GroupMember || !blockerNavigation.GroupMember || requester.Owner != blocker.Owner || requesterNavigation.OrderGroup != blockerNavigation.OrderGroup || blockerNavigation.YieldFor.Value != 0 || requesterNavigation.WaitTicks < 16) return false;
+        if (!requesterNavigation.GroupMember || !blockerNavigation.GroupMember || requesterOwnership.Owner != blockerOwnership.Owner || requesterNavigation.OrderGroup != blockerNavigation.OrderGroup || blockerNavigation.YieldFor.Value != 0 || requesterNavigation.WaitTicks < 16) return false;
         long oldCost = DistanceSquared(requester.Position, requesterMotion.Target) + DistanceSquared(blocker.Position, blockerMotion.Target);
         long newCost = DistanceSquared(requester.Position, blockerMotion.Target) + DistanceSquared(blocker.Position, requesterMotion.Target);
         if (newCost >= oldCost || !StopAllowed(requester.UnitType, blockerMotion.Target) || !ClearTerrain(requesterIndex, requester.Position, blockerMotion.Target) ||

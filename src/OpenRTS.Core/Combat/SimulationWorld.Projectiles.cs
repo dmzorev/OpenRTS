@@ -17,11 +17,12 @@ public sealed partial class SimulationWorld
     private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null)
     {
         ref var actor = ref _entities[source];
+        ref var actorOwnership = ref actor.Ownership;
         WorldPosition muzzle, destination;
         if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actor.UnitType], actor.Position, p); }
         else ObjectGeometry.DistanceSquared(_types[actor.UnitType], actor.Position, _types[_entities[target].UnitType], _entities[target].Position, out muzzle, out destination);
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Id, Target = target < 0 ? default : _entities[target].Id,
-            Owner = actor.Owner, UnitType = actor.UnitType, Mount = mount, Previous = muzzle, Position = muzzle,
+            Owner = actorOwnership.Owner, UnitType = actor.UnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
             InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
@@ -55,7 +56,8 @@ public sealed partial class SimulationWorld
                 foreach (int i in _combatCandidates)
                 {
                     ref var body = ref _entities[i];
-                    if (body.Id == shot.Source || !weapon.FriendlyFire && body.Owner == shot.Owner) continue;
+                    ref var bodyOwnership = ref body.Ownership;
+                    if (body.Id == shot.Source || !weapon.FriendlyFire && bodyOwnership.Owner == shot.Owner) continue;
                     int t;
                     var type = _types[body.UnitType];
                     if (type.Footprint is { } footprint)

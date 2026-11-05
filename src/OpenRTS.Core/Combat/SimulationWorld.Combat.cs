@@ -4,33 +4,28 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private struct WeaponState
-    {
-        public EntityId Target, ChargingTarget;
-        public long ReadyTick, FireAtTick;
-        public int BurstRemaining;
-        public bool AutoCast;
-        public FacingDirection PreviousFacing, Facing;
-        public AnimationPlayback Animation;
-    }
     private readonly Dictionary<EntityId, long> _damage = new(), _healing = new();
     private readonly List<EntityId> _dead = [], _affected = [];
     private readonly List<int> _combatCandidates = [];
     private bool Enemy(int index, EntityId id, out int target)
     {
         target = -1;
-        return _indices.TryGetValue(id, out target) && target != index && _entities[index].Owner != 0 &&
-            _entities[target].Owner != 0 && _entities[index].Owner != _entities[target].Owner;
+        if (!_indices.TryGetValue(id, out target) || target == index) return false;
+        uint owner = _entities[index].Ownership.Owner, other = _entities[target].Ownership.Owner;
+        return owner != 0 && other != 0 && owner != other;
     }
     private bool ValidTarget(int index, EntityId id, WeaponDefinition weapon, out int target)
     {
         target = -1;
-        if (!_indices.TryGetValue(id, out target) || index == target || _entities[index].Owner == 0) return false;
+        if (!_indices.TryGetValue(id, out target) || index == target) return false;
+        uint owner = _entities[index].Ownership.Owner;
+        if (owner == 0) return false;
         ref var other = ref _entities[target];
+        ref var otherOwnership = ref other.Ownership;
         if (weapon.Modifier(_types[other.UnitType].Armor) == 0) return false;
         return weapon.Effect == WeaponEffect.Repair
-            ? other.Owner == _entities[index].Owner && other.Health < _types[other.UnitType].MaxHealth
-            : other.Owner != 0 && other.Owner != _entities[index].Owner;
+            ? otherOwnership.Owner == owner && other.Health < _types[other.UnitType].MaxHealth
+            : otherOwnership.Owner != 0 && otherOwnership.Owner != owner;
     }
     private WeaponDefinition? OrderWeapon(int index, bool repair = false, EntityId target = default)
     {
@@ -39,7 +34,7 @@ public sealed partial class SimulationWorld
         for (int m = 0; m < mounts.Count; m++)
         {
             var mount = mounts[m];
-            if (MountAbility(_entities[index].UnitType, m) >= 0 && !repair && !_entities[index].Weapons[m].AutoCast) continue;
+            if (MountAbility(_entities[index].UnitType, m) >= 0 && !repair && !_entities[index].Combat.Weapons[m].AutoCast) continue;
             if ((mount.Weapon.Effect == WeaponEffect.Repair) != repair) continue;
             if (best is null || mount.Weapon.Range < best.Range) best = mount.Weapon;
             if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
@@ -71,7 +66,7 @@ public sealed partial class SimulationWorld
     }
     private void CancelWindups(int index)
     {
-        foreach (ref var state in _entities[index].Weapons.AsSpan()) { state.ChargingTarget = default; state.FireAtTick = 0; state.Target = default; }
+        foreach (ref var state in _entities[index].Combat.Weapons.AsSpan()) { state.ChargingTarget = default; state.FireAtTick = 0; state.Target = default; }
     }
     private void UpdateWeapons()
     {
@@ -80,13 +75,17 @@ public sealed partial class SimulationWorld
         {
             _stepCancellation.ThrowIfCancellationRequested();
             int i = _movementOrder[orderIndex]; ref var entity = ref _entities[i];
+            var type = _types[entity.UnitType];
+            if (type.Weapons.Count == 0) continue;
+            ref var entityCombat = ref entity.Combat;
+            ref var entityPresentation = ref entity.Presentation;
+            ref var entityOwnership = ref entity.Ownership;
             ref var entityOrders = ref entity.Orders;
             ref var entityMotion = ref entity.Motion;
-            var type = _types[entity.UnitType];
-            entity.WeaponReadyTick = 0;
+            entityCombat.WeaponReadyTick = 0;
             for (int mountIndex = 0; mountIndex < type.Weapons.Count; mountIndex++)
             {
-                var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entity.Weapons[mountIndex];
+                var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
                 bool repairOrder = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
                 bool ordinaryMove = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move;
@@ -132,19 +131,19 @@ public sealed partial class SimulationWorld
                             state.BurstRemaining--; state.ReadyTick = Tick + (state.BurstRemaining > 0 ? weapon.BurstIntervalTicks : weapon.CooldownTicks);
                             state.ChargingTarget = default; state.FireAtTick = 0;
                             state.Animation = new(type.AnimationIndex(mount.Animation), Tick, weapon.AnimationTicks);
-                            entity.WeaponAnimation = state.Animation;
+                            entityPresentation.WeaponAnimation = state.Animation;
                             WorldPosition muzzle, impactPoint;
                             if (ground) { impactPoint = point; muzzle = ObjectGeometry.ClosestPoint(type, entity.Position, point); }
                             else ObjectGeometry.DistanceSquared(type, entity.Position, _types[_entities[target].UnitType], _entities[target].Position, out muzzle, out impactPoint);
                             _events.Add(new(Tick, WorldEventKind.WeaponFired, entity.Id, impactPoint, entity.UnitType,
                                 state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle));
-                            if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entity.Owner, state.Target, impactPoint, entity.Id, entity.UnitType, mountIndex);
+                            if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entityOwnership.Owner, state.Target, impactPoint, entity.Id, entity.UnitType, mountIndex);
                             else Launch(i, target, mountIndex, weapon, ground ? point : null);
                             if (manual && state.BurstRemaining == 0) { entityOrders.HasOrder = false; entityOrders.CombatTarget = default; entityOrders.OrderPhase = OrderPhase.Idle; }
                         }
                     }
                 }
-                entity.WeaponReadyTick = Math.Max(entity.WeaponReadyTick, state.ReadyTick);
+                entityCombat.WeaponReadyTick = Math.Max(entityCombat.WeaponReadyTick, state.ReadyTick);
             }
         }
         UpdateProjectiles();
@@ -175,31 +174,40 @@ public sealed partial class SimulationWorld
         void ApplyEffect(EntityId id)
         {
             if (!_indices.TryGetValue(id, out int i)) return;
-            ref var entity = ref _entities[i]; bool repair = weapon.Effect == WeaponEffect.Repair;
-            if (repair ? entity.Owner != owner || id == source : entity.Owner == 0 || !weapon.FriendlyFire && entity.Owner == owner) return;
+            ref var entity = ref _entities[i];
+            ref var entityOwnership = ref entity.Ownership;
+            bool repair = weapon.Effect == WeaponEffect.Repair;
+            if (repair ? entityOwnership.Owner != owner || id == source : entityOwnership.Owner == 0 || !weapon.FriendlyFire && entityOwnership.Owner == owner) return;
             long value = (long)weapon.Damage * weapon.Modifier(_types[entity.UnitType].Armor) / 100;
             if (value == 0) return;
             var effects = repair ? _healing : _damage;
             effects.TryGetValue(id, out long previous); effects[id] = previous + value;
         }
     }
-    public int WeaponCount { get { int count = 0; for (int i = 0; i < Count; i++) count += _entities[i].Weapons.Length; return count; } }
+    public int WeaponCount => CountWeapons();
     public void CopyWeaponPoses(Span<WeaponPose> destination)
     {
         ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < WeaponCount) throw new ArgumentException("Destination is too small.", nameof(destination));
         int offset = 0;
-        for (int i = 0; i < Count; i++) for (int mount = 0; mount < _entities[i].Weapons.Length; mount++)
+        for (int i = 0; i < Count; i++)
         {
-            var state = _entities[i].Weapons[mount];
-            destination[offset++] = new(_entities[i].Id, mount, state.PreviousFacing, state.Facing, state.Animation, state.ReadyTick, state.BurstRemaining, state.Target, state.AutoCast, state.FireAtTick > 0 || _entities[i].Orders.HasOrder && _entities[i].Orders.ActiveOrder.Kind == UnitActionKind.Ability && AbilityMount(_entities[i].UnitType, _entities[i].Orders.ActiveOrder.Ability) == mount);
+            ref var entity = ref _entities[i];
+            ref var combat = ref entity.Combat;
+            ref var orders = ref entity.Orders;
+            for (int mount = 0; mount < combat.Weapons.Length; mount++)
+            {
+                var state = combat.Weapons[mount];
+                destination[offset++] = new(entity.Id, mount, state.PreviousFacing, state.Facing, state.Animation, state.ReadyTick, state.BurstRemaining, state.Target, state.AutoCast, state.FireAtTick > 0 || orders.HasOrder && orders.ActiveOrder.Kind == UnitActionKind.Ability && AbilityMount(entity.UnitType, orders.ActiveOrder.Ability) == mount);
+            }
         }
     }
     private static void WriteWeapons(BinaryWriter writer, EntityState entity)
     {
-        writer.Write(entity.Weapons.Length);
-        foreach (var state in entity.Weapons)
+        ref var entityCombat = ref entity.Combat;
+        writer.Write(entityCombat.Weapons.Length);
+        foreach (var state in entityCombat.Weapons)
         {
             writer.Write(state.Target.Value); writer.Write(state.ChargingTarget.Value); writer.Write(state.ReadyTick); writer.Write(state.FireAtTick); writer.Write(state.BurstRemaining); writer.Write(state.AutoCast);
             writer.Write(state.Facing.X); writer.Write(state.Facing.Y); writer.Write(state.Animation.Animation); writer.Write(state.Animation.StartTick); writer.Write(state.Animation.DurationTicks);

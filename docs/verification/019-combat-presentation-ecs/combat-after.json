@@ -1,0 +1,91 @@
+{
+  "Stage": "after",
+  "BaselineCommit": "9bc273b16d1b677fdd4e400b46d6fc20cdc2fc02",
+  "Method": "Serial paired AB/BA trials; TieredCompilation=0; identical workloads. Combat: same test assembly with old/new Core, 8 warm/16 measured ticks, total time not p95.",
+  "Results": [
+    {
+      "Entities": 10000,
+      "Ticks": 16,
+      "Shots": 52500,
+      "StepMilliseconds": 94.4053,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FFAFE12FF945BA152911E693066C0B58E1AC9945D9B8911E841730DD029B3116"
+      },
+      "Trial": 1,
+      "Workload": "10000 active shooters"
+    },
+    {
+      "Entities": 10000,
+      "Projectiles": 10000,
+      "Ticks": 16,
+      "StepMilliseconds": 133.5735,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FC16751313BB4602C66C5A06F5E2B52B6C8048BD09008BEBE46F5FB8E42D0545"
+      },
+      "Trial": 1,
+      "Workload": "10000 live projectiles"
+    },
+    {
+      "Entities": 10000,
+      "Ticks": 16,
+      "Shots": 52500,
+      "StepMilliseconds": 94.5797,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FFAFE12FF945BA152911E693066C0B58E1AC9945D9B8911E841730DD029B3116"
+      },
+      "Trial": 2,
+      "Workload": "10000 active shooters"
+    },
+    {
+      "Entities": 10000,
+      "Projectiles": 10000,
+      "Ticks": 16,
+      "StepMilliseconds": 149.6823,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FC16751313BB4602C66C5A06F5E2B52B6C8048BD09008BEBE46F5FB8E42D0545"
+      },
+      "Trial": 2,
+      "Workload": "10000 live projectiles"
+    },
+    {
+      "Entities": 10000,
+      "Ticks": 16,
+      "Shots": 52500,
+      "StepMilliseconds": 95.4458,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FFAFE12FF945BA152911E693066C0B58E1AC9945D9B8911E841730DD029B3116"
+      },
+      "Trial": 3,
+      "Workload": "10000 active shooters"
+    },
+    {
+      "Entities": 10000,
+      "Projectiles": 10000,
+      "Ticks": 16,
+      "StepMilliseconds": 139.287,
+      "AllocatedBytes": 0,
+      "State": {
+        "Tick": 24,
+        "EntityCount": 10000,
+        "StateHash": "FC16751313BB4602C66C5A06F5E2B52B6C8048BD09008BEBE46F5FB8E42D0545"
+      },
+      "Trial": 3,
+      "Workload": "10000 live projectiles"
+    }
+  ]
+}

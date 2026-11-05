@@ -42,8 +42,10 @@ public sealed partial class SimulationWorld
                 int chosen = -1, product = -1, queue = -1, length = int.MaxValue;
                 foreach (int i in recipients)
                 {
-                    ref var e = ref _entities[i]; int p = ProductIndex(e.UnitType, command.Action);
-                    if (p < 0 || e.Owner == 0 || !TryGetProducer(i, out var state)) continue;
+                    ref var e = ref _entities[i];
+                    ref var eOwnership = ref e.Ownership;
+                    int p = ProductIndex(e.UnitType, command.Action);
+                    if (p < 0 || eOwnership.Owner == 0 || !TryGetProducer(i, out var state)) continue;
                     int q = QueueIndex(e.UnitType, _types[e.UnitType].Products[p].Queue), size = state.Queues[q].Count;
                     if (size >= _types[e.UnitType].TaskQueues[q].Capacity || size >= length) continue;
                     chosen = i; product = p; queue = q; length = size;
@@ -80,7 +82,7 @@ public sealed partial class SimulationWorld
                 int target = _productTypes[e.UnitType][task.Product]; var build = _builds[e.UnitType][task.Product];
                 if (build.Kind != ProductionKind.PlaceBuilding || ObjectGeometry.DistanceSquared(_types[e.UnitType], e.Position, _types[target], command.Position, out _, out _) > (long)build.PlacementRadius * build.PlacementRadius ||
                     !PrepareFootprint(target, command.Position, out var grid)) { RejectAction(e.Id); return; }
-                var id = Spawn(target, command.Position, e.Owner); if (grid is not null) CommitGrid(grid);
+                var id = Spawn(target, command.Position, e.Ownership.Owner); if (grid is not null) CommitGrid(grid);
                 FinishTask(e.Id, q, task, id); return;
             }
         }
@@ -118,7 +120,7 @@ public sealed partial class SimulationWorld
                 var exit = new WorldPosition(Math.Clamp(actor.Position.X + settings.Exit.X, 0, Width), Math.Clamp(actor.Position.Y + settings.Exit.Y, 0, Depth));
                 if (!FindProductionExit(target, exit, settings.ExitSearchRadius, out var position))
                 { if (!task.Blocked) _events.Add(new(Tick, WorldEventKind.ProductionBlocked, id)); task.Blocked = true; continue; }
-                var spawned = Spawn(target, position, actor.Owner); completed++;
+                var spawned = Spawn(target, position, actor.Ownership.Owner); completed++;
                 if (settings.ExitAnimation is { } animation) ApplyPresentation(_indices[id], new(Tick, 0, 1, CommandKind.PlayAnimation, id,
                     Animation: type.AnimationIndex(animation), DurationTicks: settings.ExitAnimationTicks, Track: AnimationTrack.Body));
                 if (producer.HasRally) IssueOrder(_indices[spawned], new(UnitActionKind.Move, producer.Rally), false);

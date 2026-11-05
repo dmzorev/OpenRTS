@@ -192,7 +192,7 @@ internal static class WeaponChecks
             for (int t = 0; t < 16; t++) { world.Step(); foreach (var e in world.Events) if (e.Kind == WorldEventKind.WeaponFired) fired++; }
             timer.Stop(); bytes = GC.GetAllocatedBytesForCurrentThread() - bytes;
             NavigationChecks.Check(fired > 40000 && world.Count == 10000, "Large battle failed to acquire spatial targets");
-            Console.WriteLine("OPENRTS_COMBAT_SAMPLE:" + System.Text.Json.JsonSerializer.Serialize(new { Entities = world.Count, Ticks = 16, Shots = fired, StepMilliseconds = timer.Elapsed.TotalMilliseconds, AllocatedBytes = bytes }));
+            Console.WriteLine("OPENRTS_COMBAT_SAMPLE:" + System.Text.Json.JsonSerializer.Serialize(new { Entities = world.Count, Ticks = 16, Shots = fired, StepMilliseconds = timer.Elapsed.TotalMilliseconds, AllocatedBytes = bytes, State = world.Report() }));
         });
         test("Weapons: 10000 live projectiles retain bounded spatial collision work", () =>
         {
@@ -204,7 +204,7 @@ internal static class WeaponChecks
             for (int t = 0; t < 16; t++) world.Step();
             timer.Stop(); bytes = GC.GetAllocatedBytesForCurrentThread() - bytes;
             NavigationChecks.Check(world.ProjectileCount == 10000, "Long-flight salvo lost projectiles");
-            Console.WriteLine("OPENRTS_PROJECTILE_SAMPLE:" + System.Text.Json.JsonSerializer.Serialize(new { Entities = world.Count, Projectiles = world.ProjectileCount, Ticks = 16, StepMilliseconds = timer.Elapsed.TotalMilliseconds, AllocatedBytes = bytes }));
+            Console.WriteLine("OPENRTS_PROJECTILE_SAMPLE:" + System.Text.Json.JsonSerializer.Serialize(new { Entities = world.Count, Projectiles = world.ProjectileCount, Ticks = 16, StepMilliseconds = timer.Elapsed.TotalMilliseconds, AllocatedBytes = bytes, State = world.Report() }));
         });
     }
 }

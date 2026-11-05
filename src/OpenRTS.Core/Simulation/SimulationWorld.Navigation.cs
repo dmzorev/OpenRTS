@@ -218,12 +218,14 @@ public sealed partial class SimulationWorld
     private void TryYield(int requesterIndex, int blockerIndex)
     {
         ref var requester = ref _entities[requesterIndex];
+        ref var requesterOwnership = ref requester.Ownership;
         ref var requesterNavigation = ref requester.Navigation;
         ref var requesterMotion = ref requester.Motion;
         ref var blocker = ref _entities[blockerIndex];
+        ref var blockerOwnership = ref blocker.Ownership;
         ref var blockerNavigation = ref blocker.Navigation;
         ref var blockerMotion = ref blocker.Motion;
-        if (!_types[blocker.UnitType].Movable || requester.Owner != blocker.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
+        if (!_types[blocker.UnitType].Movable || requesterOwnership.Owner != blockerOwnership.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
             !requesterNavigation.GroupMember && requesterMotion.Target == blocker.Position) return;
         if (blockerMotion.Moving && blocker.Id.Value < requester.Id.Value) return;
         NavigationLocalSearches++;

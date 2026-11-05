@@ -37,6 +37,7 @@ public sealed partial class SimulationWorld
     private bool StartOrder(int index, UnitOrder order)
     {
         ref var entity = ref _entities[index];
+        ref var entityPresentation = ref entity.Presentation;
         ref var entityNavigation = ref entity.Navigation;
         ref var entityOrders = ref entity.Orders;
         ref var entityMotion = ref entity.Motion;
@@ -52,7 +53,7 @@ public sealed partial class SimulationWorld
         { if (!_types[entity.UnitType].Movable) Halt(index); else if (!SetTarget(index, entity.Position)) return false; }
         else Halt(index);
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
-        { entity.HasAim = false; entity.AimEntity = default; }
+        { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
         entityOrders.CombatTarget = default; CancelWindups(index);
         entityOrders.ActiveOrder = order; entityOrders.HasOrder = order.Kind != UnitActionKind.Stop || entityMotion.Moving;
         entityOrders.OrderStarted = Tick;
@@ -87,7 +88,9 @@ public sealed partial class SimulationWorld
             bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
             var weapon = OrderWeapon(i, repair, entityOrders.HasOrder ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget);
             if (entityMotion.Moving && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition) continue;
-            if (weapon is null || entity.Owner == 0 || entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move) continue;
+            if (weapon is null || entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move) continue;
+            if (entity.Ownership.Owner == 0) continue;
+            ref var entityPresentation = ref entity.Presentation;
             bool attack = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Attack or UnitActionKind.Repair;
             bool aggressive = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.AttackMove;
             int range = aggressive ? weapon.AcquireRange : weapon.Range;
@@ -96,7 +99,7 @@ public sealed partial class SimulationWorld
             {
                 if (entityOrders.CombatTarget.Value != 0)
                 {
-                    entityOrders.CombatTarget = default; entity.HasAim = false; entity.AimEntity = default;
+                    entityOrders.CombatTarget = default; entityPresentation.HasAim = false; entityPresentation.AimEntity = default;
                     if (attack) { entityOrders.HasOrder = false; Halt(i); entityOrders.OrderPhase = OrderPhase.Idle; continue; }
                     if (aggressive)
                     { SetTarget(i, entityOrders.ActiveOrder.Position); entityNavigation.GroupMember = entityOrders.ActiveOrder.Group; entityNavigation.OrderGroup = entityOrders.ActiveOrder.Cohort; entityOrders.OrderPhase = entityMotion.Moving ? OrderPhase.Moving : OrderPhase.Idle; }
@@ -107,7 +110,7 @@ public sealed partial class SimulationWorld
                 if (target < 0 || !InWeaponRange(i, target, range)) continue;
                 entityOrders.CombatTarget = _entities[target].Id;
             }
-            entity.HasAim = true; entity.AimEntity = entityOrders.CombatTarget;
+            entityPresentation.HasAim = true; entityPresentation.AimEntity = entityOrders.CombatTarget;
             if (InWeaponRange(i, target, weapon.Range) && (_types[entity.UnitType].Footprint is not null || StopAllowed(entity.UnitType, entity.Position))) { Halt(i); entityOrders.OrderPhase = OrderPhase.Engaging; }
             else if ((aggressive || attack) && _types[entity.UnitType].Movable)
             {

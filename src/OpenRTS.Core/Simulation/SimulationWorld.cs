@@ -12,24 +12,18 @@ public sealed partial class SimulationWorld : IDisposable
     private struct EntityState
     {
         public EntityId Id;
-        // shortcut: keep handles in packed state until E4 moves hot components into unit storage.
+        // shortcut: keep packed mapping and live component views until the E4/E5 index cleanup.
         public Frent.Entity StorageEntity;
         public int UnitType;
-        // shortcut: remaining combat/presentation code resolves live ECS data until its E4 slice.
         public readonly int Health => StorageEntity.Get<HealthState>().Current;
         public readonly WorldPosition Position => StorageEntity.Get<SpatialState>().Position;
         public readonly WorldPosition Previous => StorageEntity.Get<SpatialState>().Previous;
         public readonly ref OrderState Orders => ref StorageEntity.Get<OrderState>();
         public readonly ref MotionState Motion => ref StorageEntity.Get<MotionState>();
         public readonly ref NavigationAgentState Navigation => ref StorageEntity.Get<NavigationAgentState>();
-        public WeaponState[] Weapons;
-        public long WeaponReadyTick;
-        public uint Owner, VisualStates;
-        public FacingDirection BodyFacing, PreviousBodyFacing, WeaponFacing, PreviousWeaponFacing;
-        public AnimationPlayback BodyAnimation, WeaponAnimation;
-        public bool BodyAnimationOverride, HasAim;
-        public WorldPosition AimPoint;
-        public EntityId AimEntity;
+        public readonly ref CombatState Combat => ref StorageEntity.Get<CombatState>();
+        public readonly ref PresentationState Presentation => ref StorageEntity.Get<PresentationState>();
+        public readonly ref OwnershipState Ownership => ref StorageEntity.Get<OwnershipState>();
     }
 
     private readonly UnitDefinition[] _types;
@@ -165,12 +159,7 @@ public sealed partial class SimulationWorld : IDisposable
         try
         {
             CapturePreviousPositions();
-            for (int i = 0; i < Count; i++)
-            {
-                ref var entity = ref _entities[i];
-                foreach (ref var mount in entity.Weapons.AsSpan()) mount.PreviousFacing = mount.Facing;
-                entity.PreviousBodyFacing = entity.BodyFacing; entity.PreviousWeaponFacing = entity.WeaponFacing;
-            }
+            CapturePreviousFacings();
             UpdateOrders();
             if (_navigation is not null) UpdateNavigation(cancellationToken);
             else UpdateDirectMovement();
@@ -190,21 +179,24 @@ public sealed partial class SimulationWorld : IDisposable
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i];
+            ref var entityPresentation = ref entity.Presentation;
+            ref var entityOwnership = ref entity.Ownership;
+            ref var entityCombat = ref entity.Combat;
             ref var entityOrders = ref entity.Orders;
             ref var entityMotion = ref entity.Motion;
             ref var entityNavigation = ref entity.Navigation;
             ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
             int health = entity.StorageEntity.Get<HealthState>().Current;
             TryGetProducer(i, out var producer);
-            uint states = entity.VisualStates;
+            uint states = entityPresentation.VisualStates;
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entity.UnitType].TaskQueues[q].WorkingState is { } state)
                     states |= _types[entity.UnitType].StateMask(state);
             destination[i] = new(entity.Id, entity.UnitType, spatial.Previous, spatial.Position,
-                new(entity.Owner, entity.PreviousBodyFacing, entity.BodyFacing, entity.PreviousWeaponFacing, entity.WeaponFacing,
-                    entity.BodyAnimation, entity.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), health, weaponOffset, entity.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default);
-            weaponOffset += entity.Weapons.Length;
+                new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
+                    entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default);
+            weaponOffset += entityCombat.Weapons.Length;
         }
     }
 
@@ -332,7 +324,7 @@ public sealed partial class SimulationWorld : IDisposable
         var id = _entities[index].Id;
         if (_entities[index].StorageEntity.Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
-        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Owner));
+        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Ownership.Owner));
         _entities[index].StorageEntity.Delete();
         _groupRoutes.Remove(id); _indices.Remove(id); _orderDirty = true; Count--;
         if (index != Count)
@@ -381,24 +373,19 @@ public sealed partial class SimulationWorld : IDisposable
             Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
         }
         var id = new EntityId(_nextId);
-        var state = new EntityState { Id = id, UnitType = unitType,
-            Owner = owner, VisualStates = states,
-            Weapons = _types[unitType].Weapons.Select(_ => new WeaponState { Facing = FacingDirection.North, PreviousFacing = FacingDirection.North, Animation = AnimationPlayback.None }).ToArray(),
-            BodyFacing = FacingDirection.North, PreviousBodyFacing = FacingDirection.North,
-            WeaponFacing = FacingDirection.North, PreviousWeaponFacing = FacingDirection.North,
-            BodyAnimation = new(_types[unitType].IdleAnimation, Tick, 0), WeaponAnimation = AnimationPlayback.None };
+        var state = new EntityState { Id = id, UnitType = unitType };
         var type = _types[unitType];
         _unitStorage ??= new();
         state.StorageEntity = type.TaskQueues.Count == 0
-            ? _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null))
-            : _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new ProducerState(type.TaskQueues.Count));
+            ? _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+            : _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
         _entities[Count] = state;
         _nextId++;
         (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);
         if (type.TaskQueues.Count > 0) _producersDirty = true;
-        for (int a = 0; a < type.Abilities.Count; a++) _entities[_indices[id]].Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
+        for (int a = 0; a < type.Abilities.Count; a++) _entities[_indices[id]].Combat.Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;
     }

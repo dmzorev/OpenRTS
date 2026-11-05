@@ -1,6 +1,6 @@
 # Выбор ECS для OpenRTS
 
-Дата: 2026-11-05. **Выбран Frent 0.9.1-beta, data-only компоненты и явно вызываемые query-системы. E0–E3 выполнены; [E3 definitions/actions](../../verification/016-composed-definitions.md). Также реализованы [E4a Spatial/Health](../../verification/017-spatial-health-ecs.md) и [E4b Orders/Motion/NavigationAgent](../../verification/018-orders-motion-navigation-ecs.md). Combat/Presentation и завершение E4/E5 ещё впереди.** Исследовательские probes изолированы от основных csproj/solution; Core подключает только выбранный Frent.
+Дата: 2026-11-05. **Выбран Frent 0.9.1-beta, data-only компоненты и явно вызываемые query-системы. E0–E3 выполнены; [E3 definitions/actions](../../verification/016-composed-definitions.md). Также реализованы [E4a Spatial/Health](../../verification/017-spatial-health-ecs.md) и [E4b Orders/Motion/NavigationAgent](../../verification/018-orders-motion-navigation-ecs.md). Реализован [E4c Combat/Presentation/Ownership](../../verification/019-combat-presentation-ecs.md); mapping и завершение E4/E5 ещё впереди.** Исследовательские probes изолированы от основных csproj/solution; Core подключает только выбранный Frent.
 
 Этот выбор заменяет прежнюю рекомендацию сначала строить собственные специализированные stores из [исследования Actor/traits](../actor-composition/README.md). Разделение ответственности из него сохраняется; готовая библиотека теперь берёт на себя ECS storage, membership, queries и внутренние handles.
 

@@ -1,6 +1,6 @@
 # План миграции на Frent
 
-Статус: E0–E3 реализованы. Core закрепляет Frent0.9.1-beta; identity/lifecycle и ProducerState в ECS, составные definitions/UI Actions разделены. [Проверки E3](../../verification/016-composed-definitions.md). E4a Spatial/Health и E4b Orders/Motion/NavigationAgent реализованы; Combat/Presentation и завершение E4/E5 ещё впереди. [Проверки E4b](../../verification/018-orders-motion-navigation-ecs.md). [Проверки E4a](../../verification/017-spatial-health-ecs.md). [Проверки](../../verification/015-ecs-production.md). [Архитектура](architecture.md), [выбор](README.md).
+Статус: E0–E3 реализованы. Core закрепляет Frent0.9.1-beta; identity/lifecycle и ProducerState в ECS, составные definitions/UI Actions разделены. [Проверки E3](../../verification/016-composed-definitions.md). E4a Spatial/Health, E4b Orders/Motion/NavigationAgent и E4c Combat/Presentation/Ownership реализованы; mapping и завершение E4/E5 ещё впереди. [Проверки E4c](../../verification/019-combat-presentation-ecs.md). [Проверки E4b](../../verification/018-orders-motion-navigation-ecs.md). [Проверки E4a](../../verification/017-spatial-health-ecs.md). [Проверки](../../verification/015-ecs-production.md). [Архитектура](architecture.md), [выбор](README.md).
 
 ## Обязательная последовательность
 
@@ -63,6 +63,6 @@ ECS не отменяет N4: clearance/global invalidation/холодный п�
 
 ## Что требуется от пользователя
 
-Для выбора библиотеки и технического пилота новых продуктовых решений нет. Исследование, интеграцию, тесты, локальные измерения и подготовку документации можно выполнить самостоятельно в рамках следующего этапа. Production-пилот и E3 выполнены; Spatial/Health и Orders/Motion/NavigationAgent уже в ECS; следующий пакет — Combat/Presentation, затем оставшийся mapping/legacy cleanup. Общая миграция ещё не закончена.
+Для выбора библиотеки и технического пилота новых продуктовых решений нет. Исследование, интеграцию, тесты, локальные измерения и подготовку документации можно выполнить самостоятельно в рамках следующего этапа. Production-пилот и E3 выполнены; Mutable runtime state юнитов уже в ECS; следующий пакет — оставшийся mapping/legacy cleanup и навигационная интеграция. Общая миграция ещё не закончена.
 
 Позже полезны целевые CPU/память/OS и бюджет тика конкретной игры, а после рабочего Sandbox — оценка поведения. Новая схема экономики, сетевой режим, авторские моды/горячая загрузка требуют отдельных требований по мере их появления. До этого они не блокируют E0–E2.
