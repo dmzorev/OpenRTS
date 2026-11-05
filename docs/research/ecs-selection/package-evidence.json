@@ -1,0 +1,152 @@
+{
+  "checked_on": "2026-11-05",
+  "method": "Actual restored nupkg and nuspec; net10 dependency resolution in probe/*/packages.lock.json. No binaries vendored.",
+  "packages": [
+    {
+      "id": "Frent",
+      "version": "0.9.1-beta",
+      "license": {
+        "type": "file",
+        "value": "LICENSE.md"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/itsBuggingMe/Frent",
+        "commit": "189532826c235fc240665204498cf5006ed3967e"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/frent/0.9.1-beta/frent.0.9.1-beta.nupkg",
+      "sha256_nupkg": "d1105faf9771f800791009bf68481170ec94016e02b33f17223364b2f951e61f",
+      "sha256_nuspec": "42bf676eb750a2c331afebfb19da2cf5d9b96b92e6012b0d13e1182b5daa5663",
+      "license_file_sha256": "ce03fa69cca635344af519665997acb490515cb55813641c8fbd111889bd4f34",
+      "local_license": "probe/licenses/Frent-0.9.1-beta.txt"
+    },
+    {
+      "id": "EasyEcs",
+      "version": "4.7.0",
+      "license": {
+        "type": "expression",
+        "value": "MIT"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/JasonXuDeveloper/EasyEcs",
+        "commit": "b01f49bcb6149bb9bc38495a79af39c2793665e8"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/easyecs/4.7.0/easyecs.4.7.0.nupkg",
+      "sha256_nupkg": "a8de70bcda232e10aef9bdc13536d5df32e2b275672b76c4a55019c9cd4c876e",
+      "sha256_nuspec": "f4ad206a0be2626c67d3c3278a329004c8ac7f5d0066fe3a7ad4bda99fd8f187"
+    },
+    {
+      "id": "Nino",
+      "version": "4.0.0-rc.6",
+      "license": {
+        "type": "expression",
+        "value": "MIT"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/JasonXuDeveloper/Nino",
+        "commit": "2be081e2d0bb7ce6b72a01fa18a3edc4923c353f"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/nino/4.0.0-rc.6/nino.4.0.0-rc.6.nupkg",
+      "sha256_nupkg": "efd21cf1dee52c5280cda43307cc5128a95fed4e6be677a3b1bafdd056a5d368",
+      "sha256_nuspec": "34f8511f046a87d09d841f51f9523469b000be4070d02b7f5f7b9d25840c5eae"
+    },
+    {
+      "id": "Nino.Generator",
+      "version": "4.0.0-rc.6",
+      "license": {
+        "type": "expression",
+        "value": "MIT"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/JasonXuDeveloper/Nino",
+        "commit": "2be081e2d0bb7ce6b72a01fa18a3edc4923c353f"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/nino.generator/4.0.0-rc.6/nino.generator.4.0.0-rc.6.nupkg",
+      "sha256_nupkg": "fd816ef2e9964431454eb0efb6853285be64074fd734a230aa1d4907bfe51975",
+      "sha256_nuspec": "16a350228c477a52d4157926216ff2c8d831299c8a19ab73e79ec17494db3be8"
+    },
+    {
+      "id": "Nino.Serialization",
+      "version": "4.0.0-rc.6",
+      "license": {
+        "type": "expression",
+        "value": "MIT"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/JasonXuDeveloper/Nino",
+        "commit": "2be081e2d0bb7ce6b72a01fa18a3edc4923c353f"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/nino.serialization/4.0.0-rc.6/nino.serialization.4.0.0-rc.6.nupkg",
+      "sha256_nupkg": "dce9206299d7cc4a6d0ff5e2b702d3e87277295a46f0bb33e1b25bfd18a6b5bd",
+      "sha256_nuspec": "29027280202ace0b1a792b7aa72473ced41155cb9e2c4ce83f31d48d231f8baa"
+    },
+    {
+      "id": "Friflo.Engine.ECS",
+      "version": "3.6.0",
+      "license": {
+        "type": "expression",
+        "value": "MIT"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/friflo/Friflo.Engine.ECS",
+        "commit": "c326ceb2076d7d14c0ae74df0e661c62aedd8d24"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/friflo.engine.ecs/3.6.0/friflo.engine.ecs.3.6.0.nupkg",
+      "sha256_nupkg": "411cd8eb160db6c19bc54d6281c3849933eed78dfde34cbe650882e60c5896de",
+      "sha256_nuspec": "c093a01762289a611d3d364e0cb600363e1fd891d8e00d5a8085ce67fe8629d7"
+    },
+    {
+      "id": "Friflo.Json.Fliox",
+      "version": "1.0.4",
+      "license": {
+        "type": "expression",
+        "value": "LGPL-3.0-only"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/friflo/Friflo.Json.Fliox",
+        "commit": "6ac89217ad3ea66f11abfd756a0af323d63315ff"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/friflo.json.fliox/1.0.4/friflo.json.fliox.1.0.4.nupkg",
+      "sha256_nupkg": "40fa12fb627cc9f86fd89ca0df003328ab8bf1d2943fab0818d90aa0e39d25bd",
+      "sha256_nuspec": "5bad6646538532b5b92e16fd949baa69825c313345b78bff33a6e149c31cf343"
+    },
+    {
+      "id": "Friflo.Json.Burst",
+      "version": "1.0.4",
+      "license": {
+        "type": "expression",
+        "value": "LGPL-3.0-only"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/friflo/Friflo.Json.Fliox",
+        "commit": "6ac89217ad3ea66f11abfd756a0af323d63315ff"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/friflo.json.burst/1.0.4/friflo.json.burst.1.0.4.nupkg",
+      "sha256_nupkg": "75d9662aa146b1dcc48eb520412e61ab48e4dff2cf4444b43a4e933e72e4eb34",
+      "sha256_nuspec": "83e00a1041c8620270a54169ef7da5445ac1e559a2913c7d6c92a64fde282709"
+    },
+    {
+      "id": "Friflo.Json.Fliox.Annotation",
+      "version": "1.0.4",
+      "license": {
+        "type": "expression",
+        "value": "LGPL-3.0-only"
+      },
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/friflo/Friflo.Json.Fliox",
+        "commit": "6ac89217ad3ea66f11abfd756a0af323d63315ff"
+      },
+      "nupkg_url": "https://api.nuget.org/v3-flatcontainer/friflo.json.fliox.annotation/1.0.4/friflo.json.fliox.annotation.1.0.4.nupkg",
+      "sha256_nupkg": "05a3479a4d229a8caa176780f2cacd2f46010625801cd1eec0bfd30e4bfbf515",
+      "sha256_nuspec": "239e58e0495d163ef6df00e85baa4e99004fc90a8f9b8c740f3d2dca53aebe08"
+    }
+  ]
+}

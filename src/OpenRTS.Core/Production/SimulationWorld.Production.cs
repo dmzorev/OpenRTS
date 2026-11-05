@@ -3,7 +3,11 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld
 {
     private sealed class ProductionTask(long id, int product, bool repeat)
-    { public long Id = id; public int Product = product, Progress; public bool Repeat = repeat, Ready, Blocked; }
+    {
+        public long Id = id;
+        public int Product = product, Progress;
+        public bool Repeat = repeat, Ready, Blocked;
+    }
     private sealed class ProducerState(int queues)
     {
         public List<ProductionTask>[] Queues = Enumerable.Range(0, queues).Select(_ => new List<ProductionTask>()).ToArray();
@@ -154,14 +158,18 @@ public sealed partial class SimulationWorld
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < TaskCount) throw new ArgumentException("Destination is too small."); int at = 0;
         foreach (var (id, state) in _producers)
-        { int t = _entities[_indices[id]].UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
-            { var build = _builds[t][task.Product]; destination[at++] = new(id, q, task.Id, task.Product, _productTypes[t][task.Product], task.Progress, build.Ticks, build.Cost, task.Repeat, task.Ready); } }
+        {
+            int t = _entities[_indices[id]].UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
+            { var build = _builds[t][task.Product]; destination[at++] = new(id, q, task.Id, task.Product, _productTypes[t][task.Product], task.Progress, build.Ticks, build.Cost, task.Repeat, task.Ready); }
+        }
     }
     private void WriteProduction(BinaryWriter w)
     {
         w.Write(_nextTaskId); w.Write(_producers.Count);
         foreach (var (id, state) in _producers)
-        { w.Write(id.Value); w.Write(state.HasRally); w.Write(state.Rally.X); w.Write(state.Rally.Y); w.Write(state.Rally.Elevation); w.Write(state.Queues.Length);
-            foreach (var tasks in state.Queues) { w.Write(tasks.Count); foreach (var t in tasks) { w.Write(t.Id); w.Write(t.Product); w.Write(t.Progress); w.Write(t.Repeat); w.Write(t.Ready); w.Write(t.Blocked); } } }
+        {
+            w.Write(id.Value); w.Write(state.HasRally); w.Write(state.Rally.X); w.Write(state.Rally.Y); w.Write(state.Rally.Elevation); w.Write(state.Queues.Length);
+            foreach (var tasks in state.Queues) { w.Write(tasks.Count); foreach (var t in tasks) { w.Write(t.Id); w.Write(t.Product); w.Write(t.Progress); w.Write(t.Repeat); w.Write(t.Ready); w.Write(t.Blocked); } }
+        }
     }
 }

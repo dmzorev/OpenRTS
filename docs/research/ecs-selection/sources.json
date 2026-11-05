@@ -1,0 +1,202 @@
+{
+  "checked_on": "2026-11-05",
+  "openrts_base_commit": "80ebd76c4e520b4b71c6ffc80c75b47ed4d11b59",
+  "scope": "Choose ECS, propose architecture and migration. No production runtime migration. Vendor benchmark claims not treated as measurements.",
+  "versions": {
+    "Frent": {
+      "package": "0.9.1-beta",
+      "source_tag_commit": "e9901ea8979d410afb881666033bd99dbfe57687",
+      "package_repository_commit": "189532826c235fc240665204498cf5006ed3967e"
+    },
+    "EasyEcs": {
+      "package": "4.7.0",
+      "commit": "b01f49bcb6149bb9bc38495a79af39c2793665e8"
+    },
+    "Friflo.Engine.ECS": {
+      "package": "3.6.0",
+      "commit": "c326ceb2076d7d14c0ae74df0e661c62aedd8d24"
+    }
+  },
+  "sources": [
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/LICENSE.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Frent.csproj",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/README.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/docs/docs/installation.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/docs/docs/systems.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/docs/docs/filter-update.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/docs/docs/structural-changes.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/docs/docs/limitations.md",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Entity.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/World.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/World.structural.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Core/CommandBuffer.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Core/Component.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Systems/Query.typed.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Components/ISparseComponent.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/blob/e9901ea8979d410afb881666033bd99dbfe57687/Frent/Systems/Enumerators/ChunkQueryEnumerator.cs",
+      "scope": "Frent0.9.1-beta: release source, query API, structural and identity semantics",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/LICENSE",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/src/EasyEcs.Core/EasyEcs.Core.csproj",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/docs/content/architecture.mdx",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/docs/content/guide/threading.mdx",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/docs/content/guide/queries.mdx",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/docs/content/guide/dynamic-buffers.mdx",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/docs/content/faq.mdx",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/src/EasyEcs.Core/ComponentInfo.cs",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/EasyEcs/blob/b01f49bcb6149bb9bc38495a79af39c2793665e8/src/EasyEcs.Core/World.Systems.cs",
+      "scope": "EasyEcs4.7.0 release; later master features excluded",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/LICENSE",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/src/ECS/Friflo.Engine.ECS.csproj",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/src/ECS/CommandBuffer/CommandBuffer.cs",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/src/ECS/CommandBuffer/CommandBufferSynced.cs",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/src/ECS/Systems/SystemGroup.cs",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Engine.ECS/blob/c326ceb2076d7d14c0ae74df0e661c62aedd8d24/src/ECS/Entity.cs",
+      "scope": "Friflo3.6.0",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://www.nuget.org/packages/Friflo.Engine.ECS/4.0.0-preview.2",
+      "scope": "Preview still depends on Fliox1.0.4",
+      "kind": "primary-package-metadata"
+    },
+    {
+      "url": "https://github.com/friflo/Friflo.Json.Fliox/blob/6ac89217ad3ea66f11abfd756a0af323d63315ff/LICENSE",
+      "scope": "LGPL dependency license; also verified actual nuspec",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/JasonXuDeveloper/Nino/blob/2be081e2d0bb7ce6b72a01fa18a3edc4923c353f/LICENSE",
+      "scope": "MIT transitive dependency; actual nuspec checked",
+      "kind": "primary-source"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/Frent/compare/189532826c235fc240665204498cf5006ed3967e...e9901ea8979d410afb881666033bd99dbfe57687",
+      "scope": "NuGet repository revision differs from release tag only in two markdown documents",
+      "kind": "primary-comparison"
+    },
+    {
+      "url": "https://github.com/itsBuggingMe/FrentGodotSample/blob/master/src/FrentGodotSample.csproj",
+      "scope": "Upstream integration example uses older versions; not evidence for our Godot version",
+      "kind": "primary-example"
+    }
+  ]
+}

@@ -6,6 +6,8 @@
 
 - [План работы и распределение решений](docs/plan.md)
 - [Архитектурные договорённости](docs/architecture.md)
+- [ECS: выбор Frent, архитектура и план миграции](docs/research/ecs-selection/README.md)
+- [Actor и traits: исходное исследование связности](docs/research/actor-composition/README.md)
 - [Референсы для исследования систем](docs/references.md)
 - [Решения первого каркаса](docs/decisions/001-foundation.md)
 - [Численная модель и поток симуляции](docs/decisions/002-simulation.md)
