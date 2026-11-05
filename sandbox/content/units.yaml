@@ -1,4 +1,5 @@
 ^unit:
+  Buildable: {Ticks: 75, Cost: 100}
   Movement: {Locomotor: infantry}
   Health: {HP: 100, Armor: Living}
   Presentation:
@@ -10,6 +11,10 @@ rifleman:
   Armaments:
     Mounts:
       main: {Weapon: rifle}
+      grenade: {Weapon: grenade}
+  Actions:
+    Buttons:
+      grenade: {Mount: grenade, GroundTarget: true, Label: Граната, Cursor: grenade, Icon: res://assets/units/rifleman.png}
   Presentation: {Model: infantry-rifle, Name: Пехотинец с автоматом}
 
 rocketeer:
@@ -18,13 +23,6 @@ rocketeer:
     Mounts:
       main: {Weapon: missile}
   Presentation: {Model: infantry-rocket, Name: Пехотинец с ракетницей}
-
-grenadier:
-  Inherits: ^unit
-  Armaments:
-    Mounts:
-      main: {Weapon: grenade}
-  Presentation: {Model: infantry-grenade, Name: Гранатомётчик}
 
 apc-mg:
   Inherits: ^unit
@@ -67,6 +65,9 @@ tank-mixed:
 
 engineer:
   Inherits: ^unit
+  Actions:
+    Buttons:
+      repair: {Mount: main, Label: Ремонт, Cursor: repair}
   Movement: {Locomotor: amphibious}
   Health: {HP: 220, Armor: Mechanical}
   Armaments:

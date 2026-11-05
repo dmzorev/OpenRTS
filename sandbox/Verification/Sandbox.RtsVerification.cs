@@ -31,7 +31,7 @@ public partial class Sandbox
                 var originals = _displayPoses.Take(_displayCount).ToArray();
                 _displayPoses = [.. originals, originals[0] with { Id = new(100001), Current = originals[0].Current with { X = originals[0].Current.X + 2048 } }];
                 _displayCount++; RefreshSelection(); Click(1, doubleClick: true);
-                Check(_selection.Count == 2 && _selection.Contains(new(100001)), "Double click selects visible same-type units");
+                Check(_selection.Count == 3 && _selection.Contains(new(100001)), "Double click selects visible same-type units");
                 Click(2, ctrl: true); Check(_selection.Count == 1 && _selected.Value == 2, "Ctrl-click type filter");
                 _displayPoses = originals; _displayCount = originals.Length; RefreshSelection();
                 Click(1); Click(2, shift: true); KeyInput(Key.Key1, ctrl: true);

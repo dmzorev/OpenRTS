@@ -89,6 +89,7 @@ public sealed partial class SimulationWorld
         _types = unitTypes.ToArray();
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
+        InitializeProduction();
         Width = width;
         Depth = depth;
         TickRate = tickRate;
@@ -109,7 +110,7 @@ public sealed partial class SimulationWorld
             _motion.Clear(initialCapacity);
             _localPaths = new WorldPosition[checked(initialCapacity * LocalMotionSearch.PathCapacity)];
         }
-        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null)) _combatIndex = new(speedPerTick);
+        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0)) _combatIndex = new(speedPerTick);
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
@@ -145,8 +146,11 @@ public sealed partial class SimulationWorld
                 throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
             if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
                 throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected)
+            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally)
                 ValidatePosition(command.Position);
+            if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced)
+                if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
+                    throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", nameof(commands));
             if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
                 throw new ArgumentException("Scatter area must have positive extents.", nameof(commands));
             if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
@@ -183,6 +187,7 @@ public sealed partial class SimulationWorld
         else for (int i = 0; i < Count; i++)
             if (_entities[i].Moving && Advance(ref _entities[i], _entities[i].Target)) _entities[i].Moving = false;
         UpdateWeapons();
+        UpdateProduction();
         UpdatePresentation();
         }
         catch { _failed = true; throw; }
@@ -196,10 +201,15 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             ref var entity = ref _entities[i];
+            _producers.TryGetValue(entity.Id, out var producer);
+            uint states = entity.VisualStates;
+            if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
+                if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entity.UnitType].TaskQueues[q].WorkingState is { } state)
+                    states |= _types[entity.UnitType].StateMask(state);
             destination[i] = new(entity.Id, entity.UnitType, entity.Previous, entity.Position,
                 new(entity.Owner, entity.PreviousBodyFacing, entity.BodyFacing, entity.PreviousWeaponFacing, entity.WeaponFacing,
-                    entity.BodyAnimation, entity.WeaponAnimation, entity.VisualStates),
-                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health, weaponOffset, entity.Weapons.Length, entity.TerrainStranded);
+                    entity.BodyAnimation, entity.WeaponAnimation, states),
+                new(entity.ActiveOrder.Kind, entity.OrderPhase, entity.Target, entity.CombatTarget, entity.PendingOrders?.Count ?? 0, entity.WeaponReadyTick), entity.Health, weaponOffset, entity.Weapons.Length, entity.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default);
             weaponOffset += entity.Weapons.Length;
         }
     }
@@ -210,7 +220,7 @@ public sealed partial class SimulationWorld
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 6 : 10);
+            writer.Write(_navigation is null ? 7 : 11);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -239,7 +249,7 @@ public sealed partial class SimulationWorld
                     { writer.Write(point.X); writer.Write(point.Y); }
                 }
             }
-            WriteProjectiles(writer);
+            WriteProjectiles(writer); WriteProduction(writer);
             writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
             _navigation?.WriteState(writer);
             writer.Write(_weighted is not null); _weighted?.WriteState(writer);
@@ -255,9 +265,15 @@ public sealed partial class SimulationWorld
 
     private void Apply(WorldCommand command)
     {
+        if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
+        if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
         if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.Stop or CommandKind.HoldPosition)
         {
             var members = Recipients(command);
+            if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
+            { foreach (int i in members) if (!_types[_entities[i].UnitType].Movable && _producers.ContainsKey(_entities[i].Id)) SetRally(i, command.Position);
+                members = members.Where(i => _types[_entities[i].UnitType].Movable || !_producers.ContainsKey(_entities[i].Id)).ToArray(); }
+            if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair,
                 CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
             if (_navigation is not null && (command.Kind is CommandKind.MoveGroup or CommandKind.MoveSelected || command.Kind == CommandKind.AttackMove && members.Length > 1))
@@ -315,7 +331,7 @@ public sealed partial class SimulationWorld
 
     private void DestroyIndex(int index, bool wreck = true)
     {
-        var id = _entities[index].Id; bool stamped = _footprints.Remove(id);
+        var id = _entities[index].Id; if (_producers.Remove(id)) _producersDirty = true; bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Owner));
         _groupRoutes.Remove(id); _indices.Remove(id); _orderDirty = true; Count--;
         if (index != Count)
@@ -375,6 +391,8 @@ public sealed partial class SimulationWorld
         (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);
+        RegisterProducer(id, unitType);
+        for (int a = 0; a < type.Abilities.Count; a++) _entities[_indices[id]].Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;
     }

@@ -13,11 +13,11 @@ public sealed class EntitySet
         if (_ids.Length is < 1 or > 1000000 || _ids[0].Value == 0) throw new ArgumentException("Recipients must contain 1..1000000 valid IDs.", nameof(ids));
     }
 }
-public enum UnitActionKind { Move, AttackMove, Attack, Stop, HoldPosition, Repair }
+public enum UnitActionKind { Move, AttackMove, Attack, Stop, HoldPosition, Repair, Ability }
 public enum OrderPhase { Idle, Moving, Approaching, Engaging, Holding, Waiting }
 public readonly record struct UnitAction(UnitActionKind Kind, EntitySet Recipients, WorldPosition Position = default,
-    EntityId Target = default, bool Queued = false);
-public readonly record struct UnitOrder(UnitActionKind Kind, WorldPosition Position, EntityId Target = default, bool Group = false, long Cohort = 0);
+    EntityId Target = default, bool Queued = false, string? Action = null);
+public readonly record struct UnitOrder(UnitActionKind Kind, WorldPosition Position, EntityId Target = default, bool Group = false, long Cohort = 0, int Ability = -1);
 public readonly record struct OrderSnapshot(UnitActionKind Kind, OrderPhase Phase, WorldPosition Destination, EntityId Target,
     int QueuedCount, long ReadyTick);
 

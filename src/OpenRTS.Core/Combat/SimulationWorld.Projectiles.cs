@@ -14,11 +14,13 @@ public sealed partial class SimulationWorld
     private readonly List<ProjectileState> _projectiles = [];
     private long _nextProjectileId = 1;
     public int ProjectileCount => _projectiles.Count;
-    private void Launch(int source, int target, int mount, WeaponDefinition weapon)
+    private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null)
     {
         ref var actor = ref _entities[source];
-        ObjectGeometry.DistanceSquared(_types[actor.UnitType], actor.Position, _types[_entities[target].UnitType], _entities[target].Position, out var muzzle, out var destination);
-        _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Id, Target = _entities[target].Id,
+        WorldPosition muzzle, destination;
+        if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actor.UnitType], actor.Position, p); }
+        else ObjectGeometry.DistanceSquared(_types[actor.UnitType], actor.Position, _types[_entities[target].UnitType], _entities[target].Position, out muzzle, out destination);
+        _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Id, Target = target < 0 ? default : _entities[target].Id,
             Owner = actor.Owner, UnitType = actor.UnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
             InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });

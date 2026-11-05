@@ -56,5 +56,5 @@ public sealed record WeaponDefinition
 
 public sealed record WeaponMountDefinition(string Id, WeaponDefinition Weapon, string Animation = "fire", bool FireWhileMoving = false);
 public readonly record struct WeaponPose(EntityId Entity, int Mount, FacingDirection PreviousFacing, FacingDirection Facing,
-    AnimationPlayback Animation, long ReadyTick, int BurstRemaining, EntityId Target);
+    AnimationPlayback Animation, long ReadyTick, int BurstRemaining, EntityId Target, bool AutoCast = false, bool Busy = false);
 public readonly record struct ProjectilePose(long Id, int UnitType, int Mount, WorldPosition Previous, WorldPosition Current, FacingDirection Facing);

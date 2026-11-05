@@ -1,4 +1,5 @@
 ^building:
+  Buildable: {Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400}
   Health: {HP: 1000, Armor: Building}
   Movement: {Enabled: false}
   Presentation:
@@ -17,11 +18,26 @@ power-plant:
 
 barracks:
   Inherits: ^building
+  TaskQueues:
+    Queues:
+      infantry: {Capacity: 20, Payment: Upfront, WorkingState: working, ExitAnimation: door, Exit: [0, 1024]}
+  Actions:
+    Buttons:
+      rifleman: {Unit: rifleman, Label: Автоматчик}
+      rocketeer: {Unit: rocketeer, Label: Ракетчик}
   Footprint: {Rows: ['####', '#==#', '#++#']}
   Presentation: {Model: barracks, Name: Бараки}
 
 factory:
   Inherits: ^building
+  TaskQueues:
+    Queues:
+      vehicles: {Capacity: 12, Payment: Progressive, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
+  Actions:
+    Buttons:
+      apc: {Unit: apc-mg, Label: БТР, Order: 0}
+      tank: {Unit: large-tank, Label: Танк, Cost: 180, Ticks: 150, Order: 1}
+      repair: {Mount: repair, Label: Ремонт, Cursor: repair, Order: 2}
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Armaments:
     Mounts:
@@ -35,6 +51,16 @@ headquarters:
 
 construction-yard:
   Inherits: ^building
+  TaskQueues:
+    Queues:
+      construction: {Capacity: 12, Payment: Upfront, WorkingState: working}
+      vehicles: {Capacity: 5, Payment: OnCompletion, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
+  Actions:
+    Buttons:
+      power: {Unit: power-plant, Label: Электростанция, Queue: construction, Order: 0}
+      barracks: {Unit: barracks, Label: Бараки, Queue: construction, Order: 1}
+      factory: {Unit: factory, Label: Завод, Queue: construction, Order: 2}
+      engineer: {Unit: engineer, Label: Инженер, Queue: vehicles, Order: 3}
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Presentation: {Model: construction-yard, Name: Construction Yard}
 

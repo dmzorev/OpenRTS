@@ -10,6 +10,16 @@ public partial class RtsOverlay : Control
     public Vector2 Pointer { get; set; }
     public RtsCursor Cursor { get; set; }
     public Rect2? Marquee { get; set; }
+    public string? CustomCursor { get; set; }
+    public Vector2? Rally { get; set; }
+    private sealed record CursorStyle(Color Color, float Radius, SpriteFrames? Frames, string Sequence, Vector2 Hotspot);
+    private readonly System.Collections.Generic.Dictionary<string, CursorStyle> _custom = new(StringComparer.Ordinal);
+    public void RegisterCursor(string id, Color color, float radius = 12, SpriteFrames? frames = null, string sequence = "stand", Vector2 hotspot = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (radius < 1 || radius > 128 || frames is not null && (!frames.HasAnimation(sequence) || frames.GetFrameCount(sequence) == 0)) throw new ArgumentException("Invalid custom cursor.");
+        _custom[id] = new(color, radius, frames, sequence, hotspot);
+    }
     private float _time;
     public override void _Ready() { MouseFilter = MouseFilterEnum.Ignore; SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); }
     public override void _Process(double delta) { _time += (float)delta; QueueRedraw(); }
@@ -17,6 +27,21 @@ public partial class RtsOverlay : Control
     {
         if (Marquee is { } box)
         { DrawRect(box, new Color(0.2f, 0.8f, 1, 0.12f)); DrawRect(box, new Color(0.4f, 0.9f, 1), false, 1.5f); }
+        if (Rally is { } rally) { DrawLine(rally, rally + new Vector2(0, -24), Colors.LimeGreen, 2); DrawColoredPolygon([rally + new Vector2(0, -24), rally + new Vector2(15, -18), rally + new Vector2(0, -12)], Colors.LimeGreen); }
+        if (CustomCursor is { } id && _custom.TryGetValue(id, out var custom))
+        {
+            if (custom.Frames is { } frames)
+            {
+                float total = 0; for (int f = 0; f < frames.GetFrameCount(custom.Sequence); f++) total += frames.GetFrameDuration(custom.Sequence, f);
+                float phase = (_time * (float)frames.GetAnimationSpeed(custom.Sequence)) % total; int frame = 0;
+                while (frame < frames.GetFrameCount(custom.Sequence) - 1 && phase >= frames.GetFrameDuration(custom.Sequence, frame)) { phase -= frames.GetFrameDuration(custom.Sequence, frame); frame++; }
+                DrawTexture(frames.GetFrameTexture(custom.Sequence, frame), Pointer - custom.Hotspot);
+            }
+            else
+            { DrawArc(Pointer, custom.Radius + MathF.Sin(_time * 6), _time, _time + MathF.Tau * 0.85f, 40, custom.Color, 2, true);
+                DrawLine(Pointer - new Vector2(5, 0), Pointer + new Vector2(5, 0), custom.Color, 2); DrawLine(Pointer - new Vector2(0, 5), Pointer + new Vector2(0, 5), custom.Color, 2); }
+            return;
+        }
         Vector2 p = Pointer; float pulse = 0.5f + MathF.Sin(_time * 6) * 0.5f;
         var color = Cursor switch
         { RtsCursor.Repair => new Color(0.2f, 1, 0.6f), RtsCursor.Attack => new Color(1, 0.25f, 0.18f), RtsCursor.Unavailable => new Color(1, 0.35f, 0.3f),

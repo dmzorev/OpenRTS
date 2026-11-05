@@ -29,6 +29,9 @@ public partial class Sandbox
         AddChild(_selectionRing);
         var layer = new CanvasLayer { Layer = 20 }; AddChild(layer);
         _rtsOverlay = new(); layer.AddChild(_rtsOverlay);
+        _rtsOverlay.RegisterCursor("ability", new Color(1, 0.7f, 0.2f));
+        _rtsOverlay.RegisterCursor("grenade", new Color(1, 0.55f, 0.12f), 18);
+        _rtsOverlay.RegisterCursor("repair", new Color(0.2f, 1, 0.65f));
         if (DisplayServer.GetName() != "headless") Input.MouseMode = Input.MouseModeEnum.Hidden;
     }
     private void RefreshSelection()
@@ -37,10 +40,11 @@ public partial class Sandbox
         for (int i = 0; i < _displayCount; i++) _selectionPoses.Add(_displayPoses[i].Id, _displayPoses[i]);
         _selection.Prune(_selectionPoses.ContainsKey);
         _availabilityRevision = -1;
+        RefreshCommandSelection();
         foreach (var (kind, button) in _actionButtons)
         { button.Disabled = !CanIssue(kind); button.Modulate = _armedAction == kind ? new Color(0.5f, 0.9f, 1) : Colors.White; }
     }
-    private EntityPose? Selected() => _selectionPoses.TryGetValue(_selection.Primary, out var pose) ? pose : null;
+    private EntityPose? Selected() => _selectionPoses.TryGetValue(_activeRecipients.Length > 0 ? _activeRecipients[0] : _selection.Primary, out var pose) ? pose : null;
     private EntityPose? Pick(WorldPosition point)
     {
         EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false;
@@ -73,7 +77,7 @@ public partial class Sandbox
             {
                 if (!_selectionPoses.TryGetValue(id, out var pose) || pose.Presentation.Owner != 1) { _canControl = false; break; }
                 var type = _catalog.Units[pose.UnitType];
-                _canMove |= type.Movable;
+                _canMove |= type.Movable || type.TaskQueues.Count > 0;
                 bool damage = type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage);
                 _canAttack |= damage; _canAttackMove |= damage && type.Movable;
                 _canRepair |= type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair);
@@ -84,6 +88,7 @@ public partial class Sandbox
     }
     public bool ActivateAction(UnitActionKind kind, bool queued = false)
     {
+        _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null;
         if (!CanIssue(kind)) { _notice = "Действие недоступно текущему выбору."; return false; }
         if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair)
         { _armedAction = kind; _queueArmed = queued; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; }
@@ -97,7 +102,7 @@ public partial class Sandbox
         {
             var type = _catalog!.Units[_selectionPoses[id].UnitType];
             return kind switch {
-                UnitActionKind.Move => type.Movable,
+                UnitActionKind.Move => type.Movable || type.TaskQueues.Count > 0,
                 UnitActionKind.AttackMove => type.Movable && type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage),
                 UnitActionKind.Attack => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage),
                 UnitActionKind.Repair => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair), _ => true };
@@ -120,11 +125,12 @@ public partial class Sandbox
         if (!click.Pressed)
         { if (click.ButtonIndex == MouseButton.Left && _pointerDown) FinishSelection(click.Position); return; }
         if (_buildings && _placing && click.ButtonIndex == MouseButton.Right) { _placing = false; return; }
-        if (click.ButtonIndex == MouseButton.Right && (_armedAction is not null || _pointerDown))
-        { _armedAction = null; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return; }
+        if (click.ButtonIndex == MouseButton.Right && (_armedAction is not null || _armedCustom is not null || _pointerDown))
+        { _armedAction = null; _armedCustom = null; _panelDirty = true; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return; }
         if (CommandPoint(click.Position) is not { } point) { _notice = "Точка вне карты."; return; }
         if (HandlePlacement(click, point)) return;
         var picked = Pick(point);
+        if (HandleCustomTarget(click, point, picked)) return;
         if (click.ButtonIndex == MouseButton.Left && _armedAction is { } armed)
         {
             var kind = armed == UnitActionKind.AttackMove && picked is { Presentation.Owner: not 1 and not 0 } ? UnitActionKind.Attack : armed;
@@ -138,7 +144,7 @@ public partial class Sandbox
             {
                 var ids = _displayPoses.Take(_displayCount).Where(p => p.UnitType == same.UnitType && p.Presentation.Owner == same.Presentation.Owner && OnScreen(p)).Select(p => p.Id);
                 if (!click.ShiftPressed || same.Presentation.Owner == 1) _selection.Change(ids, click.ShiftPressed && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
-                _pointerDown = false; return;
+                _pointerDown = false; RefreshSelection(); return;
             }
             _pointerDown = true; _dragStart = click.Position; _dragAdd = click.ShiftPressed;
             return;
@@ -148,6 +154,7 @@ public partial class Sandbox
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
         bool enemy = picked is { Presentation.Owner: not 1 and not 0 };
         bool repair = !enemy && picked is { Presentation.Owner: 1 } ally && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
+        if (repair && ContextRepair(picked!.Value)) return;
         IssueAction(repair ? UnitActionKind.Repair : enemy && !click.CtrlPressed ? UnitActionKind.Attack : UnitActionKind.Move, point, picked?.Id ?? default, click.ShiftPressed);
     }
     public override void _Input(InputEvent input)
@@ -180,23 +187,25 @@ public partial class Sandbox
             if (!_dragAdd || picked is { Presentation.Owner: 1 })
                 _selection.Change(picked is { } pose ? [pose.Id] : [], _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Toggle : SelectionChange.Replace);
         }
-        UpdateSelection(1); UpdateRtsCursor();
+        RefreshSelection(); UpdateSelection(1); UpdateRtsCursor();
     }
     private bool HandleRtsKey(InputEventKey key, Key code)
     {
+        if (HandleCustomKey(key, code)) return true;
+        if (code == Key.Tab) return CycleCommandType(key.ShiftPressed);
         if (HandleBuildingKey(code)) return true;
         if (code == Key.Escape)
-        { if (_armedAction is not null || _pointerDown) { _armedAction = null; _pointerDown = false; } else _selection.Change([], SelectionChange.Replace);
-            if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return true; }
+        { if (_armedAction is not null || _armedCustom is not null || _pointerDown) { _armedAction = null; _armedCustom = null; _panelDirty = true; _pointerDown = false; } else _selection.Change([], SelectionChange.Replace);
+            if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; RefreshSelection(); UpdateRtsCursor(); return true; }
         if (code >= Key.Key1 && code <= Key.Key9)
         {
             int group = (int)(code - Key.Key0);
             if (key.CtrlPressed) { if (CanIssue(UnitActionKind.Stop)) _selection.StoreGroup(group); else _notice = "Контрольные группы доступны для своих юнитов."; }
             else _selection.RecallGroup(group, key.ShiftPressed && CanIssue(UnitActionKind.Stop), _selectionPoses.ContainsKey);
-            return true;
+            RefreshSelection(); return true;
         }
         if (code == Key.A && key.CtrlPressed)
-        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == 1).Select(p => p.Id), SelectionChange.Replace); return true; }
+        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == 1).Select(p => p.Id), SelectionChange.Replace); RefreshSelection(); return true; }
         if (code == Key.Space)
         {
             var poses = _selection.Snapshot().Where(_selectionPoses.ContainsKey).Select(id => _selectionPoses[id]).ToArray();
@@ -204,7 +213,7 @@ public partial class Sandbox
                 MoveCamera(new((float)poses.Average(p => p.Current.X) / 1024 - center.X, 0, (float)poses.Average(p => p.Current.Y) / 1024 - center.Z));
             return true;
         }
-        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, Key.E => UnitActionKind.Repair, _ => (UnitActionKind?)null };
+        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
         return action is { } kind && ActivateAction(kind, key.ShiftPressed);
     }
     private void UpdateRtsCursor()
@@ -216,7 +225,7 @@ public partial class Sandbox
         {
             var hovered = Pick(point);
             if (_armedAction is not null && !CanIssue(_armedAction.Value)) cursor = RtsCursor.Unavailable;
-            else if (_armedAction == UnitActionKind.Repair || _armedAction is null && CanIssue(UnitActionKind.Repair) && hovered is { Presentation.Owner: 1 })
+            else if (_armedAction == UnitActionKind.Repair || _armedAction is null && CanIssue(UnitActionKind.Repair) && hovered is { Presentation.Owner: 1 } candidate && candidate.Health < _catalog!.Units[candidate.UnitType].MaxHealth && _catalog.Units[candidate.UnitType].Armor != ArmorKind.Living)
             { cursor = hovered is { Presentation.Owner: 1 } ally && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living ? RtsCursor.Repair : RtsCursor.Unavailable; }
             else if (CanIssue(UnitActionKind.Stop))
             {
@@ -246,8 +255,20 @@ public partial class Sandbox
             else if (hovered is { } pose) cursor = pose.Presentation.Owner == 1 ? RtsCursor.Select : RtsCursor.Inspect;
         }
         else if (_armedAction is not null || CanIssue(UnitActionKind.Move)) cursor = RtsCursor.Unavailable;
+        _rtsOverlay.CustomCursor = null;
+        if (_armedCustom is { } custom && _activeType >= 0)
+        {
+            var binding = _catalog!.Presentations[_activeType].Actions!.First(a => a.Id == custom);
+            var ability = _catalog.Units[_activeType].Abilities.First(a => a.Id == custom);
+            var weapon = _catalog.Units[_activeType].Weapons.First(m => m.Id == ability.Mount).Weapon;
+            var hovered = CommandPoint(_pointer) is { } p ? Pick(p) : null;
+            bool valid = CommandPoint(_pointer) is not null && (ability.GroundTarget || hovered is { } t &&
+                (weapon.Effect == WeaponEffect.Repair ? t.Presentation.Owner == 1 && t.Health < _catalog.Units[t.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[t.UnitType].Armor) > 0 : t.Presentation.Owner is not 0 and not 1));
+            if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
+        }
+        _rtsOverlay.Rally = ActiveRecipients().FirstOrDefault(id => _selectionPoses[id].HasRally) is var rally && rally.Value != 0 ? Screen(_selectionPoses[rally] with { Current = _selectionPoses[rally].Rally }) : null;
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(_pointer)))
-            cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default;
+        { _rtsOverlay.CustomCursor = null; cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default; }
         _rtsOverlay.Cursor = cursor;
     }
     private void UpdateSelection(float alpha)

@@ -38,15 +38,16 @@ public partial class Sandbox
                     OpenRTS.Core.Orders.OrderPhase.Engaging => "бой", OpenRTS.Core.Orders.OrderPhase.Holding => "держит позицию", _ => "ожидает" };
                 string armor = type.Armor switch { ArmorKind.Living => "живой", ArmorKind.Mechanical => "техника", _ => "здание" };
                 string movement = type.Movable ? $"скорость {type.Locomotor.Rules[terrain].Speed * 100.0 / 1024:0.#}%" : "неподвижный";
-                selection += $"\nHP {pose.Health}/{type.MaxHealth} · {armor} · {phase} · очередь {pose.Order.QueuedCount}\nГрунт: {ground} · {movement}";
+                selection += $"\nHP {pose.Health}/{type.MaxHealth} · {armor} · {phase} · приказы в очереди {pose.Order.QueuedCount}\nГрунт: {ground} · {movement}";
             }
+            if (type.TaskQueues.Count > 0) selection += $"\nПроизводство: {_displayTasks.Take(_displayTaskCount).Count(t => t.Producer == pose.Id)} задач · {type.TaskQueues.Count} очередей";
             selection += "\n" + string.Join(" · ", type.Weapons.Select(m => $"{WeaponName(m.Weapon.Id)} ({m.Weapon.Range / 1024.0:0.#})"));
-            if (_buildings && type.Footprint is { } fp) selection += $"\nFootprint {fp.Width}×{fp.Height} · W — работа · O — дверь · C/F — строительство/производство";
+            if (_buildings && type.Footprint is { } fp) selection += $"\nFootprint {fp.Width}×{fp.Height} · O — дверь · C/F — визуальные клипы";
             if (pose.TerrainStranded) selection += "\nНет допустимого грунта: ожидает восстановления.";
             for (int i = 0; i < type.States.Count; i++) if ((pose.Presentation.States & (1u << i)) != 0)
                 selection += type.States[i] switch { "damaged" => " · повреждён", "working" => " · работает", "destroyed" => " · уничтожен", "swimming" => " · в воде", _ => " · " + type.States[i] };
         }
-        return $"OPENRTS  /  {(_buildings ? "N2 · ЗДАНИЯ" : "ПОЛИГОН")}\n\n{selection}\n{_displayCount} объектов · тик {tick} · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}" +
+        return $"OPENRTS  /  {(_buildings ? "ПРОИЗВОДСТВО И ЗДАНИЯ" : "ПОЛИГОН")}\n\n{selection}\n{_displayCount} объектов · тик {tick} · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}" +
             (_notice.Length == 0 ? "" : "\n" + _notice);
     }
     private static string WeaponName(string id) => id switch { "rifle" => "автомат", "cannon" => "пушка", "missile" => "ракеты", "grenade" => "граната", "repair" => "ремонт", _ => id };
@@ -54,21 +55,22 @@ public partial class Sandbox
     {
         var layer = new CanvasLayer(); AddChild(layer);
         var panel = new PanelContainer { AnchorTop = 1, AnchorBottom = 1, AnchorRight = 1,
-            OffsetTop = _buildings ? -158 : -116, OffsetBottom = -18, OffsetLeft = 24, OffsetRight = -24, MouseFilter = Control.MouseFilterEnum.Stop };
+            OffsetTop = _buildings ? -230 : -158, OffsetBottom = -18, OffsetLeft = 24, OffsetRight = -24, MouseFilter = Control.MouseFilterEnum.Stop };
         layer.AddChild(panel);
         _rtsPanels.Add(panel);
         var margin = new MarginContainer(); foreach (string side in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 10);
         panel.AddChild(margin); var column = new VBoxContainer(); margin.AddChild(column);
+        AddCommandPanel(column);
         var row = new HBoxContainer(); column.AddChild(row);
         foreach (var action in new[] { (UnitActionKind.Move, "M · Идти"), (UnitActionKind.AttackMove, "A · Атаковать / идти"),
-            (UnitActionKind.Repair, "E · Ремонт"), (UnitActionKind.Stop, "S · Стоп"), (UnitActionKind.HoldPosition, "H · Удерживать") })
+            (UnitActionKind.Stop, "S · Стоп"), (UnitActionKind.HoldPosition, "H · Удерживать") })
         {
             var button = new Button { Text = action.Item2, FocusMode = Control.FocusModeEnum.None };
             var kind = action.Item1; button.Pressed += () => ActivateAction(kind, Input.IsPhysicalKeyPressed(Key.Shift));
             _actionButtons.Add(kind, button); row.AddChild(button);
         }
         if (_buildings) AddBuildingTools(column);
-        var label = new Label { Text = "ЛКМ / двойной клик / рамка — выбор · Shift — добавить / очередь · Ctrl+клик — тип · Ctrl+1…9 / 1…9 — группы\nПКМ — идти / атаковать · A/M/E + ЛКМ — цель · Esc/ПКМ — отмена режима · стрелки/СКМ/колесо — камера · P/N/+/− — время" };
+        var label = new Label { Text = "Tab / Shift+Tab — тип · Q–Y — действия · ПКМ по способности — авто · Shift — 5 заказов · ПКМ по заказу — повтор · очередь: ЛКМ −1 / Shift −5 / ПКМ всё" };
         label.AddThemeFontSizeOverride("font_size", 12); column.AddChild(label);
     }
 }

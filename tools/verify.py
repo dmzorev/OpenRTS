@@ -51,8 +51,8 @@ def main():
 
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 10:
-        raise RuntimeError("Expected ten concrete unit definitions")
+    if expected["DefinitionCount"] != 9:
+        raise RuntimeError("Expected nine concrete unit definitions")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -115,6 +115,17 @@ def main():
     if buildings != parallel or "ERROR:" in native.stderr or "OPENRTS_BUILDINGS:PASS" not in native.stdout or report(native.stdout, "OPENRTS_SIMULATION:") != buildings:
         raise RuntimeError("Building host/worker/presentation parity failed:\n" + native.stdout + native.stderr)
     print("PASS buildings, footprint masks, sizes, lifecycle states, doors, radar and 10000-building batches; host/worker parity", flush=True)
+
+    actions = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-actions"])
+    if "ERROR:" in actions.stderr or "OPENRTS_ACTIONS:PASS" not in actions.stdout:
+        raise RuntimeError("Custom actions/production panel failed:\n" + actions.stdout + actions.stderr)
+    production_args = ["--production", "--ticks=160"]
+    production = report(run(headless + production_args + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")
+    parallel = report(run(headless + production_args + ["--workers=4"]).stdout, "OPENRTS_SIMULATION:")
+    host = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-production", "--workers=4"])
+    if production != parallel or "ERROR:" in host.stderr or report(host.stdout, "OPENRTS_SIMULATION:") != production:
+        raise RuntimeError("Production/ability journal host parity failed:\n" + host.stdout + host.stderr)
+    print("PASS custom hotkeys/cursors, type tabs, autocast/cooldowns, task stacks, production/rally/placement and journal host parity", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

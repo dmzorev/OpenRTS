@@ -26,7 +26,7 @@ public partial class Sandbox
         { int type = _catalog!.Units.ToList().FindIndex(u => u.Id == id); _placeablePicker.AddItem(_catalog.Presentations[type].Name); }
         _placeablePicker.ItemSelected += index => _placeableId = BuildingScenario.Placeable[(int)index]; row.AddChild(_placeablePicker);
         void Button(string text, Action action) { var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None }; b.Pressed += action; row.AddChild(b); }
-        Button("B · Разместить", () => { _placing = true; _armedAction = null; });
+        Button("B · Разместить", () => { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; });
         Button("Del · Убрать", () => RemoveBuilding(false)); Button("Backspace · Разрушить", () => RemoveBuilding(true));
         Button("Обломки: очистить", () => _sprites!.ClearWrecks());
     }
@@ -39,8 +39,8 @@ public partial class Sandbox
     private bool HandleBuildingKey(Key key)
     {
         if (!_buildings) return false;
-        if (key == Key.B) { _placing = true; _armedAction = null; return true; }
-        if (key == Key.Escape && _placing) { _placing = false; return true; }
+        if (key == Key.B) { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; return true; }
+        if (key == Key.Escape && _placing) { _placing = false; _productionPlacement = null; return true; }
         if (key is Key.Delete or Key.Backspace) { RemoveBuilding(key == Key.Backspace); return true; }
         if (Selected() is not { } selected || _catalog!.Units[selected.UnitType].Footprint is null) return false;
         var type = _catalog.Units[selected.UnitType];
@@ -53,10 +53,13 @@ public partial class Sandbox
     }
     private bool HandlePlacement(InputEventMouseButton input, WorldPosition point)
     {
-        if (!_buildings || !_placing) return false;
-        if (input.ButtonIndex == MouseButton.Right) { _placing = false; return true; }
+        if (!_placing) return false;
+        if (input.ButtonIndex == MouseButton.Right) { _placing = false; _productionPlacement = null; return true; }
         if (input.ButtonIndex != MouseButton.Left) return true;
         var position = PlacementPoint(point); uint owner = _placeableId.StartsWith("nature-", StringComparison.Ordinal) ? 0u : 1u;
+        if (_productionPlacement is { } task)
+        { var producer = _catalog!.Units[_selectionPoses[task.Producer].UnitType];
+            _session!.Submit(CommandKind.PlaceProduced, position, entity: task.Producer, action: producer.Products[task.Product].Id, taskId: task.Id); return true; }
         _session!.Submit(CommandKind.Spawn, position, unitType: PlaceableType, owner: owner);
         if (!input.ShiftPressed) _placing = false;
         return true;

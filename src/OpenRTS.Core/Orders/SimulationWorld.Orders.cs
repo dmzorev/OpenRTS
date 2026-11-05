@@ -74,6 +74,7 @@ public sealed partial class SimulationWorld
                 entity.HasOrder = false;
             while (!entity.HasOrder && entity.PendingOrders is { Count: > 0 }) StartOrder(i, entity.PendingOrders.Dequeue());
             if (!entity.HasOrder && entity.CombatTarget.Value == 0) entity.OrderPhase = OrderPhase.Idle;
+            if (entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
             bool repair = entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Repair;
             var weapon = OrderWeapon(i, repair, entity.HasOrder ? entity.ActiveOrder.Target : entity.CombatTarget);
             if (entity.Moving && entity.HasOrder && entity.ActiveOrder.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition) continue;
@@ -118,6 +119,6 @@ public sealed partial class SimulationWorld
         writer.Write(entity.CombatTarget.Value);
         writer.Write(entity.PendingOrders?.Count ?? 0);
         if (entity.PendingOrders is not null) foreach (var order in entity.PendingOrders) Write(order);
-        void Write(UnitOrder order) { writer.Write((int)order.Kind); writer.Write(order.Position.X); writer.Write(order.Position.Y); writer.Write(order.Target.Value); writer.Write(order.Group); writer.Write(order.Cohort); }
+        void Write(UnitOrder order) { writer.Write((int)order.Kind); writer.Write(order.Position.X); writer.Write(order.Position.Y); writer.Write(order.Position.Elevation); writer.Write(order.Target.Value); writer.Write(order.Group); writer.Write(order.Cohort); writer.Write(order.Ability); }
     }
 }

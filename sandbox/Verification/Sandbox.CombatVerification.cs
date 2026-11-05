@@ -14,7 +14,7 @@ public partial class Sandbox
         void Spawn(string id, int x, int y, uint owner) => world.AddInitialUnit(Type(id), new(x * 1024, y * 1024), owner);
         Spawn("tank-mixed", 12, 10, 1); Spawn("bunker-cannon", 17, 10, 2);
         Spawn("engineer", 12, 18, 1); Spawn("apc-mg", 14, 18, 1); Spawn("rocketeer", 19, 18, 2);
-        Spawn("grenadier", 25, 10, 1); Spawn("bunker-mixed", 29, 10, 2); Spawn("rifleman", 29, 11, 2);
+        Spawn("rifleman", 25, 10, 1); Spawn("bunker-mixed", 29, 10, 2); Spawn("rifleman", 29, 11, 2);
         bool firedCannon = false, firedRocket = false, repaired = false, exploded = false;
         var saved = _displayPoses; int savedCount = _displayCount; var selected = _selection.Snapshot();
         var cameraPosition = _camera!.Position; float cameraSize = _camera.Size;
@@ -26,7 +26,7 @@ public partial class Sandbox
             for (int tick = 1; tick <= 40; tick++)
             {
                 WorldCommand[] commands = tick switch {
-                    1 => [new(1, 0, 1, CommandKind.AttackTarget, new(1), TargetEntity: new(2)), new(1, 0, 2, CommandKind.AttackTarget, new(5), TargetEntity: new(4)), new(1, 0, 3, CommandKind.AttackTarget, new(6), TargetEntity: new(7))],
+                    1 => [new(1, 0, 1, CommandKind.AttackTarget, new(1), TargetEntity: new(2)), new(1, 0, 2, CommandKind.AttackTarget, new(5), TargetEntity: new(4)), new(1, 0, 3, CommandKind.UseAbility, new(6), TargetEntity: new(7), Action: "grenade")],
                     2 => [new(2, 0, 1, CommandKind.Move, new(1), new(12 * 1024, 13 * 1024))],
                     35 => [new(35, 0, 1, CommandKind.RepairTarget, new(3), TargetEntity: new(4))], _ => [] };
                 world.Step(commands);

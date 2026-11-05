@@ -126,7 +126,7 @@ public sealed class SimulationSession : IDisposable
     /// <summary>Enqueues live input. Its authoritative tick is assigned by the worker and recorded in the journal.</summary>
     public long Submit(CommandKind kind, WorldPosition position = default, EntityId entity = default, int unitType = 0,
         uint owner = 0, int animation = 0, int durationTicks = 1, AnimationTrack track = AnimationTrack.Weapon,
-        uint states = 0, EntityId targetEntity = default, EntitySet? recipients = null, bool queued = false)
+        uint states = 0, EntityId targetEntity = default, EntitySet? recipients = null, bool queued = false, string? action = null, string? queue = null, int amount = 1, bool repeat = false, bool enabled = false, long taskId = 0)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_endTick.HasValue || Completion.IsCompleted) throw new InvalidOperationException("This session no longer accepts live input.");
@@ -137,7 +137,7 @@ public sealed class SimulationSession : IDisposable
             throw new InvalidOperationException("Input backlog exceeded.");
         }
         long sequence = Interlocked.Increment(ref _inputSequence);
-        _input.Enqueue(new(0, 1, sequence, kind, entity, position, unitType, owner, animation, durationTicks, track, states, targetEntity, recipients, queued));
+        _input.Enqueue(new(0, 1, sequence, kind, entity, position, unitType, owner, animation, durationTicks, track, states, targetEntity, recipients, queued, action, queue, amount, repeat, enabled, taskId));
         return sequence;
     }
 
@@ -150,11 +150,13 @@ public sealed class SimulationSession : IDisposable
             UnitActionKind.AttackMove => CommandKind.AttackMove,
             UnitActionKind.Attack => CommandKind.AttackTarget,
             UnitActionKind.Repair => CommandKind.RepairTarget,
+            UnitActionKind.Ability => CommandKind.UseAbility,
             UnitActionKind.Stop => CommandKind.Stop,
             UnitActionKind.HoldPosition => CommandKind.HoldPosition,
             _ => throw new ArgumentOutOfRangeException(nameof(action))
         };
-        return Submit(kind, action.Position, action.Recipients.Ids[0], targetEntity: action.Target, recipients: action.Recipients, queued: action.Queued);
+        if (kind == CommandKind.UseAbility && string.IsNullOrWhiteSpace(action.Action)) throw new ArgumentException("An ability action requires its registered ID.", nameof(action));
+        return Submit(kind, action.Position, action.Recipients.Ids[0], targetEntity: action.Target, recipients: action.Recipients, queued: action.Queued, action: action.Action);
     }
 
     public bool TryReadEvent(out WorldEvent value)

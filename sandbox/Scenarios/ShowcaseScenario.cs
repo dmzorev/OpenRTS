@@ -39,7 +39,7 @@ public static class ShowcaseScenario
             uint states = team == 0 && i == 3 ? catalog.Units[type].StateMask("swimming") : 0;
             world.AddInitialUnit(type, new(x * 1024, y * 1024), (uint)(team + 1), states);
         }
-        string[] extras = ["grenadier", "engineer", "tank-mixed", "bunker-cannon", "bunker-mixed"];
+        string[] extras = ["rifleman", "engineer", "tank-mixed", "bunker-cannon", "bunker-mixed"];
         for (int team = 0; team < 2; team++) for (int i = 0; i < extras.Length; i++)
         {
             int type = catalog.Units.ToList().FindIndex(u => u.Id == extras[i]);

@@ -7,6 +7,7 @@ public sealed partial class SimulationWorld
         public EntityId Target, ChargingTarget;
         public long ReadyTick, FireAtTick;
         public int BurstRemaining;
+        public bool AutoCast;
         public FacingDirection PreviousFacing, Facing;
         public AnimationPlayback Animation;
     }
@@ -36,6 +37,7 @@ public sealed partial class SimulationWorld
         for (int m = 0; m < mounts.Count; m++)
         {
             var mount = mounts[m];
+            if (MountAbility(_entities[index].UnitType, m) >= 0 && !repair && !_entities[index].Weapons[m].AutoCast) continue;
             if ((mount.Weapon.Effect == WeaponEffect.Repair) != repair) continue;
             if (best is null || mount.Weapon.Range < best.Range) best = mount.Weapon;
             if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
@@ -83,29 +85,41 @@ public sealed partial class SimulationWorld
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
                 bool repairOrder = entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Repair;
                 bool ordinaryMove = entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Move;
-                int target = -1;
-                if ((!ordinaryMove || mount.FireWhileMoving) && (!entity.Moving || mount.FireWhileMoving) &&
-                    (weapon.Effect != WeaponEffect.Repair || repairOrder))
+                int ability = MountAbility(entity.UnitType, mountIndex);
+                bool manual = ability >= 0 && entity.HasOrder && entity.ActiveOrder.Kind == UnitActionKind.Ability && entity.ActiveOrder.Ability == ability;
+                bool allowed = manual || ability < 0 || state.AutoCast || repairOrder && weapon.Effect == WeaponEffect.Repair;
+                int target = -1; bool ground = false; WorldPosition point = default;
+                if (allowed && (!ordinaryMove || mount.FireWhileMoving) && (!entity.Moving || mount.FireWhileMoving) &&
+                    (weapon.Effect != WeaponEffect.Repair || repairOrder || manual || state.AutoCast))
                 {
-                    var preferred = repairOrder ? entity.ActiveOrder.Target : entity.CombatTarget;
-                    if (!ValidTarget(i, preferred, weapon, out target) || !InWeaponRange(i, target, weapon.Range))
+                    if (manual)
                     {
-                        target = -1;
-                        if (weapon.Effect == WeaponEffect.Damage && !repairOrder)
+                        var order = entity.ActiveOrder;
+                        if (AbilityInRange(i, order, weapon))
+                        { ground = order.Target.Value == 0; point = order.Position; if (!ground) ValidTarget(i, order.Target, weapon, out target); }
+                    }
+                    else
+                    {
+                        var preferred = repairOrder ? entity.ActiveOrder.Target : entity.CombatTarget;
+                        if (!ValidTarget(i, preferred, weapon, out target) || !InWeaponRange(i, target, weapon.Range))
                         {
-                            if (ValidTarget(i, state.Target, weapon, out int previous) && InWeaponRange(i, previous, weapon.Range)) target = previous;
-                            else if ((Tick + entity.Id.Value + mountIndex) % 4 == 0 || entity.OrderStarted == Tick) target = AcquireWeaponTarget(i, weapon);
+                            target = -1;
+                            if (!repairOrder && (weapon.Effect == WeaponEffect.Damage || state.AutoCast))
+                            {
+                                if (ValidTarget(i, state.Target, weapon, out int previous) && InWeaponRange(i, previous, weapon.Range)) target = previous;
+                                else if ((Tick + entity.Id.Value + mountIndex) % 4 == 0 || entity.OrderStarted == Tick) target = AcquireWeaponTarget(i, weapon);
+                            }
                         }
                     }
                 }
-                if (target < 0) { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; }
+                if (target < 0 && !ground) { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; }
                 else
                 {
-                    state.Target = _entities[target].Id;
-                    var aim = AimPoint(i, target); state.Facing = new(aim.X - entity.Position.X, aim.Y - entity.Position.Y);
+                    state.Target = ground ? default : _entities[target].Id;
+                    var aim = ground ? point : AimPoint(i, target); state.Facing = new(aim.X - entity.Position.X, aim.Y - entity.Position.Y);
                     if (Tick >= state.ReadyTick)
                     {
-                        if (state.ChargingTarget != state.Target)
+                        if (state.FireAtTick == 0 || state.ChargingTarget != state.Target)
                         { state.ChargingTarget = state.Target; state.FireAtTick = Tick + (state.BurstRemaining == 0 ? weapon.WindupTicks : 0); }
                         if (Tick >= state.FireAtTick)
                         {
@@ -114,11 +128,14 @@ public sealed partial class SimulationWorld
                             state.ChargingTarget = default; state.FireAtTick = 0;
                             state.Animation = new(type.AnimationIndex(mount.Animation), Tick, weapon.AnimationTicks);
                             entity.WeaponAnimation = state.Animation;
-                            ObjectGeometry.DistanceSquared(type, entity.Position, _types[_entities[target].UnitType], _entities[target].Position, out var muzzle, out var impactPoint);
+                            WorldPosition muzzle, impactPoint;
+                            if (ground) { impactPoint = point; muzzle = ObjectGeometry.ClosestPoint(type, entity.Position, point); }
+                            else ObjectGeometry.DistanceSquared(type, entity.Position, _types[_entities[target].UnitType], _entities[target].Position, out muzzle, out impactPoint);
                             _events.Add(new(Tick, WorldEventKind.WeaponFired, entity.Id, impactPoint, entity.UnitType,
                                 state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle));
                             if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entity.Owner, state.Target, impactPoint, entity.Id, entity.UnitType, mountIndex);
-                            else Launch(i, target, mountIndex, weapon);
+                            else Launch(i, target, mountIndex, weapon, ground ? point : null);
+                            if (manual && state.BurstRemaining == 0) { entity.HasOrder = false; entity.CombatTarget = default; entity.OrderPhase = OrderPhase.Idle; }
                         }
                     }
                 }
@@ -170,7 +187,7 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++) for (int mount = 0; mount < _entities[i].Weapons.Length; mount++)
         {
             var state = _entities[i].Weapons[mount];
-            destination[offset++] = new(_entities[i].Id, mount, state.PreviousFacing, state.Facing, state.Animation, state.ReadyTick, state.BurstRemaining, state.Target);
+            destination[offset++] = new(_entities[i].Id, mount, state.PreviousFacing, state.Facing, state.Animation, state.ReadyTick, state.BurstRemaining, state.Target, state.AutoCast, state.FireAtTick > 0 || _entities[i].HasOrder && _entities[i].ActiveOrder.Kind == UnitActionKind.Ability && AbilityMount(_entities[i].UnitType, _entities[i].ActiveOrder.Ability) == mount);
         }
     }
     private static void WriteWeapons(BinaryWriter writer, EntityState entity)
@@ -178,7 +195,7 @@ public sealed partial class SimulationWorld
         writer.Write(entity.Weapons.Length);
         foreach (var state in entity.Weapons)
         {
-            writer.Write(state.Target.Value); writer.Write(state.ChargingTarget.Value); writer.Write(state.ReadyTick); writer.Write(state.FireAtTick); writer.Write(state.BurstRemaining);
+            writer.Write(state.Target.Value); writer.Write(state.ChargingTarget.Value); writer.Write(state.ReadyTick); writer.Write(state.FireAtTick); writer.Write(state.BurstRemaining); writer.Write(state.AutoCast);
             writer.Write(state.Facing.X); writer.Write(state.Facing.Y); writer.Write(state.Animation.Animation); writer.Write(state.Animation.StartTick); writer.Write(state.Animation.DurationTicks);
         }
     }
