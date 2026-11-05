@@ -9,25 +9,9 @@ namespace OpenRTS.Core;
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
 public sealed partial class SimulationWorld : IDisposable
 {
-    private struct EntityState
-    {
-        public EntityId Id;
-        // shortcut: keep packed mapping and live component views until the E4/E5 index cleanup.
-        public Frent.Entity StorageEntity;
-        public int UnitType;
-        public readonly int Health => StorageEntity.Get<HealthState>().Current;
-        public readonly WorldPosition Position => StorageEntity.Get<SpatialState>().Position;
-        public readonly WorldPosition Previous => StorageEntity.Get<SpatialState>().Previous;
-        public readonly ref OrderState Orders => ref StorageEntity.Get<OrderState>();
-        public readonly ref MotionState Motion => ref StorageEntity.Get<MotionState>();
-        public readonly ref NavigationAgentState Navigation => ref StorageEntity.Get<NavigationAgentState>();
-        public readonly ref CombatState Combat => ref StorageEntity.Get<CombatState>();
-        public readonly ref PresentationState Presentation => ref StorageEntity.Get<PresentationState>();
-        public readonly ref OwnershipState Ownership => ref StorageEntity.Get<OwnershipState>();
-    }
-
     private readonly UnitDefinition[] _types;
-    private EntityState[] _entities;
+    // Derived dense handle list, independent of Frent rows and spatial-index slots.
+    private Frent.Entity[] _unitHandles;
     private readonly Dictionary<EntityId, int> _indices;
     private readonly List<WorldEvent> _events = [];
     private WorldCommand[] _commands = [];
@@ -76,10 +60,10 @@ public sealed partial class SimulationWorld : IDisposable
         Depth = depth;
         TickRate = tickRate;
         SpeedPerTick = speedPerTick;
-        _entities = new EntityState[initialCapacity];
+        _unitHandles = new Frent.Entity[initialCapacity];
         _indices = new(initialCapacity);
         _random = new(seed);
-        _idOrder = Comparer<int>.Create((a, b) => _entities[a].Id.Value.CompareTo(_entities[b].Id.Value));
+        _idOrder = Comparer<int>.Create((a, b) => _unitHandles[a].Get<UnitIdentity>().Id.Value.CompareTo(_unitHandles[b].Get<UnitIdentity>().Id.Value));
         if (navigationGrid is not null)
         {
             if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "The current local motion budget allows at most 1024 world units per tick.");
@@ -178,21 +162,22 @@ public sealed partial class SimulationWorld : IDisposable
         int weaponOffset = 0;
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i];
-            ref var entityPresentation = ref entity.Presentation;
-            ref var entityOwnership = ref entity.Ownership;
-            ref var entityCombat = ref entity.Combat;
-            ref var entityOrders = ref entity.Orders;
-            ref var entityMotion = ref entity.Motion;
-            ref var entityNavigation = ref entity.Navigation;
-            ref var spatial = ref entity.StorageEntity.Get<SpatialState>();
-            int health = entity.StorageEntity.Get<HealthState>().Current;
+            ref var entity = ref _unitHandles[i];
+            var entityIdentity = entity.Get<UnitIdentity>();
+            ref var entityPresentation = ref entity.Get<PresentationState>();
+            ref var entityOwnership = ref entity.Get<OwnershipState>();
+            ref var entityCombat = ref entity.Get<CombatState>();
+            ref var entityOrders = ref entity.Get<OrderState>();
+            ref var entityMotion = ref entity.Get<MotionState>();
+            ref var entityNavigation = ref entity.Get<NavigationAgentState>();
+            ref var spatial = ref entity.Get<SpatialState>();
+            int health = entity.Get<HealthState>().Current;
             TryGetProducer(i, out var producer);
             uint states = entityPresentation.VisualStates;
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
-                if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entity.UnitType].TaskQueues[q].WorkingState is { } state)
-                    states |= _types[entity.UnitType].StateMask(state);
-            destination[i] = new(entity.Id, entity.UnitType, spatial.Previous, spatial.Position,
+                if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.UnitType].TaskQueues[q].WorkingState is { } state)
+                    states |= _types[entityIdentity.UnitType].StateMask(state);
+            destination[i] = new(entityIdentity.Id, entityIdentity.UnitType, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
                 new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default);
@@ -216,12 +201,13 @@ public sealed partial class SimulationWorld : IDisposable
                 type.WriteState(writer);
             }
             writer.Write(_orderGroupSequence); writer.Write(Count);
-            foreach (var entity in _entities.AsSpan(0, Count).ToArray().OrderBy(e => e.Id.Value))
+            foreach (var entity in _unitHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<UnitIdentity>().Id.Value))
             {
-                ref var entityMotion = ref entity.Motion;
-                ref var entityNavigation = ref entity.Navigation;
-                var position = entity.StorageEntity.Get<SpatialState>().Position;
-                writer.Write(entity.Id.Value); writer.Write(entity.UnitType); writer.Write(entity.Health);
+                var entityIdentity = entity.Get<UnitIdentity>();
+                ref var entityMotion = ref entity.Get<MotionState>();
+                ref var entityNavigation = ref entity.Get<NavigationAgentState>();
+                var position = entity.Get<SpatialState>().Position;
+                writer.Write(entityIdentity.Id.Value); writer.Write(entityIdentity.UnitType); writer.Write(entity.Get<HealthState>().Current);
                 writer.Write(position.X); writer.Write(position.Y); writer.Write(position.Elevation);
                 writer.Write(entityMotion.Target.X); writer.Write(entityMotion.Target.Y); writer.Write(entityMotion.Target.Elevation);
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
@@ -234,7 +220,7 @@ public sealed partial class SimulationWorld : IDisposable
                     writer.Write(entityNavigation.LastProgressTick);
                     writer.Write(entityNavigation.LocalTarget.X); writer.Write(entityNavigation.LocalTarget.Y);
                     writer.Write(entityNavigation.PathLength - entityNavigation.PathCursor);
-                    int index = _indices[entity.Id];
+                    int index = _indices[entityIdentity.Id];
                     foreach (var point in Path(index)[entityNavigation.PathCursor..entityNavigation.PathLength])
                     { writer.Write(point.X); writer.Write(point.Y); }
                 }
@@ -261,8 +247,8 @@ public sealed partial class SimulationWorld : IDisposable
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
-            { foreach (int i in members) if (!_types[_entities[i].UnitType].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
-                members = members.Where(i => _types[_entities[i].UnitType].Movable || !TryGetProducer(i, out _)).ToArray(); }
+            { foreach (int i in members) if (!_types[_unitHandles[i].Get<UnitIdentity>().UnitType].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
+                members = members.Where(i => _types[_unitHandles[i].Get<UnitIdentity>().UnitType].Movable || !TryGetProducer(i, out _)).ToArray(); }
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair,
                 CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
@@ -302,7 +288,7 @@ public sealed partial class SimulationWorld : IDisposable
             for (int i = 0; i < Count; i++)
             {
                 // Per-entity streams make this independent of packed storage and future task scheduling.
-                var random = new DeterministicRandom(seed ^ _entities[i].Id.Value);
+                var random = new DeterministicRandom(seed ^ _unitHandles[i].Get<UnitIdentity>().Id.Value);
                 var target = command.Kind == CommandKind.Scatter
                     ? new WorldPosition(random.NextInt(command.Position.X), random.NextInt(command.Position.Y)) : command.Position;
                 IssueOrder(i, new(UnitActionKind.Move, target), false);
@@ -321,71 +307,73 @@ public sealed partial class SimulationWorld : IDisposable
 
     private void DestroyIndex(int index, bool wreck = true)
     {
-        var id = _entities[index].Id;
-        if (_entities[index].StorageEntity.Has<ProducerState>()) _producersDirty = true;
+        var id = _unitHandles[index].Get<UnitIdentity>().Id;
+        if (_unitHandles[index].Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
-        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entities[index].Position, _entities[index].UnitType, Owner: _entities[index].Ownership.Owner));
-        _entities[index].StorageEntity.Delete();
-        _groupRoutes.Remove(id); _indices.Remove(id); _orderDirty = true; Count--;
+        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _unitHandles[index].Get<SpatialState>().Position, _unitHandles[index].Get<UnitIdentity>().UnitType, Owner: _unitHandles[index].Get<OwnershipState>().Owner));
+        _unitHandles[index].Delete();
+        _indices.Remove(id); _orderDirty = true; Count--;
         if (index != Count)
         {
-            _entities[index] = _entities[Count];
-            _indices[_entities[index].Id] = index;
+            _unitHandles[index] = _unitHandles[Count];
+            _indices[_unitHandles[index].Get<UnitIdentity>().Id] = index;
         }
-        _entities[Count] = default;
+        _unitHandles[Count] = default;
         if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
     }
 
     private bool SetTarget(int index, WorldPosition position)
     {
-        ref var entity = ref _entities[index];
-        ref var entityNavigation = ref entity.Navigation;
-        ref var entityMotion = ref entity.Motion;
-        if (!_types[entity.UnitType].Movable && position != entity.Position)
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entity.Id)); return false; }
+        ref var entity = ref _unitHandles[index];
+        ref var entitySpatial = ref entity.Get<SpatialState>();
+        var entityIdentity = entity.Get<UnitIdentity>();
+        ref var entityNavigation = ref entity.Get<NavigationAgentState>();
+        ref var entityMotion = ref entity.Get<MotionState>();
+        if (!_types[entityIdentity.UnitType].Movable && position != entitySpatial.Position)
+        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (_navigation is not null)
         {
-            if (!Resolver(entity.UnitType).Resolve(entity.Position, position, out var resolved, _stepCancellation))
-            { _events.Add(new(Tick, WorldEventKind.NoRoute, entity.Id, position, entity.UnitType)); return false; }
-            if (resolved != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, entity.Id, resolved, entity.UnitType));
+            if (!Resolver(entityIdentity.UnitType).Resolve(entitySpatial.Position, position, out var resolved, _stepCancellation))
+            { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.UnitType)); return false; }
+            if (resolved != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, entityIdentity.Id, resolved, entityIdentity.UnitType));
             position = resolved;
         }
-        else if (!StopAllowed(entity.UnitType, position))
-        { _events.Add(new(Tick, WorldEventKind.NoRoute, entity.Id, position, entity.UnitType)); return false; }
+        else if (!StopAllowed(entityIdentity.UnitType, position))
+        { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.UnitType)); return false; }
         entityNavigation.GroupMember = false; entityNavigation.OrderGroup = 0; entityMotion.MovementRemainder = 0;
         entityNavigation.WaitTicks = entityNavigation.PathLength = entityNavigation.PathCursor = 0;
         entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0; entityNavigation.LocalTarget = default;
-        _groupRoutes.Remove(entity.Id);
-        entityMotion.Target = GroundPosition(position, entity.Position.Elevation);
+        entityNavigation.Route = null;
+        entityMotion.Target = GroundPosition(position, entitySpatial.Position.Elevation);
         if (_navigation is not null)
         {
             entityNavigation.GoalCell = _navigation.Grid.CellAt(position);
         }
-        entityMotion.Moving = entity.Position != entityMotion.Target;
+        entityMotion.Moving = entitySpatial.Position != entityMotion.Target;
         return true;
     }
 
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
     {
         if (_nextId == uint.MaxValue) throw new InvalidOperationException("Entity ID space exhausted.");
-        if (Count == _entities.Length)
+        if (Count == _unitHandles.Length)
         {
-            Array.Resize(ref _entities, checked(Math.Max(16, Count * 2)));
+            Array.Resize(ref _unitHandles, checked(Math.Max(16, Count * 2)));
         }
         var id = new EntityId(_nextId);
-        var state = new EntityState { Id = id, UnitType = unitType };
+        Frent.Entity state;
         var type = _types[unitType];
         _unitStorage ??= new();
-        state.StorageEntity = type.TaskQueues.Count == 0
-            ? _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-            : _unitStorage.Create(new UnitIdentity { Id = id }, type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
-        _entities[Count] = state;
+        state = type.TaskQueues.Count == 0
+            ? _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+            : _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+        _unitHandles[Count] = state;
         _nextId++;
-        (_motion ?? _combatIndex)?.Add(Count, id, position, owner, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+        (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);
         if (type.TaskQueues.Count > 0) _producersDirty = true;
-        for (int a = 0; a < type.Abilities.Count; a++) _entities[_indices[id]].Combat.Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
+        for (int a = 0; a < type.Abilities.Count; a++) _unitHandles[_indices[id]].Get<CombatState>().Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;
     }

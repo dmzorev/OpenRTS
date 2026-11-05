@@ -1,6 +1,6 @@
 # Архитектура OpenRTS поверх Frent
 
-Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health, Orders/Motion/NavigationAgent и Combat/Presentation/Ownership уже в struct-компонентах ECS; EntityState[] содержит только временный mapping и live views. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
+Статус: E0–E3 реализованы; identity/lifecycle, blueprint reference и производство в ECS, Spatial/Health, Orders/Motion/NavigationAgent и Combat/Presentation/Ownership уже в struct-компонентах ECS; EntityState[]/live views удалены в финальной интеграции; остался derived dense native-handle cache с domain lookup. [Реализация definitions/actions](../../decisions/015-composed-definitions-and-actions.md). [Выбор и альтернативы](README.md), [переход](migration.md).
 
 ## Entity и Actor
 
@@ -114,3 +114,6 @@ Core и игровые systems могут использовать нативн�
 
 
 Реализация E4c: [Combat/Presentation/Ownership](../../decisions/018-combat-presentation-components.md). Mount arrays и playback/aim/owner больше не лежат в packed EntityState. Previous facings и WeaponCount используют queries; залп/death/production сохраняют прежние commit barriers. [Измерения](../../verification/019-combat-presentation-ecs.md) дополнены отдельными Release combat/projectile samples с прежней Core assembly. Остаток миграции — mapping, MotionIndex и per-ID group routes, без пустого Player или обязательного ECS для projectile pool.
+
+
+Реализация E4/E5: [identity/routes/spatial index](../../decisions/019-ecs-integration.md). UnitIdentity readonly, Route в NavigationAgentState. MotionIndex владеет собственными body slots и возвращает EntityId; BodyToken — временный ключ одного build, не native row. Mutable runtime state юнитов больше не дублируется в legacy store, общего Actor wrapper нет. [Финальные проверки и ограничения](../../verification/020-ecs-integration.md).

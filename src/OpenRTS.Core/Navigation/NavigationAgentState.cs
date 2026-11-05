@@ -9,5 +9,6 @@ internal struct NavigationAgentState(int goalCell, bool hasNavigation)
     public EntityId YieldFor;
     public long YieldDeadline, LastProgressTick;
     public WorldPosition LocalTarget;
+    public NavigationRoute? Route;
     public WorldPosition[]? LocalPath = hasNavigation ? new WorldPosition[LocalMotionSearch.PathCapacity] : null;
 }

@@ -1,3 +1,4 @@
+using OpenRTS.Core.Simulation;
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -18,8 +19,9 @@ public sealed partial class SimulationWorld
         _cellOverrides.Clear();
         foreach (var id in _footprints)
         {
-            ref var entity = ref _entities[_indices[id]];
-            Stamp(_types[entity.UnitType].Footprint!, entity.Position);
+            ref var entity = ref _unitHandles[_indices[id]];
+            var entityIdentity = entity.Get<UnitIdentity>();
+            Stamp(_types[entityIdentity.UnitType].Footprint!, entity.Get<SpatialState>().Position);
         }
         if (extra is not null) Stamp(extra, position);
         return basis.Compose(_cellOverrides, _navigation!.Grid);
@@ -42,13 +44,15 @@ public sealed partial class SimulationWorld
         occupant = default;
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i];
-            ref var entityMotion = ref entity.Motion;
-            var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
-            bool clear = TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
-            bool newNoStop = !TerrainGeometry.CanStop(candidate, entity.Position, type.Body, type.Locomotor) &&
-                TerrainGeometry.CanStop(_navigation!.Grid, entity.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
-            if ((!clear || newNoStop) && (occupant.Value == 0 || entity.Id.Value < occupant.Value)) occupant = entity.Id;
+            ref var entity = ref _unitHandles[i];
+            ref var entitySpatial = ref entity.Get<SpatialState>();
+            var entityIdentity = entity.Get<UnitIdentity>();
+            ref var entityMotion = ref entity.Get<MotionState>();
+            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null) continue;
+            bool clear = TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
+            bool newNoStop = !TerrainGeometry.CanStop(candidate, entitySpatial.Position, type.Body, type.Locomotor) &&
+                TerrainGeometry.CanStop(_navigation!.Grid, entitySpatial.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
+            if ((!clear || newNoStop) && (occupant.Value == 0 || entityIdentity.Id.Value < occupant.Value)) occupant = entityIdentity.Id;
         }
         return occupant.Value == 0;
     }
@@ -68,25 +72,27 @@ public sealed partial class SimulationWorld
         // Local paths and exact destinations are also invalidated, not only shared global fields.
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _entities[i];
-            ref var entityNavigation = ref entity.Navigation;
-            ref var entityMotion = ref entity.Motion;
-            ref var entityOrders = ref entity.Orders;
+            ref var entity = ref _unitHandles[i];
+            ref var entitySpatial = ref entity.Get<SpatialState>();
+            var entityIdentity = entity.Get<UnitIdentity>();
+            ref var entityNavigation = ref entity.Get<NavigationAgentState>();
+            ref var entityMotion = ref entity.Get<MotionState>();
+            ref var entityOrders = ref entity.Get<OrderState>();
             entityNavigation.PathLength = entityNavigation.PathCursor = 0;
             entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
-            var type = _types[entity.UnitType]; if (type.Footprint is not null) continue;
+            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null) continue;
             bool wasStranded = entityNavigation.TerrainStranded;
-            entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entity.Position, entity.Position, type.Body, type.Locomotor);
+            entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             if (entityNavigation.TerrainStranded)
             {
                 entityMotion.Moving = false; entityOrders.OrderPhase = OrderPhase.Waiting;
-                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entity.Id, entity.Position, entity.UnitType));
+                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entityIdentity.Id, entitySpatial.Position, entityIdentity.UnitType));
             }
             else if ((wasStranded || entityMotion.Moving) && type.Movable)
             {
                 var goal = entityMotion.Target;
-                if (!StopAllowed(entity.UnitType, goal)) SetTarget(i, goal);
-                else entityMotion.Moving = entity.Position != goal;
+                if (!StopAllowed(entityIdentity.UnitType, goal)) SetTarget(i, goal);
+                else entityMotion.Moving = entitySpatial.Position != goal;
             }
         }
     }

@@ -58,6 +58,7 @@ EcsStorageChecks.Run(Test);
 SpatialHealthChecks.Run(Test);
 OrdersMotionChecks.Run(Test);
 CombatPresentationChecks.Run(Test);
+EcsNavigationIntegrationChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

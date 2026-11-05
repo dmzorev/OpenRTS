@@ -7,8 +7,6 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private struct UnitIdentity { public EntityId Id; }
-
     // Unit storage only. Other domains may use independent ECS stores or ordinary data structures.
     private Frent.World? _unitStorage;
     private bool _disposed, _producersDirty;
@@ -17,13 +15,13 @@ public sealed partial class SimulationWorld
     private bool TryGetProducer(int index, [NotNullWhen(true)] out ProducerState? producer)
     {
         producer = null;
-        var entity = _entities[index].StorageEntity;
+        var entity = _unitHandles[index];
         if (!entity.Has<ProducerState>()) return false;
         producer = entity.Get<ProducerState>();
         return true;
     }
 
-    private ProducerState Producer(EntityId id) => _entities[_indices[id]].StorageEntity.Get<ProducerState>();
+    private ProducerState Producer(EntityId id) => _unitHandles[_indices[id]].Get<ProducerState>();
 
     private EntityId[] ProducerOrder()
     {

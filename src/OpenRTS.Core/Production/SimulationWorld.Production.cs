@@ -1,3 +1,4 @@
+using OpenRTS.Core.Simulation;
 using OpenRTS.Core.Production;
 
 namespace OpenRTS.Core;
@@ -26,9 +27,10 @@ public sealed partial class SimulationWorld
     private int QueueIndex(int type, string id) { for (int q = 0; q < _types[type].TaskQueues.Count; q++) if (_types[type].TaskQueues[q].Id == id) return q; return -1; }
     private void SetRally(int index, WorldPosition point)
     {
-        ref var actor = ref _entities[index];
-        if (!TryGetProducer(index, out var producer)) { RejectAction(actor.Id); return; }
-        producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actor.Id, point));
+        ref var actor = ref _unitHandles[index];
+        var actorIdentity = actor.Get<UnitIdentity>();
+        if (!TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
+        producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actorIdentity.Id, point));
     }
     private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
     private void ApplyProduction(WorldCommand command)
@@ -42,17 +44,19 @@ public sealed partial class SimulationWorld
                 int chosen = -1, product = -1, queue = -1, length = int.MaxValue;
                 foreach (int i in recipients)
                 {
-                    ref var e = ref _entities[i];
-                    ref var eOwnership = ref e.Ownership;
-                    int p = ProductIndex(e.UnitType, command.Action);
+                    ref var e = ref _unitHandles[i];
+                    var eIdentity = e.Get<UnitIdentity>();
+                    ref var eOwnership = ref e.Get<OwnershipState>();
+                    int p = ProductIndex(eIdentity.UnitType, command.Action);
                     if (p < 0 || eOwnership.Owner == 0 || !TryGetProducer(i, out var state)) continue;
-                    int q = QueueIndex(e.UnitType, _types[e.UnitType].Products[p].Queue), size = state.Queues[q].Count;
-                    if (size >= _types[e.UnitType].TaskQueues[q].Capacity || size >= length) continue;
+                    int q = QueueIndex(eIdentity.UnitType, _types[eIdentity.UnitType].Products[p].Queue), size = state.Queues[q].Count;
+                    if (size >= _types[eIdentity.UnitType].TaskQueues[q].Capacity || size >= length) continue;
                     chosen = i; product = p; queue = q; length = size;
                 }
                 if (chosen < 0) { RejectAction(); break; }
-                var actor = _entities[chosen]; Producer(actor.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat));
-                _events.Add(new(Tick, WorldEventKind.TaskAdded, actor.Id, UnitType: _productTypes[actor.UnitType][product]));
+                var actor = _unitHandles[chosen];
+                var actorIdentity = actor.Get<UnitIdentity>(); Producer(actorIdentity.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat));
+                _events.Add(new(Tick, WorldEventKind.TaskAdded, actorIdentity.Id, UnitType: _productTypes[actorIdentity.UnitType][product]));
             }
             return;
         }
@@ -62,11 +66,12 @@ public sealed partial class SimulationWorld
             var matching = new List<(long Id, EntityId Producer, int Queue, ProductionTask Task)>();
             foreach (int i in recipients)
             {
-                var e = _entities[i]; if (!TryGetProducer(i, out var state)) continue;
+                var e = _unitHandles[i];
+                var eIdentity = e.Get<UnitIdentity>(); if (!TryGetProducer(i, out var state)) continue;
                 for (int q = 0; q < state.Queues.Length; q++)
-                    if (command.Queue is null || _types[e.UnitType].TaskQueues[q].Id == command.Queue)
+                    if (command.Queue is null || _types[eIdentity.UnitType].TaskQueues[q].Id == command.Queue)
                         foreach (var task in state.Queues[q])
-                            if (_types[e.UnitType].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, e.Id, q, task));
+                            if (_types[eIdentity.UnitType].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, eIdentity.Id, q, task));
             }
             foreach (var item in matching.OrderByDescending(x => x.Id).Take(command.Amount))
             { Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
@@ -74,16 +79,17 @@ public sealed partial class SimulationWorld
         }
         foreach (int i in recipients)
         {
-            var e = _entities[i]; if (!TryGetProducer(i, out var state)) continue;
+            var e = _unitHandles[i];
+            var eIdentity = e.Get<UnitIdentity>(); if (!TryGetProducer(i, out var state)) continue;
             for (int q = 0; q < state.Queues.Length; q++)
             {
                 var tasks = state.Queues[q]; if (tasks.Count == 0) continue; var task = tasks[0];
-                if (!task.Ready || command.TaskId != task.Id || _types[e.UnitType].Products[task.Product].Id != command.Action) continue;
-                int target = _productTypes[e.UnitType][task.Product]; var build = _builds[e.UnitType][task.Product];
-                if (build.Kind != ProductionKind.PlaceBuilding || ObjectGeometry.DistanceSquared(_types[e.UnitType], e.Position, _types[target], command.Position, out _, out _) > (long)build.PlacementRadius * build.PlacementRadius ||
-                    !PrepareFootprint(target, command.Position, out var grid)) { RejectAction(e.Id); return; }
-                var id = Spawn(target, command.Position, e.Ownership.Owner); if (grid is not null) CommitGrid(grid);
-                FinishTask(e.Id, q, task, id); return;
+                if (!task.Ready || command.TaskId != task.Id || _types[eIdentity.UnitType].Products[task.Product].Id != command.Action) continue;
+                int target = _productTypes[eIdentity.UnitType][task.Product]; var build = _builds[eIdentity.UnitType][task.Product];
+                if (build.Kind != ProductionKind.PlaceBuilding || ObjectGeometry.DistanceSquared(_types[eIdentity.UnitType], e.Get<SpatialState>().Position, _types[target], command.Position, out _, out _) > (long)build.PlacementRadius * build.PlacementRadius ||
+                    !PrepareFootprint(target, command.Position, out var grid)) { RejectAction(eIdentity.Id); return; }
+                var id = Spawn(target, command.Position, e.Get<OwnershipState>().Owner); if (grid is not null) CommitGrid(grid);
+                FinishTask(eIdentity.Id, q, task, id); return;
             }
         }
         RejectAction();
@@ -103,11 +109,12 @@ public sealed partial class SimulationWorld
         foreach (var id in order)
         {
             _stepCancellation.ThrowIfCancellationRequested();
-            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _entities[i]; var producer = actor.StorageEntity.Get<ProducerState>(); var type = _types[actor.UnitType];
+            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _unitHandles[i];
+            var actorIdentity = actor.Get<UnitIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.UnitType];
             for (int q = 0; q < producer.Queues.Length; q++)
             {
                 var tasks = producer.Queues[q]; if (tasks.Count == 0) continue;
-                var task = tasks[0]; var build = _builds[actor.UnitType][task.Product];
+                var task = tasks[0]; var build = _builds[actorIdentity.UnitType][task.Product];
                 if (!task.Ready)
                 {
                     task.Progress++;
@@ -116,11 +123,11 @@ public sealed partial class SimulationWorld
                 }
                 if (build.Kind == ProductionKind.PlaceBuilding || completed == 32) continue;
                 if (!rebuilt) { RebuildMotionIndex(); rebuilt = true; }
-                int target = _productTypes[actor.UnitType][task.Product]; var settings = type.TaskQueues[q];
-                var exit = new WorldPosition(Math.Clamp(actor.Position.X + settings.Exit.X, 0, Width), Math.Clamp(actor.Position.Y + settings.Exit.Y, 0, Depth));
+                int target = _productTypes[actorIdentity.UnitType][task.Product]; var settings = type.TaskQueues[q];
+                var exit = new WorldPosition(Math.Clamp(actor.Get<SpatialState>().Position.X + settings.Exit.X, 0, Width), Math.Clamp(actor.Get<SpatialState>().Position.Y + settings.Exit.Y, 0, Depth));
                 if (!FindProductionExit(target, exit, settings.ExitSearchRadius, out var position))
                 { if (!task.Blocked) _events.Add(new(Tick, WorldEventKind.ProductionBlocked, id)); task.Blocked = true; continue; }
-                var spawned = Spawn(target, position, actor.Ownership.Owner); completed++;
+                var spawned = Spawn(target, position, actor.Get<OwnershipState>().Owner); completed++;
                 if (settings.ExitAnimation is { } animation) ApplyPresentation(_indices[id], new(Tick, 0, 1, CommandKind.PlayAnimation, id,
                     Animation: type.AnimationIndex(animation), DurationTicks: settings.ExitAnimationTicks, Track: AnimationTrack.Body));
                 if (producer.HasRally) IssueOrder(_indices[spawned], new(UnitActionKind.Move, producer.Rally), false);
@@ -160,7 +167,7 @@ public sealed partial class SimulationWorld
         foreach (var id in ProducerOrder())
         {
             var state = Producer(id);
-            int t = _entities[_indices[id]].UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
+            int t = _unitHandles[_indices[id]].Get<UnitIdentity>().UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
             { var build = _builds[t][task.Product]; destination[at++] = new(id, q, task.Id, task.Product, _productTypes[t][task.Product], task.Progress, build.Ticks, build.Cost, task.Repeat, task.Ready); }
         }
     }

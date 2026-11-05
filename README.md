@@ -16,6 +16,8 @@
 - [Проверки и стоимость E4b](docs/verification/018-orders-motion-navigation-ecs.md)
 - [Combat/Presentation/Ownership в ECS: E4c](docs/decisions/018-combat-presentation-components.md)
 - [Проверки и стоимость E4c](docs/verification/019-combat-presentation-ecs.md)
+- [Завершение ECS-интеграции: identity, routes и spatial index](docs/decisions/019-ecs-integration.md)
+- [Проверки и стоимость интеграции](docs/verification/020-ecs-integration.md)
 - [Actor и traits: исходное исследование связности](docs/research/actor-composition/README.md)
 - [Референсы для исследования систем](docs/references.md)
 - [Решения первого каркаса](docs/decisions/001-foundation.md)

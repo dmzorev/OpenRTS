@@ -7,9 +7,10 @@ public sealed partial class SimulationWorld
 {
     private void ApplyPresentation(int index, WorldCommand command)
     {
-        ref var entity = ref _entities[index];
-        ref var entityPresentation = ref entity.Presentation;
-        var type = _types[entity.UnitType];
+        ref var entity = ref _unitHandles[index];
+        var entityIdentity = entity.Get<UnitIdentity>();
+        ref var entityPresentation = ref entity.Get<PresentationState>();
+        var type = _types[entityIdentity.UnitType];
         if (command.Kind is CommandKind.SetVisualStates or CommandKind.ToggleVisualState)
         {
             if ((command.States & ~type.AllowedStateMask) != 0) { Reject(); return; }
@@ -21,7 +22,7 @@ public sealed partial class SimulationWorld
             var playback = new AnimationPlayback(command.Animation, Tick, command.DurationTicks);
             if (command.Track == AnimationTrack.Body) { entityPresentation.BodyAnimation = playback; entityPresentation.BodyAnimationOverride = true; }
             else entityPresentation.WeaponAnimation = playback;
-            _events.Add(new(Tick, WorldEventKind.AnimationPlayed, entity.Id, entity.Position, entity.UnitType,
+            _events.Add(new(Tick, WorldEventKind.AnimationPlayed, entityIdentity.Id, entity.Get<SpatialState>().Position, entityIdentity.UnitType,
                 command.Animation, command.DurationTicks, command.Track));
         }
         else if (command.Kind == CommandKind.Aim)
@@ -60,7 +61,7 @@ public sealed partial class SimulationWorld
             {
                 if (entityPresentation.AimEntity.Value != 0)
                 {
-                    if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _entities[target].Position;
+                    if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _unitHandles[target].Get<SpatialState>().Position;
                     else { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; entityPresentation.AimPoint = default; }
                 }
                 else aim = entityPresentation.AimPoint;
@@ -75,10 +76,10 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private static void WritePresentation(BinaryWriter writer, EntityState entity)
+    private static void WritePresentation(BinaryWriter writer, Frent.Entity entity)
     {
-        ref var entityOwnership = ref entity.Ownership;
-        ref var entityPresentation = ref entity.Presentation;
+        ref var entityOwnership = ref entity.Get<OwnershipState>();
+        ref var entityPresentation = ref entity.Get<PresentationState>();
         writer.Write(entityOwnership.Owner); writer.Write(entityPresentation.VisualStates);
         writer.Write(entityPresentation.BodyFacing.X); writer.Write(entityPresentation.BodyFacing.Y);
         writer.Write(entityPresentation.WeaponFacing.X); writer.Write(entityPresentation.WeaponFacing.Y);

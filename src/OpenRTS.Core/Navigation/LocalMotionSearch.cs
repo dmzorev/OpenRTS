@@ -8,10 +8,11 @@ internal sealed class LocalMotionSearch
     private readonly int[] _queue = new int[Side * Side], _parents = new int[Side * Side], _depth = new int[Side * Side];
     private readonly long[] _costs = new long[Side * Side];
 
-    internal int Find(NavigationGrid grid, MotionIndex bodies, int index, WorldPosition start, WorldPosition goal,
+    internal int Find(NavigationGrid grid, MotionIndex bodies, EntityId id, WorldPosition start, WorldPosition goal,
         Span<WorldPosition> path, WorldPosition? yieldFor = null, Locomotor? locomotor = null, BodyShape? requesterBody = null)
     {
-        var body = bodies.Shape(index);
+        var token = bodies.Resolve(id);
+        var body = bodies.Shape(token);
         Array.Fill(_parents, -2);
         int origin = Radius * Side + Radius, head = 0, tail = 1;
         _queue[0] = origin; _parents[origin] = -1; _depth[origin] = 0;
@@ -36,7 +37,7 @@ internal sealed class LocalMotionSearch
                 int clearance = Math.Max(body.HalfWidth, body.HalfHeight) + Math.Max((requesterBody ?? BodyShape.Default).HalfWidth, (requesterBody ?? BodyShape.Default).HalfHeight);
                 found = cross * cross >= (Int128)clearance * clearance * (dx * dx + dy * dy);
             }
-            else found = TerrainGeometry.Clear(grid, point, goal, body, locomotor) && bodies.ClearSegment(index, point, goal);
+            else found = TerrainGeometry.Clear(grid, point, goal, body, locomotor) && bodies.ClearSegment(token, point, goal);
             if (node != origin && found && _depth[node] < PathCapacity &&
                 (yieldFor is null || locomotor is null || locomotor.At(grid, grid.CellAt(point)).CanStop))
             {
@@ -55,7 +56,7 @@ internal sealed class LocalMotionSearch
                 int next = y * Side + x;
                 if (pending is null && _parents[next] != -2) continue;
                 var target = Position(next);
-                if (!TerrainGeometry.Clear(grid, point, target, body, locomotor) || !bodies.ClearSegment(index, point, target)) continue;
+                if (!TerrainGeometry.Clear(grid, point, target, body, locomotor) || !bodies.ClearSegment(token, point, target)) continue;
                 if (pending is not null)
                 {
                     long edge = TerrainCost.Segment(grid, locomotor!, point, target);
