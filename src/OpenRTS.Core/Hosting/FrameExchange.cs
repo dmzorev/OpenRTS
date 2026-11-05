@@ -11,6 +11,8 @@ public sealed class FrameExchange
         public WeaponPose[] Weapons = [];
         public ProjectilePose[] Projectiles = [];
         public TaskPose[] Tasks = [];
+        public PlayerPose[] Players = [];
+        public int PlayerCount;
         public int TaskCount;
         public int WeaponCount, ProjectileCount;
         public int Count, Readers, TickRate, NavigationWaitingCount, MovingCount, LocalSearches, Yields, GoalExchanges, QueueWaiting;
@@ -38,6 +40,9 @@ public sealed class FrameExchange
             if (slot.Projectiles.Length < slot.ProjectileCount) Array.Resize(ref slot.Projectiles, Math.Max(slot.ProjectileCount, slot.Projectiles.Length * 2));
             slot.TaskCount = world.TaskCount;
             if (slot.Tasks.Length < slot.TaskCount) Array.Resize(ref slot.Tasks, Math.Max(slot.TaskCount, slot.Tasks.Length * 2));
+            slot.PlayerCount = world.PlayerCount;
+            if (slot.Players.Length < slot.PlayerCount) Array.Resize(ref slot.Players, slot.PlayerCount);
+            world.CopyPlayers(slot.Players);
             world.CopyTaskPoses(slot.Tasks);
             world.CopyWeaponPoses(slot.Weapons); world.CopyProjectilePoses(slot.Projectiles);
             slot.Count = world.Count;
@@ -91,6 +96,7 @@ public sealed class FrameExchange
         public int NavigationYields => Data.Yields;
         public int NavigationGoalExchanges => Data.GoalExchanges;
         public int NavigationQueueWaitingCount => Data.QueueWaiting;
+        public ReadOnlySpan<PlayerPose> Players => Data.Players.AsSpan(0, Data.PlayerCount);
         public ReadOnlySpan<TaskPose> Tasks => Data.Tasks.AsSpan(0, Data.TaskCount);
         public ReadOnlySpan<WeaponPose> Weapons => Data.Weapons.AsSpan(0, Data.WeaponCount);
         public ReadOnlySpan<ProjectilePose> Projectiles => Data.Projectiles.AsSpan(0, Data.ProjectileCount);

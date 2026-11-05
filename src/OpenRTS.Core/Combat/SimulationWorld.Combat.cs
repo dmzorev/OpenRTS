@@ -16,6 +16,7 @@ public sealed partial class SimulationWorld
         ref var other = ref _unitHandles[target];
         var otherIdentity = other.Get<UnitIdentity>();
         ref var otherOwnership = ref other.Get<OwnershipState>();
+        if (_types[otherIdentity.UnitType].Destruction == DestructionPolicy.Invulnerable) return false;
         if (weapon.Modifier(_types[otherIdentity.UnitType].Armor) == 0) return false;
         return weapon.Effect == WeaponEffect.Repair
             ? otherOwnership.Owner == owner && other.Get<HealthState>().Current < _types[otherIdentity.UnitType].MaxHealth
@@ -87,6 +88,8 @@ public sealed partial class SimulationWorld
             {
                 var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
+                if (type.Economy is { DisableWeapons: true } && LowPower(entityOwnership.Owner))
+                { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; entityCombat.WeaponReadyTick = Math.Max(entityCombat.WeaponReadyTick, state.ReadyTick); continue; }
                 bool repairOrder = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
                 bool ordinaryMove = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move;
                 int ability = MountAbility(entityIdentity.UnitType, mountIndex);
@@ -159,7 +162,12 @@ public sealed partial class SimulationWorld
             var entityIdentity = entity.Get<UnitIdentity>(); ref var health = ref entity.Get<HealthState>(); int before = health.Current;
             _damage.TryGetValue(id, out long damage); health.Current = (int)Math.Max(0, health.Current - damage);
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Damaged, id, entitySpatial.Position, entityIdentity.UnitType, Amount: before - health.Current));
-            if (health.Current == 0) { _dead.Add(id); continue; }
+            if (health.Current == 0)
+            {
+                if (_types[entityIdentity.UnitType].Destruction == DestructionPolicy.Neutralize) { health.Current = 1; ChangeOwner(i, 0); }
+                else _dead.Add(id);
+                continue;
+            }
             before = health.Current; _healing.TryGetValue(id, out long healing); health.Current = (int)Math.Min(_types[entityIdentity.UnitType].MaxHealth, health.Current + healing);
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Repaired, id, entitySpatial.Position, entityIdentity.UnitType, Amount: health.Current - before));
         }
@@ -181,6 +189,7 @@ public sealed partial class SimulationWorld
             ref var entityOwnership = ref entity.Get<OwnershipState>();
             bool repair = weapon.Effect == WeaponEffect.Repair;
             if (repair ? entityOwnership.Owner != owner || id == source : entityOwnership.Owner == 0 || !weapon.FriendlyFire && entityOwnership.Owner == owner) return;
+            if (_types[_unitHandles[i].Get<UnitIdentity>().UnitType].Destruction == DestructionPolicy.Invulnerable) return;
             long value = (long)weapon.Damage * weapon.Modifier(_types[entityIdentity.UnitType].Armor) / 100;
             if (value == 0) return;
             var effects = repair ? _healing : _damage;

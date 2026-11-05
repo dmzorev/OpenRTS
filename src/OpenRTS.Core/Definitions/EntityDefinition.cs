@@ -10,14 +10,20 @@ public sealed record EntityDefinition
     public ArmamentDefinition? Armament { get; }
     public ProducerDefinition? Production { get; }
     public BuildDefinition? Build { get; }
+    public EconomyDefinition? Economy { get; }
+    public CapturableDefinition? Capturable { get; }
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        Economy = economy; Capturable = capturable;
+        if (economy is not null && (spatial is null || spatial.Movable || presentation is null || !presentation.States.Contains(economy.LowPowerState))) throw new ArgumentException("Economy requires an immobile entity and declared lowpower state.");
+        if (capturable is not null && (spatial is null || spatial.Movable || health is null || health.Destruction == DestructionPolicy.Invulnerable)) throw new ArgumentException("Capturable requires an immobile attackable entity with health.");
+        if (health?.Destruction == DestructionPolicy.Neutralize && capturable is null) throw new ArgumentException("Neutralize requires Capturable.");
         Id = id; Health = health; Spatial = spatial; Presentation = presentation; Build = build;
-        Armament = armament?.Weapons.Count > 0 ? armament : null;
+        Armament = armament is not null && (armament.Weapons.Count > 0 || armament.Abilities.Count > 0) ? armament : null;
         Production = production?.Queues.Count > 0 ? production : null;
         if (Armament is not null)
         {

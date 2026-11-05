@@ -20,6 +20,7 @@ public partial class Sandbox
     private void AddBuildingTools(VBoxContainer column)
     {
         _footprintView = new(); AddChild(_footprintView.Node);
+        if (_skirmish) return;
         var row = new HBoxContainer(); column.AddChild(row);
         _placeablePicker = new() { FocusMode = Control.FocusModeEnum.None };
         foreach (string id in BuildingScenario.Placeable)
@@ -38,7 +39,7 @@ public partial class Sandbox
     }
     private bool HandleBuildingKey(Key key)
     {
-        if (!_buildings) return false;
+        if (!_buildings || _skirmish) return false;
         if (key == Key.B) { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; return true; }
         if (key == Key.Escape && _placing) { _placing = false; _productionPlacement = null; return true; }
         if (key is Key.Delete or Key.Backspace) { RemoveBuilding(key == Key.Backspace); return true; }

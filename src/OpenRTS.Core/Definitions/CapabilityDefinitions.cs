@@ -6,9 +6,12 @@ public sealed record HealthDefinition
 {
     public int MaxHealth { get; }
     public ArmorKind Armor { get; }
-    public HealthDefinition(int maxHealth, ArmorKind armor = ArmorKind.Living)
+    public DestructionPolicy Destruction { get; }
+    public HealthDefinition(int maxHealth, ArmorKind armor = ArmorKind.Living, DestructionPolicy destruction = DestructionPolicy.Destroy)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxHealth);
+        if (!Enum.IsDefined(destruction)) throw new ArgumentException("Unknown destruction policy.");
+        Destruction = destruction;
         if (!Enum.IsDefined(armor)) throw new ArgumentException("Unknown armor class.", nameof(armor));
         MaxHealth = maxHealth; Armor = armor;
     }
@@ -72,11 +75,13 @@ public sealed record ArmamentDefinition
         var skills = (abilities ?? []).ToArray();
         if (skills.Any(a => a is null)) throw new ArgumentException("Abilities cannot be null.");
         Array.Sort(skills, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id));
-        if (skills.Length > 8 || skills.Any(a => string.IsNullOrWhiteSpace(a.Id) || a.Id.Length > 128 || !mounts.Any(m => m.Id == a.Mount)) ||
-            skills.Select(a => a.Id).Distinct(StringComparer.Ordinal).Count() != skills.Length || skills.Select(a => a.Mount).Distinct(StringComparer.Ordinal).Count() != skills.Length)
+        if (skills.Length > 8 || skills.Any(a => string.IsNullOrWhiteSpace(a.Id) || a.Id.Length > 128 || (a.Kind == AbilityKind.Weapon && !mounts.Any(m => m.Id == a.Mount))) ||
+            skills.Select(a => a.Id).Distinct(StringComparer.Ordinal).Count() != skills.Length || skills.Where(a => a.Kind == AbilityKind.Weapon).Select(a => a.Mount).Distinct(StringComparer.Ordinal).Count() != skills.Count(a => a.Kind == AbilityKind.Weapon))
             throw new ArgumentException("Abilities require unique IDs, known distinct mounts and bounded counts.");
         foreach (var a in skills)
         {
+            if (!Enum.IsDefined(a.Kind) || a.Range is < 256 or > 8192) throw new ArgumentException("Invalid ability kind/range.");
+            if (a.Kind == AbilityKind.Capture) { if (a.AutoCast || a.GroundTarget || a.Mount is null || a.Mount.Length != 0) throw new ArgumentException("Capture requires an entity target and no mount/autocast."); continue; }
             var w = mounts.Single(m => m.Id == a.Mount).Weapon;
             if (a.GroundTarget && (w.Effect == WeaponEffect.Repair || w.Projectile == ProjectileKind.Missile || w.SplashRadius == 0))
                 throw new ArgumentException("Ground abilities require splash and cannot repair or home.");

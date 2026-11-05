@@ -3,7 +3,8 @@ namespace OpenRTS.Core.Production;
 internal sealed class ProductionTask(long id, int product, bool repeat)
 {
     public long Id = id;
-    public int Product = product, Progress;
+    public int Product = product, Progress, Paid, Remainder;
+    public uint Payer;
     public bool Repeat = repeat, Ready, Blocked;
 }
 

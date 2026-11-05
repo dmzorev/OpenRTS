@@ -60,7 +60,7 @@ internal static class DefinitionChecks
         test("Definitions: hidden actions execute through the public command boundary", () =>
         {
             var catalog = Load(Gameplay);
-            using var world = new SimulationWorld(catalog.Units, 20000, 12000);
+            using var world = new SimulationWorld(catalog.Units, 20000, 12000, players: [new(1, "blue", 10000)]);
             world.AddInitialUnit(0, new(4096, 4096), 1);
             world.Step([new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "train"), new(1, 0, 2, CommandKind.UseAbility, new(1), new(8192, 4096), Action: "grenade")]);
             Check(world.TaskCount == 1 && !world.Events.ToArray().Any(e => e.Kind == WorldEventKind.ActionUnavailable), "Action required a UI button");
@@ -100,8 +100,8 @@ internal static class DefinitionChecks
         test("Definitions: shared recipes do not share mutable production state", () =>
         {
             var catalog = Load(Gameplay);
-            using var a = new SimulationWorld(catalog.Units, 20000, 12000);
-            using var b = new SimulationWorld(catalog.Units, 20000, 12000);
+            using var a = new SimulationWorld(catalog.Units, 20000, 12000, players: [new(1, "blue", 10000)]);
+            using var b = new SimulationWorld(catalog.Units, 20000, 12000, players: [new(1, "blue", 10000)]);
             a.AddInitialUnit(0, new(4096, 4096), 1); b.AddInitialUnit(0, new(4096, 4096), 1);
             a.Step([new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "train")]); b.Step();
             Check(a.TaskCount == 1 && b.TaskCount == 0 && catalog.Units[0].MaxHealth == 100 && catalog.Units[0].TaskQueues.Count == 1, "Runtime state leaked into the shared definition");

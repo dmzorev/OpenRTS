@@ -150,6 +150,7 @@ public sealed class SimulationSession : IDisposable
             UnitActionKind.AttackMove => CommandKind.AttackMove,
             UnitActionKind.Attack => CommandKind.AttackTarget,
             UnitActionKind.Repair => CommandKind.RepairTarget,
+            UnitActionKind.Capture => CommandKind.CaptureTarget,
             UnitActionKind.Ability => CommandKind.UseAbility,
             UnitActionKind.Stop => CommandKind.Stop,
             UnitActionKind.HoldPosition => CommandKind.HoldPosition,

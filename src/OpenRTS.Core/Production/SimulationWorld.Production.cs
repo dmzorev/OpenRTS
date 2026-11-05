@@ -51,11 +51,18 @@ public sealed partial class SimulationWorld
                     if (p < 0 || eOwnership.Owner == 0 || !TryGetProducer(i, out var state)) continue;
                     int q = QueueIndex(eIdentity.UnitType, _types[eIdentity.UnitType].Products[p].Queue), size = state.Queues[q].Count;
                     if (size >= _types[eIdentity.UnitType].TaskQueues[q].Capacity || size >= length) continue;
+                    var settings = _types[eIdentity.UnitType].TaskQueues[q];
+                    if (settings.Payment == PaymentPolicy.Upfront && Player(eOwnership.Owner).Credits < _builds[eIdentity.UnitType][p].Cost) continue;
                     chosen = i; product = p; queue = q; length = size;
                 }
                 if (chosen < 0) { RejectAction(); break; }
                 var actor = _unitHandles[chosen];
-                var actorIdentity = actor.Get<UnitIdentity>(); Producer(actorIdentity.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat));
+                var actorIdentity = actor.Get<UnitIdentity>();
+                uint owner = actor.Get<OwnershipState>().Owner;
+                int cost = _builds[actorIdentity.UnitType][product].Cost;
+                bool upfront = _types[actorIdentity.UnitType].TaskQueues[queue].Payment == PaymentPolicy.Upfront;
+                if (upfront && !Spend(owner, cost)) { RejectAction(actorIdentity.Id); break; }
+                Producer(actorIdentity.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat) { Payer = owner, Paid = upfront ? cost : 0 });
                 _events.Add(new(Tick, WorldEventKind.TaskAdded, actorIdentity.Id, UnitType: _productTypes[actorIdentity.UnitType][product]));
             }
             return;
@@ -74,7 +81,7 @@ public sealed partial class SimulationWorld
                             if (_types[eIdentity.UnitType].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, eIdentity.Id, q, task));
             }
             foreach (var item in matching.OrderByDescending(x => x.Id).Take(command.Amount))
-            { Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
+            { Refund(item.Task, _builds[_unitHandles[_indices[item.Producer]].Get<UnitIdentity>().UnitType][item.Task.Product]); Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
             return;
         }
         foreach (int i in recipients)
@@ -97,7 +104,7 @@ public sealed partial class SimulationWorld
     private void FinishTask(EntityId producer, int queue, ProductionTask task, EntityId created)
     {
         var tasks = Producer(producer).Queues[queue]; tasks.RemoveAt(0);
-        if (task.Repeat) tasks.Add(new(checked(_nextTaskId++), task.Product, true));
+        if (task.Repeat) tasks.Add(new(checked(_nextTaskId++), task.Product, true) { Payer = _unitHandles[_indices[producer]].Get<OwnershipState>().Owner });
         _events.Add(new(Tick, WorldEventKind.Produced, producer, TargetEntity: created));
     }
     private void UpdateProduction()
@@ -111,13 +118,21 @@ public sealed partial class SimulationWorld
             _stepCancellation.ThrowIfCancellationRequested();
             if (!_indices.TryGetValue(id, out int i)) continue; var actor = _unitHandles[i];
             var actorIdentity = actor.Get<UnitIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.UnitType];
+            uint owner = actor.Get<OwnershipState>().Owner; if (owner == 0) continue;
             for (int q = 0; q < producer.Queues.Length; q++)
             {
                 var tasks = producer.Queues[q]; if (tasks.Count == 0) continue;
                 var task = tasks[0]; var build = _builds[actorIdentity.UnitType][task.Product];
                 if (!task.Ready)
                 {
-                    task.Progress++;
+                    var policy = type.TaskQueues[q].Payment;
+                    if (policy == PaymentPolicy.Upfront && task.Paid < build.Cost)
+                    { if (!Spend(owner, build.Cost - task.Paid)) continue; task.Paid = build.Cost; }
+                    int work = task.Remainder + (type.Economy is not null && LowPower(owner) ? 1 : 2);
+                    int progress = Math.Min(build.Ticks, task.Progress + work / 2);
+                    int due = policy == PaymentPolicy.Progressive ? (int)(((long)build.Cost * progress + build.Ticks - 1) / build.Ticks) : policy == PaymentPolicy.OnCompletion && progress == build.Ticks ? build.Cost : task.Paid;
+                    if (!Spend(owner, due - task.Paid)) continue;
+                    task.Paid = due; task.Progress = progress; task.Remainder = work % 2;
                     if (task.Progress < build.Ticks) continue;
                     task.Ready = true; _events.Add(new(Tick, WorldEventKind.ProductionReady, id));
                 }
@@ -179,7 +194,7 @@ public sealed partial class SimulationWorld
         {
             var state = Producer(id);
             w.Write(id.Value); w.Write(state.HasRally); w.Write(state.Rally.X); w.Write(state.Rally.Y); w.Write(state.Rally.Elevation); w.Write(state.Queues.Length);
-            foreach (var tasks in state.Queues) { w.Write(tasks.Count); foreach (var t in tasks) { w.Write(t.Id); w.Write(t.Product); w.Write(t.Progress); w.Write(t.Repeat); w.Write(t.Ready); w.Write(t.Blocked); } }
+            foreach (var tasks in state.Queues) { w.Write(tasks.Count); foreach (var t in tasks) { w.Write(t.Id); w.Write(t.Product); w.Write(t.Progress); w.Write(t.Repeat); w.Write(t.Ready); w.Write(t.Blocked); w.Write(t.Payer); w.Write(t.Paid); w.Write(t.Remainder); } }
         }
     }
 }

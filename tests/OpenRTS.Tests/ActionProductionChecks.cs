@@ -13,7 +13,7 @@ internal static class ActionProductionChecks
             products: [new("u", "unit", "units"), new("b", "building", "buildings")]),
             new("unit", 100, body: BodyShape.Circle(128), build: new(duration, 20)),
             new("building", 500, ["idle"], movable: false, footprint: Stamp(), build: new(3, 80, ProductionKind.PlaceBuilding))];
-        var w = new SimulationWorld(types, 20480, 16384, navigationGrid: grid ?? new(20, 16), navigationWorkers: workers, reverseNavigationJobs: reverse);
+        var w = new SimulationWorld(types, 20480, 16384, navigationGrid: grid ?? new(20, 16), navigationWorkers: workers, reverseNavigationJobs: reverse, players: [new(1, "blue", 10000), new(2, "red", 10000)]);
         w.AddInitialUnit(0, new(4096, 4096), 1); return w;
     }
     private static TaskPose[] Tasks(SimulationWorld w) { var result = new TaskPose[w.TaskCount]; w.CopyTaskPoses(result); return result; }
@@ -100,7 +100,7 @@ internal static class ActionProductionChecks
         {
             var producer = new UnitDefinition("f", 100, ["idle", "door"], movable: false, footprint: Stamp(), taskQueues: [new("q", exit: new(0, 2048), exitAnimation: "door")],
                 products: [new("b", "b", "q", new(1, 7, ProductionKind.PlaceBuilding, 1024)), new("u", "u", "q")]);
-            using var w = new SimulationWorld([producer, new("b", 100, ["idle"], movable: false, footprint: Stamp(), build: new(50, 80, ProductionKind.PlaceBuilding)), new("u", 100, build: new(1))], 20480, 16384, navigationGrid: new(20, 16));
+            using var w = new SimulationWorld([producer, new("b", 100, ["idle"], movable: false, footprint: Stamp(), build: new(50, 80, ProductionKind.PlaceBuilding)), new("u", 100, build: new(1))], 20480, 16384, navigationGrid: new(20, 16), players: [new(1, "blue", 1000)]);
             w.AddInitialUnit(0, new(4096, 4096), 1); w.Step([new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "b")]);
             var task = Tasks(w).Single(); NavigationChecks.Check(task.Cost == 7 && task.Duration == 1 && task.Ready, "Recipe defaults did not override the target");
             w.Step([new(2, 0, 1, CommandKind.PlaceProduced, new(1), new(16384, 4096), Action: "b", TaskId: task.Id)]);

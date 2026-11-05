@@ -1,0 +1,42 @@
+2026-11-05 — Players/economy/capture
+
+./tools/dev.sh test
+20 DeclarativeContent checks passed.
+PASS Players: neutral, power, income ownership and frozen resource frames
+PASS Players: Upfront charges production once, pauses without funds and refunds cancellation
+PASS Players: Progressive charges production once, pauses without funds and refunds cancellation
+PASS Players: OnCompletion charges production once, pauses without funds and refunds cancellation
+PASS Players: lowpower halves production and disables weapons until supply returns
+PASS Players: default capture time, neutralization, recapture and income timers
+PASS Players: invulnerable props reject direct attacks and splash damage
+PASS Players: capture cancels old queues, refunds their payer and transfers power atomically
+PASS Players: neutralized footprints remain solid and captured ruins can be repaired
+PASS Players: skirmish journal captures distant resources and builds for the correct player
+PASS Players: content rejects invalid capture, economy and neutralization definitions
+206 OpenRTS checks passed; 0 failed.
+
+Full tools/verify.py after build and Godot resource import
+PASS DeclarativeContent import and documented local changes match SHA-256
+PASS pinned Frent MIT license notice matches the verified package
+PASS weapon-stage sprite sources and normalized assets match SHA-256
+PASS building sources, open-door edits and normalized sprites match SHA-256
+PASS Godot/headless content parity; 1 static MultiMesh instances
+PASS Godot/headless content parity; 10000 static MultiMesh instances
+PASS Godot/headless content parity; 10001 static MultiMesh instances
+PASS 1 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10000 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS 10001 moving entities: direct/worker/Godot parity at 15 and 120 FPS
+PASS real-time worker pacing at 25 Hz with a 15 FPS presentation
+PASS 1 navigation entities: sequential/parallel/reverse/Godot parity
+PASS 10000 navigation entities: sequential/parallel/reverse/Godot parity
+PASS Godot wheel focus, zoom, pan and playback input handlers
+PASS SpriteFrames, layered presentation, combat effects, repair cursor, alpha, states and showcase input
+PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions
+PASS buildings, footprint masks, sizes, lifecycle states, doors, radar and 10000-building batches; host/worker parity
+PASS custom hotkeys/cursors, type tabs, autocast/cooldowns, task stacks, production/rally/placement and journal host parity
+PASS Players, resource HUD, capture cursor, dual-player controls and1800-tick skirmish journal
+PASS invalid content and preview arguments fail explicitly
+
+Semantic formats: catalog8/direct8/nav12; PlayerPose added to golden frame traces.
+Intentional baseline change and before/after hashes: traces.json.
+No economic throughput benchmark or manual visual playtest was claimed.

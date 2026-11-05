@@ -31,6 +31,7 @@ public partial class Sandbox
         _rtsOverlay = new(); layer.AddChild(_rtsOverlay);
         _rtsOverlay.RegisterCursor("ability", new Color(1, 0.7f, 0.2f));
         _rtsOverlay.RegisterCursor("grenade", new Color(1, 0.55f, 0.12f), 18);
+        _rtsOverlay.RegisterCursor("capture", new Color(0.95f, 0.85f, 0.2f), 20);
         _rtsOverlay.RegisterCursor("repair", new Color(0.2f, 1, 0.65f));
         if (DisplayServer.GetName() != "headless") Input.MouseMode = Input.MouseModeEnum.Hidden;
     }
@@ -66,7 +67,18 @@ public partial class Sandbox
     }
     private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f));
     private bool OnScreen(EntityPose pose) => GetViewport().GetVisibleRect().HasPoint(Screen(pose));
-    private EntityId[] Controlled() => _selection.Snapshot().Where(id => _selectionPoses.TryGetValue(id, out var pose) && pose.Presentation.Owner == 1).ToArray();
+    private bool Controls(uint owner) => owner == 1 || _skirmish && owner == 2;
+    private uint CommandOwner => Selected()?.Presentation.Owner ?? 1;
+    private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
+    private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;
+    private bool CapturableTarget(EntityPose pose) => pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Capturable is not null;
+    private bool AbilityTarget(AbilityDefinition ability, UnitDefinition type, EntityPose target)
+    {
+        if (ability.Kind == AbilityKind.Capture) return CapturableTarget(target);
+        var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
+        return weapon.Effect == WeaponEffect.Repair ? Ally(target) && target.Health < _catalog!.Units[target.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[target.UnitType].Armor) > 0 : Enemy(target);
+    }
+    private EntityId[] Controlled() => _selection.Snapshot().Where(id => _selectionPoses.TryGetValue(id, out var pose) && Controls(pose.Presentation.Owner)).ToArray();
     private bool CanIssue(UnitActionKind kind)
     {
         if (_catalog is null) return false;
@@ -75,7 +87,7 @@ public partial class Sandbox
             _canMove = _canAttack = _canAttackMove = _canRepair = false; _canControl = _selection.Count > 0;
             foreach (var id in _selection.Ids)
             {
-                if (!_selectionPoses.TryGetValue(id, out var pose) || pose.Presentation.Owner != 1) { _canControl = false; break; }
+                if (!_selectionPoses.TryGetValue(id, out var pose) || !Controls(pose.Presentation.Owner)) { _canControl = false; break; }
                 var type = _catalog.Units[pose.UnitType];
                 _canMove |= type.Movable || type.TaskQueues.Count > 0;
                 bool damage = type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage);
@@ -107,11 +119,14 @@ public partial class Sandbox
                 UnitActionKind.Attack => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage),
                 UnitActionKind.Repair => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair), _ => true };
         });
-        if (kind == UnitActionKind.Attack && (!_selectionPoses.TryGetValue(target, out var attacked) || attacked.Presentation.Owner is 0 or 1))
+        if (kind == UnitActionKind.Attack && (!_selectionPoses.TryGetValue(target, out var attacked) || !Enemy(attacked)))
         { _notice = "Атака: выберите вражеский юнит."; return false; }
-        if (kind == UnitActionKind.Repair && (!_selectionPoses.TryGetValue(target, out var repaired) || repaired.Presentation.Owner != 1 || repaired.Health >= _catalog!.Units[repaired.UnitType].MaxHealth || _catalog.Units[repaired.UnitType].Armor == ArmorKind.Living))
+        if (kind == UnitActionKind.Repair && (!_selectionPoses.TryGetValue(target, out var repaired) || !Ally(repaired) || repaired.Health >= _catalog!.Units[repaired.UnitType].MaxHealth || _catalog.Units[repaired.UnitType].Armor == ArmorKind.Living))
         { _notice = "Ремонт: выберите повреждённую союзную технику или здание."; return false; }
-        _session.Issue(new(kind, new EntitySet(ids), point, target, queued)); _notice = ""; return true;
+        var recipients = ids.Where(id => target.Value == 0 || !_selectionPoses.TryGetValue(target, out var victim) ||
+            (kind == UnitActionKind.Repair ? _selectionPoses[id].Presentation.Owner == victim.Presentation.Owner : kind == UnitActionKind.Attack ? _selectionPoses[id].Presentation.Owner != victim.Presentation.Owner : true)).ToArray();
+        if (recipients.Length == 0) return false;
+        _session.Issue(new(kind, new EntitySet(recipients), point, target, queued)); _notice = ""; return true;
     }
     private WorldPosition? CommandPoint(Vector2 pixel)
     {
@@ -133,7 +148,7 @@ public partial class Sandbox
         if (HandleCustomTarget(click, point, picked)) return;
         if (click.ButtonIndex == MouseButton.Left && _armedAction is { } armed)
         {
-            var kind = armed == UnitActionKind.AttackMove && picked is { Presentation.Owner: not 1 and not 0 } ? UnitActionKind.Attack : armed;
+            var kind = armed == UnitActionKind.AttackMove && picked is { } armedEnemy && Enemy(armedEnemy) ? UnitActionKind.Attack : armed;
             if (IssueAction(kind, point, kind is UnitActionKind.Attack or UnitActionKind.Repair ? picked?.Id ?? default : default, click.ShiftPressed || _queueArmed) && !click.ShiftPressed)
                 _armedAction = null;
             UpdateRtsCursor(); return;
@@ -143,7 +158,7 @@ public partial class Sandbox
             if ((click.DoubleClick || click.CtrlPressed) && picked is { } same)
             {
                 var ids = _displayPoses.Take(_displayCount).Where(p => p.UnitType == same.UnitType && p.Presentation.Owner == same.Presentation.Owner && OnScreen(p)).Select(p => p.Id);
-                if (!click.ShiftPressed || same.Presentation.Owner == 1) _selection.Change(ids, click.ShiftPressed && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
+                if (!click.ShiftPressed || Controls(same.Presentation.Owner)) _selection.Change(ids, click.ShiftPressed && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
                 _pointerDown = false; RefreshSelection(); return;
             }
             _pointerDown = true; _dragStart = click.Position; _dragAdd = click.ShiftPressed;
@@ -152,8 +167,9 @@ public partial class Sandbox
         if (!CanIssue(UnitActionKind.Stop)) { _notice = "Выберите свои юниты."; return; }
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
-        bool enemy = picked is { Presentation.Owner: not 1 and not 0 };
-        bool repair = !enemy && picked is { Presentation.Owner: 1 } ally && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
+        if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable)) return;
+        bool enemy = picked is { } enemyPose && Enemy(enemyPose);
+        bool repair = !enemy && picked is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
         if (repair && ContextRepair(picked!.Value)) return;
         IssueAction(repair ? UnitActionKind.Repair : enemy && !click.CtrlPressed ? UnitActionKind.Attack : UnitActionKind.Move, point, picked?.Id ?? default, click.ShiftPressed);
     }
@@ -178,13 +194,13 @@ public partial class Sandbox
         if (_dragStart.DistanceTo(end) >= 6)
         {
             var box = new Rect2(_dragStart, end - _dragStart).Abs();
-            var ids = _displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == 1 && OnScreen(p) && box.HasPoint(Screen(p))).Select(p => p.Id);
+            var ids = _displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner) && OnScreen(p) && box.HasPoint(Screen(p))).Select(p => p.Id);
             _selection.Change(ids, _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
         }
         else if (CommandPoint(end) is { } point)
         {
             var picked = Pick(point);
-            if (!_dragAdd || picked is { Presentation.Owner: 1 })
+            if (!_dragAdd || picked is { } controlled && Controls(controlled.Presentation.Owner))
                 _selection.Change(picked is { } pose ? [pose.Id] : [], _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Toggle : SelectionChange.Replace);
         }
         RefreshSelection(); UpdateSelection(1); UpdateRtsCursor();
@@ -205,7 +221,7 @@ public partial class Sandbox
             RefreshSelection(); return true;
         }
         if (code == Key.A && key.CtrlPressed)
-        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == 1).Select(p => p.Id), SelectionChange.Replace); RefreshSelection(); return true; }
+        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner)).Select(p => p.Id), SelectionChange.Replace); RefreshSelection(); return true; }
         if (code == Key.Space)
         {
             var poses = _selection.Snapshot().Where(_selectionPoses.ContainsKey).Select(id => _selectionPoses[id]).ToArray();
@@ -225,13 +241,13 @@ public partial class Sandbox
         {
             var hovered = Pick(point);
             if (_armedAction is not null && !CanIssue(_armedAction.Value)) cursor = RtsCursor.Unavailable;
-            else if (_armedAction == UnitActionKind.Repair || _armedAction is null && CanIssue(UnitActionKind.Repair) && hovered is { Presentation.Owner: 1 } candidate && candidate.Health < _catalog!.Units[candidate.UnitType].MaxHealth && _catalog.Units[candidate.UnitType].Armor != ArmorKind.Living)
-            { cursor = hovered is { Presentation.Owner: 1 } ally && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living ? RtsCursor.Repair : RtsCursor.Unavailable; }
+            else if (_armedAction == UnitActionKind.Repair || _armedAction is null && CanIssue(UnitActionKind.Repair) && hovered is { } candidate && Ally(candidate) && candidate.Health < _catalog!.Units[candidate.UnitType].MaxHealth && _catalog.Units[candidate.UnitType].Armor != ArmorKind.Living)
+            { cursor = hovered is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living ? RtsCursor.Repair : RtsCursor.Unavailable; }
             else if (CanIssue(UnitActionKind.Stop))
             {
-                bool attack = _armedAction is UnitActionKind.AttackMove or UnitActionKind.Attack || _armedAction is null && hovered is { Presentation.Owner: not 1 and not 0 } && !Input.IsPhysicalKeyPressed(Key.Ctrl);
-                if (attack) cursor = CanIssue(UnitActionKind.Attack) && (_armedAction != UnitActionKind.Attack || hovered is { Presentation.Owner: not 0 and not 1 }) ? RtsCursor.Attack : RtsCursor.Unavailable;
-                else if (_armedAction is null && hovered is { Presentation.Owner: 1 }) cursor = RtsCursor.Select;
+                bool attack = _armedAction is UnitActionKind.AttackMove or UnitActionKind.Attack || _armedAction is null && hovered is { } enemyHover && Enemy(enemyHover) && !Input.IsPhysicalKeyPressed(Key.Ctrl);
+                if (attack) cursor = CanIssue(UnitActionKind.Attack) && (_armedAction != UnitActionKind.Attack || hovered is { } attackHover && Enemy(attackHover)) ? RtsCursor.Attack : RtsCursor.Unavailable;
+                else if (_armedAction is null && hovered is { } allyHover && Ally(allyHover)) cursor = RtsCursor.Select;
                 else cursor = CanIssue(UnitActionKind.Move) ? RtsCursor.Move : RtsCursor.Unavailable;
                 if (cursor is RtsCursor.Move or RtsCursor.Attack && _displayGrid is { } grid && Selected() is { } primary)
                 {
@@ -252,7 +268,7 @@ public partial class Sandbox
                     }
                 }
             }
-            else if (hovered is { } pose) cursor = pose.Presentation.Owner == 1 ? RtsCursor.Select : RtsCursor.Inspect;
+            else if (hovered is { } pose) cursor = Controls(pose.Presentation.Owner) ? RtsCursor.Select : RtsCursor.Inspect;
         }
         else if (_armedAction is not null || CanIssue(UnitActionKind.Move)) cursor = RtsCursor.Unavailable;
         _rtsOverlay.CustomCursor = null;
@@ -260,12 +276,11 @@ public partial class Sandbox
         {
             var binding = _catalog!.Presentations[_activeType].Actions!.First(a => a.Id == custom);
             var ability = _catalog.Units[_activeType].Abilities.First(a => a.Id == custom);
-            var weapon = _catalog.Units[_activeType].Weapons.First(m => m.Id == ability.Mount).Weapon;
             var hovered = CommandPoint(_pointer) is { } p ? Pick(p) : null;
-            bool valid = CommandPoint(_pointer) is not null && (ability.GroundTarget || hovered is { } t &&
-                (weapon.Effect == WeaponEffect.Repair ? t.Presentation.Owner == 1 && t.Health < _catalog.Units[t.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[t.UnitType].Armor) > 0 : t.Presentation.Owner is not 0 and not 1));
+            bool valid = CommandPoint(_pointer) is not null && (ability.GroundTarget || hovered is { } target && AbilityTarget(ability, _catalog.Units[_activeType], target));
             if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
         }
+        if (_armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
         _rtsOverlay.Rally = ActiveRecipients().FirstOrDefault(id => _selectionPoses[id].HasRally) is var rally && rally.Value != 0 ? Screen(_selectionPoses[rally] with { Current = _selectionPoses[rally].Rally }) : null;
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(_pointer)))
         { _rtsOverlay.CustomCursor = null; cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default; }

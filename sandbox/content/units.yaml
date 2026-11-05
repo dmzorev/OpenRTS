@@ -70,10 +70,12 @@ engineer:
   Inherits: ^unit
   Actions:
     Definitions:
+      capture: {Capture: true, Range: 1024}
       repair: {Mount: main}
   ActionPanel:
     Buttons:
-      repair: {Label: Ремонт, Cursor: repair}
+      repair: {Label: Ремонт, Cursor: repair, Order: 0}
+      capture: {Label: Захват, Cursor: capture, Order: 1}
   Movement: {Locomotor: amphibious}
   Health: {HP: 220, Armor: Mechanical}
   Armaments:
@@ -87,18 +89,22 @@ engineer:
 
 bunker-cannon:
   Inherits: tank
+  Capturable: {}
+  Economy: {Energy: -15}
   Footprint:
     Rows: ['##', '##']
     Types: {'#': {Traverse: false, CanStop: false}}
   Movement: {Enabled: false}
   Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка, States: [damaged, working, destroyed]}
+  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка, States: [damaged, working, destroyed, lowpower]}
 
 bunker-mixed:
   Inherits: tank-mixed
+  Capturable: {}
+  Economy: {Energy: -25}
   Footprint:
     Rows: ['##', '##']
     Types: {'#': {Traverse: false, CanStop: false}}
   Movement: {Enabled: false}
   Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты, States: [damaged, working, destroyed]}
+  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты, States: [damaged, working, destroyed, lowpower]}

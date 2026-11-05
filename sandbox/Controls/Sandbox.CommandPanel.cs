@@ -106,6 +106,7 @@ public partial class Sandbox
     private WeaponPose? AbilityPose(EntityId id, string action)
     {
         var pose = _selectionPoses[id]; var type = _catalog!.Units[pose.UnitType]; var skill = type.Abilities.First(a => a.Id == action);
+        if (skill.Kind == AbilityKind.Capture) return null;
         int mount = 0; while (mount < type.Weapons.Count && type.Weapons[mount].Id != skill.Mount) mount++;
         int offset = pose.WeaponOffset + mount;
         return offset >= 0 && offset < _displayWeaponCount && _displayWeapons[offset].Entity == id ? _displayWeapons[offset] : null;
@@ -118,6 +119,7 @@ public partial class Sandbox
         _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _pointerDown = false;
         if (ability is not null)
         {
+            if (right && ability.Kind == AbilityKind.Capture) { _notice = "Захват применяется вручную."; return; }
             if (right)
             { bool enabled = !ids.All(e => AbilityPose(e, id)?.AutoCast == true); _session.Submit(CommandKind.SetAutoCast, recipients: new(ids), action: id, enabled: enabled); }
             else _armedCustom = id;
@@ -149,21 +151,31 @@ public partial class Sandbox
         if (click.ButtonIndex == MouseButton.Right) { _armedCustom = null; return true; }
         if (click.ButtonIndex != MouseButton.Left || ActiveRecipients() is not { Length: > 0 } ids) return true;
         var type = _catalog!.Units[_activeType]; var ability = type.Abilities.First(a => a.Id == action);
-        var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
-        bool repair = weapon.Effect == WeaponEffect.Repair;
-        bool target = picked is { } p && (repair ? p.Presentation.Owner == 1 && p.Health < _catalog.Units[p.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[p.UnitType].Armor) > 0 : p.Presentation.Owner is not 0 and not 1);
+        bool target = picked is { } p && AbilityTarget(ability, type, p);
         if (!target && !ability.GroundTarget) { _notice = "Выберите допустимую цель способности."; return true; }
         _session!.Submit(CommandKind.UseAbility, point, recipients: new(ids), targetEntity: target ? picked!.Value.Id : default, action: action);
         _armedCustom = null; return true;
+    }
+    private bool ContextCapture(EntityPose target)
+    {
+        foreach (var id in Controlled())
+        {
+            var pose = _selectionPoses[id]; if (pose.Presentation.Owner == target.Presentation.Owner) continue;
+            var skill = _catalog!.Units[pose.UnitType].Abilities.FirstOrDefault(a => a.Kind == AbilityKind.Capture);
+            if (skill is null) continue;
+            _session!.Submit(CommandKind.UseAbility, recipients: new([id]), targetEntity: target.Id, action: skill.Id);
+            return true;
+        }
+        return false;
     }
     private bool ContextRepair(EntityPose target)
     {
         foreach (var id in Controlled())
         {
             var unit = _selectionPoses[id]; var type = _catalog!.Units[unit.UnitType];
-            var ability = type.Abilities.FirstOrDefault(a => type.Weapons.First(m => m.Id == a.Mount).Weapon.Effect == WeaponEffect.Repair);
+            var ability = type.Abilities.FirstOrDefault(a => a.Kind == AbilityKind.Weapon && type.Weapons.First(m => m.Id == a.Mount).Weapon.Effect == WeaponEffect.Repair);
             if (ability is null) continue;
-            var recipients = Controlled().Where(e => _selectionPoses[e].UnitType == unit.UnitType);
+            var recipients = Controlled().Where(e => _selectionPoses[e].UnitType == unit.UnitType && _selectionPoses[e].Presentation.Owner == target.Presentation.Owner);
             _session!.Submit(CommandKind.UseAbility, target.Current, targetEntity: target.Id, recipients: new(recipients), action: ability.Id); return true;
         }
         return false;
@@ -187,6 +199,16 @@ public partial class Sandbox
             var button = _customButtons[action.Id]; string status = ""; bool auto = false; double progress = 0;
             if (type.Abilities.FirstOrDefault(a => a.Id == action.Id) is { } ability)
             {
+                if (ability.Kind == AbilityKind.Capture)
+                {
+                    var casts = ids.Select(id => _selectionPoses[id].Order).Where(o => o.Kind == UnitActionKind.Capture && o.CaptureDuration > 0).ToArray();
+                    progress = casts.Length == 0 ? 0 : casts.Max(o => 100.0 * o.CaptureProgress / o.CaptureDuration);
+                    button.Text = $"{action.Hotkey} · {action.Label} {(casts.Length == 0 ? "" : $"{progress:0}%")}";
+                    button.TooltipText = "Захват: ЛКМ/хоткей → чужой или нейтральный объект. Сохраняет HP.";
+                    button.Disabled = ids.Length == 0; _cooldowns[action.Id].Value = progress;
+                    button.Modulate = _armedCustom == action.Id ? new(0.5f, 0.85f, 1) : Colors.White;
+                    continue;
+                }
                 var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
                 long remaining = states.Length == 0 ? 0 : states.Min(p => Math.Max(0, p.ReadyTick - frame.Tick)); auto = states.Length > 0 && states.All(p => p.AutoCast);
                 var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
@@ -199,7 +221,7 @@ public partial class Sandbox
             {
                 var product = type.Products.First(p => p.Id == action.Id); var target = _catalog.Units.First(u => u.Id == product.Unit); var build = product.Override ?? target.Build!;
                 status = ReadyProduct(action.Id) is not null ? " ГОТОВО" : $" {build.Ticks / (double)frame.TickRate:0.#}s";
-                button.TooltipText = $"Цена {build.Cost} · {build.Ticks} тиков (экономика отключена)\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
+                button.TooltipText = $"Цена {build.Cost} · {build.Ticks} тиков\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
             }
             button.Text = $"{action.Hotkey} · {action.Label}{status}{(auto ? " ↻" : "")}";
             button.Disabled = ids.Length == 0; button.Modulate = auto ? new(0.35f, 1, 0.65f) : _armedCustom == action.Id ? new(0.5f, 0.85f, 1) : Colors.White;

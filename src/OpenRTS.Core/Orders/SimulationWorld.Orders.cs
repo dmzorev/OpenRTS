@@ -44,6 +44,7 @@ public sealed partial class SimulationWorld
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
+        if (order.Kind == UnitActionKind.Capture && !CanCapture(index, order.Target, out _)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.UnitType].Movable ||
@@ -58,6 +59,7 @@ public sealed partial class SimulationWorld
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
         entityOrders.CombatTarget = default; CancelWindups(index);
+        if (entity.Has<CaptureState>()) entity.Get<CaptureState>().Progress = 0;
         entityOrders.ActiveOrder = order; entityOrders.HasOrder = order.Kind != UnitActionKind.Stop || entityMotion.Moving;
         entityOrders.OrderStarted = Tick;
         entityOrders.OrderPhase = order.Kind == UnitActionKind.HoldPosition ? OrderPhase.Holding : entityMotion.Moving ? OrderPhase.Moving : OrderPhase.Idle;
@@ -88,6 +90,7 @@ public sealed partial class SimulationWorld
                 entityOrders.HasOrder = false;
             while (!entityOrders.HasOrder && entityOrders.PendingOrders is { Count: > 0 }) StartOrder(i, entityOrders.PendingOrders.Dequeue());
             if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture) { UpdateCapture(i); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
             bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
             var weapon = OrderWeapon(i, repair, entityOrders.HasOrder ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget);

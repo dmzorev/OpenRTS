@@ -31,7 +31,7 @@ public sealed partial class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(7); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(8); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -48,6 +48,8 @@ public sealed partial class UnitCatalog
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>()
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
+            .Register<EconomyOptions>("Economy", (_, _, options) => options)
+            .Register<CapturableOptions>("Capturable", (_, _, options) => options)
             .Register<MovementOptions>("Movement", (_, _, options) => options)
             .Register<BodyOptions>("Body", (_, _, options) => options)
             .Register<FootprintOptions>("Footprint", (_, _, options) => options)
@@ -102,7 +104,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build);
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction);
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons));
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -132,7 +134,18 @@ public sealed partial class UnitCatalog
     {
         [Required, Range(1, int.MaxValue)] public int HP { get; set; }
         public ArmorKind Armor { get; set; }
+        public DestructionPolicy Destruction { get; set; }
     }
+    private sealed class EconomyOptions
+    {
+        public int Energy { get; set; }
+        public int Income { get; set; }
+        public int Interval { get; set; } = 100;
+        public string LowPowerState { get; set; } = "lowpower";
+        public bool DisableWeapons { get; set; } = true;
+        public EconomyDefinition Compile() => new(Energy, Income, Interval, LowPowerState, DisableWeapons);
+    }
+    private sealed class CapturableOptions { public int? Ticks { get; set; } public CapturableDefinition Compile() => new(Ticks); }
     private sealed class BodyOptions { public BodyKind Kind { get; set; } = BodyKind.Circle; public int Radius { get; set; } = 256; public int[] HalfSize { get; set; } = [256, 256]; }
     private sealed class FootprintOptions
     {

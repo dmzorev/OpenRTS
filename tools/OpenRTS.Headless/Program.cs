@@ -7,11 +7,12 @@ using OpenRTS.Core;
 try
 {
     var path = "sandbox/content/units.yaml";
-    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false;
+    bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--ecs-benchmark") ecsBenchmark = true;
+        if (argument == "--skirmish") { skirmish = simulate = buildings = true; }
+        else if (argument == "--ecs-benchmark") ecsBenchmark = true;
         else if (argument == "--size-benchmark") sizeBenchmark = true;
         else if (argument == "--simulate") simulate = true;
         else if (argument == "--benchmark") { simulate = true; benchmark = true; }
@@ -39,9 +40,9 @@ try
     Console.WriteLine("OPENRTS_CONTENT:" + JsonSerializer.Serialize(catalog.Summary));
     if (simulate)
     {
-        SimulationWorld Create() => buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
+        SimulationWorld Create() => skirmish ? SkirmishScenario.Create(catalog, workers) : buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
         using var world = Create();
-        var commands = production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
+        var commands = skirmish ? SkirmishScenario.Commands() : production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
         SimulationReport report;

@@ -29,7 +29,7 @@ public partial class Sandbox : Node3D
     private int _count = 10000, _ticks = DiagnosticScenario.DefaultTicks;
     private bool _verifySimulation, _pacedVerification, _verificationDone;
     private bool _verifyControls, _verifyRtsControls;
-    private bool _buildings, _verifyBuildings;
+    private bool _buildings, _verifyBuildings, _skirmish, _verifySkirmish;
     private bool _navigation, _reverseJobs, _leftGoal;
     private int _workers = 4;
     private ObstacleView? _obstacles;
@@ -49,6 +49,8 @@ public partial class Sandbox : Node3D
                 if (arg == "--verify") continue;
                 if (arg == "--verify-actions") { _verifyActions = _buildings = _showcase = _paused = true; continue; }
                 if (arg == "--verify-production") { _productionScenario = _buildings = _showcase = _verifySimulation = true; _ticks = 160; continue; }
+                if (arg == "--skirmish") { _skirmish = _buildings = _showcase = true; continue; }
+                if (arg == "--verify-skirmish") { _verifySkirmish = _skirmish = _buildings = _showcase = true; _paused = true; continue; }
                 if (arg == "--buildings") { _buildings = _showcase = true; continue; }
                 if (arg == "--verify-buildings") { _verifyBuildings = _buildings = _showcase = true; _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; continue; }
                 if (arg == "--showcase") { _showcase = true; continue; }
@@ -66,11 +68,11 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
                 throw new ArgumentException("Параметры: --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
-            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)) && !_showcase) _buildings = _showcase = true;
+            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)) && !_showcase) _skirmish = _buildings = _showcase = true;
             if (_showcase && _navigation) throw new ArgumentException("Полигон и диагностическая навигация — отдельные режимы.");
             if (_showcase && _count != ShowcaseScenario.UnitCount && Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)))
                 throw new ArgumentException("Полигон содержит 10 юнитов; для нагрузок используйте --navigation --count=... .");
-            if (_showcase) _count = _buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount;
+            if (_showcase) _count = _skirmish ? SkirmishScenario.UnitCount : _buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount;
             if (_verifyBuildings) { _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; }
             if (_verifyPresentation) { _verifySimulation = true; _ticks = 12; }
             if ((verify ? 1 : 0) + (_verifySimulation ? 1 : 0) + (_verifyControls ? 1 : 0) > 1) throw new ArgumentException("Выберите один режим проверки.");
@@ -104,7 +106,7 @@ public partial class Sandbox : Node3D
                     _sprites = new(_catalog, _modelCatalog, TeamColor);
                     _combatEffects = new(_catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
                     AddChild(_combatEffects.Node);
-                    AddChild(new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width, _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
+                    AddChild(new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width, _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, _skirmish ? SkirmishScenario.TerrainAt : _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
                 }
                 else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
                 if (_navigation)
@@ -133,8 +135,8 @@ public partial class Sandbox : Node3D
         _notice = "";
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
-        _session = new SimulationSession(() => _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+        _session = new SimulationSession(() => _skirmish ? SkirmishScenario.Create(catalog, _workers) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            _skirmish ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -169,7 +171,7 @@ public partial class Sandbox : Node3D
                 _notice = value.Kind switch
                 {
                     WorldEventKind.DestinationAdjusted => "Цель скорректирована к ближайшему достижимому месту.",
-                    WorldEventKind.ActionUnavailable => "Действие сейчас недоступно: проверьте цель, кулдаун или очередь.",
+                    WorldEventKind.ActionUnavailable => "Действие сейчас недоступно: проверьте цель, кулдаун, очередь и кредиты.",
                     WorldEventKind.ProductionBlocked => "Производство завершено, выход занят. Ожидает свободного места.",
                     WorldEventKind.ProductionReady => "Производство завершено; результат ожидает выпуска или размещения.",
                     WorldEventKind.Produced when _selection.Contains(value.Entity) => "Производство завершено.",
@@ -185,9 +187,10 @@ public partial class Sandbox : Node3D
             }
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
+            if (_verifySkirmish) { VerifySkirmish(frame); return; }
             if (_verifyActions) { VerifyActions(frame); return; }
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
-            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick);
+            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? "\nSkirmish · управление синим и красным игроками · захват: W или ПКМ инженером" : "");
             else if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."
@@ -380,7 +383,7 @@ public partial class Sandbox : Node3D
         Vector2 groundSize = new(side, side);
         if (_navigation || _showcase)
         {
-            var grid = _buildings ? BuildingScenario.Grid(_catalog!.Locomotion!) : _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
+            var grid = _skirmish ? SkirmishScenario.Grid(_catalog!.Locomotion!) : _buildings ? BuildingScenario.Grid(_catalog!.Locomotion!) : _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
             float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
             side = Math.Max(grid.Width, grid.Height) * sample;
             center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);

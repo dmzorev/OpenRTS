@@ -135,6 +135,15 @@ def main():
         raise RuntimeError("Production/ability journal host parity failed:\n" + host.stdout + host.stderr)
     print("PASS custom hotkeys/cursors, type tabs, autocast/cooldowns, task stacks, production/rally/placement and journal host parity", flush=True)
 
+    skirmish = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-skirmish"])
+    if "ERROR:" in skirmish.stderr or "OPENRTS_SKIRMISH:" not in skirmish.stdout:
+        raise RuntimeError("Skirmish player/economy UI failed:\n" + skirmish.stdout + skirmish.stderr)
+    solo = report(run(headless + ["--skirmish", "--ticks=1800", "--workers=1"]).stdout, "OPENRTS_SIMULATION:")
+    parallel = report(run(headless + ["--skirmish", "--ticks=1800", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")
+    if solo != parallel or solo["EntityCount"] != 14:
+        raise RuntimeError("Skirmish resource/capture/production journal differs by workers")
+    print("PASS Players, resource HUD, capture cursor, dual-player controls and1800-tick skirmish journal", flush=True)
+
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:
         raise RuntimeError("Missing invalid-count diagnostic")

@@ -43,7 +43,7 @@ internal static class EcsMigrationChecks
                     {
                         State = world.Report(), Commands = world.AppliedCommands.ToArray(), Events = world.Events.ToArray(),
                         Entities = frame.Poses.ToArray(), Weapons = frame.Weapons.ToArray(),
-                        Projectiles = frame.Projectiles.ToArray(), Tasks = frame.Tasks.ToArray()
+                        Projectiles = frame.Projectiles.ToArray(), Tasks = frame.Tasks.ToArray(), Players = frame.Players.ToArray()
                     }, TraceOptions));
                 }
                 string actual = Convert.ToHexString(trace.GetHashAndReset());
@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Captured before Frent integration, against commit494f98e; covers every tick, event and published pose.
+    // Rebased for players/economy/capture (catalog8/direct8/nav12); old ECS-only traces are historical in verification015–020.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "BD1E42D0E4244AE8CD5B168C3C8383E303B44A6FF506442B3AF2A6AE4405A53D",
-        ["navigation"] = "3DB8ACFA5C1F0BF1F6EF2FD4F9E4813E3868A600B648E3F4BB97F02094B9AC08",
-        ["combat"] = "3086EFE6E7E3946E0231963A3853C586C7F80B2D42C6983E763CC157D5DD01BA",
-        ["buildings"] = "EBD90E55571FABF60C9A5B59B8166CC611983E80C69E89764B35C8A8FB583260",
-        ["production"] = "CED0C56EDB87EE5ECD306E40BC7244B891A35D628421B1E392AC2FCAD3AD2432"
+        ["direct"] = "11EB4638474348D172B9385762B3C8FDC1267CAD2F183781B53CFC83B7B9A579",
+        ["navigation"] = "2766F2050E43BC104E3430ED774FC18E1A7C8B2AF7648406A0675E5C37134D54",
+        ["combat"] = "64E8C60CF6E72A5C73D55B0407389C51B38DAB77F2F5EBC9B23AE601B1E23B62",
+        ["buildings"] = "FD2C0DF139D2C64F7082B2ABD117361AD5E2257DC99E48A6848AD33C9AB9A1FE",
+        ["production"] = "FC5A208083E08EDB0094A4E2A99BD1BAA3BDB4F7D4A4D2220FED8E1C932E7C55"
     };
 
     private static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

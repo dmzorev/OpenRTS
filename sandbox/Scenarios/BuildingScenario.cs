@@ -20,7 +20,7 @@ public static class BuildingScenario
         from y in Enumerable.Range(0, Height) from x in Enumerable.Range(0, Width) select catalog.TerrainIndex(TerrainAt(x, y)));
     public static SimulationWorld Create(UnitCatalog catalog, int workers = 1)
     {
-        var world = new SimulationWorld(catalog.Units, Width * 1024, Height * 1024, navigationGrid: Grid(catalog.Locomotion!), navigationWorkers: workers);
+        var world = new SimulationWorld(catalog.Units, Width * 1024, Height * 1024, navigationGrid: Grid(catalog.Locomotion!), navigationWorkers: workers, players: [new(1, "Синий", 10000), new(2, "Красный", 10000)]);
         try
         {
             void Add(string name, int twiceX, int twiceY, uint owner = 1, bool working = false, bool damaged = false)

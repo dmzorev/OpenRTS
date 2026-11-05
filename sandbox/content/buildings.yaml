@@ -1,10 +1,12 @@
 ^building:
   Buildable: {Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400}
   Health: {HP: 1000, Armor: Building}
+  Capturable: {}
+  Economy: {Energy: -20}
   Movement: {Enabled: false}
   Presentation:
     Animations: [idle, construct, produce, door]
-    States: [damaged, working, destroyed]
+    States: [damaged, working, destroyed, lowpower]
   Footprint:
     Types:
       '#': {Traverse: false, CanStop: false}
@@ -13,6 +15,7 @@
 
 power-plant:
   Inherits: ^building
+  Economy: {Energy: 100}
   Footprint: {Rows: ['###', '###']}
   Presentation: {Model: power-plant, Name: Электростанция}
 
@@ -60,6 +63,7 @@ headquarters:
 
 construction-yard:
   Inherits: ^building
+  Economy: {Energy: 0}
   TaskQueues:
     Queues:
       construction: {Capacity: 12, Payment: Upfront, WorkingState: working}
@@ -81,16 +85,22 @@ construction-yard:
 
 mine:
   Inherits: ^building
+  -Buildable:
+  Health: {Destruction: Neutralize}
+  Economy: {Energy: 0, Income: 40, Interval: 100}
   Footprint: {Rows: ['###', '###', '#+#', '#+#']}
   Presentation: {Model: mine, Name: Шахта}
 
 oil-derrick:
   Inherits: ^building
+  -Buildable:
+  Health: {Destruction: Neutralize}
+  Economy: {Energy: 0, Income: 30, Interval: 100}
   Footprint: {Rows: ['###', '###', '###']}
   Presentation: {Model: oil-derrick, Name: Нефтяная вышка}
 
 ^nature:
-  Health: {HP: 600, Armor: Building}
+  Health: {HP: 600, Armor: Building, Destruction: Invulnerable}
   Movement: {Enabled: false}
   Presentation: {Animations: [idle], States: [destroyed]}
 
