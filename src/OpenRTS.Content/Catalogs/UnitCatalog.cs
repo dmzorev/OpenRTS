@@ -31,7 +31,7 @@ public sealed partial class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(8); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(9); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -49,6 +49,8 @@ public sealed partial class UnitCatalog
         var registry = new TraitRegistry<string>()
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
             .Register<EconomyOptions>("Economy", (_, _, options) => options)
+            .Register<PassengerOptions>("Passenger", (_, _, options) => options)
+            .Register<TransportOptions>("Transport", (_, _, options) => options)
             .Register<CapturableOptions>("Capturable", (_, _, options) => options)
             .Register<MovementOptions>("Movement", (_, _, options) => options)
             .Register<BodyOptions>("Body", (_, _, options) => options)
@@ -82,7 +84,7 @@ public sealed partial class UnitCatalog
             if (armaments is not null) foreach (var (name, mount) in armaments.Mounts.OrderBy(p => p.Key, StringComparer.Ordinal))
             {
                 if (weapons is null || !weapons.Weapons.TryGetValue(mount.Weapon, out var weapon)) throw definition.Error(id + ".Armaments." + name, "Unknown weapon: " + mount.Weapon);
-                mounts.Add(new(name, weapon, mount.Animation, mount.FireWhileMoving));
+                mounts.Add(new(name, weapon, mount.Animation, mount.FireWhileMoving, mount.FireFromTransport));
             }
             var body = traits.All<BodyOptions>().SingleOrDefault(); var footprint = traits.All<FootprintOptions>().SingleOrDefault();
             try
@@ -104,7 +106,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction);
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile());
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons));
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -145,6 +147,20 @@ public sealed partial class UnitCatalog
         public bool DisableWeapons { get; set; } = true;
         public EconomyDefinition Compile() => new(Energy, Income, Interval, LowPowerState, DisableWeapons);
     }
+    private sealed class PassengerOptions
+    {
+        [Required] public string Type { get; set; } = "";
+        public int Slots { get; set; } = 1;
+        public PassengerDefinition Compile() => new(Type, Slots);
+    }
+    private sealed class TransportOptions
+    {
+        public string[] Accepts { get; set; } = [];
+        public int Slots { get; set; }
+        public bool FireFromInside { get; set; }
+        public int UnloadDistance { get; set; } = -1;
+        public TransportDefinition Compile() => new(Accepts, Slots, FireFromInside, UnloadDistance);
+    }
     private sealed class CapturableOptions { public int? Ticks { get; set; } public CapturableDefinition Compile() => new(Ticks); }
     private sealed class BodyOptions { public BodyKind Kind { get; set; } = BodyKind.Circle; public int Radius { get; set; } = 256; public int[] HalfSize { get; set; } = [256, 256]; }
     private sealed class FootprintOptions
@@ -166,6 +182,7 @@ public sealed partial class UnitCatalog
         [Required] public string Weapon { get; set; } = "";
         public string Animation { get; set; } = "fire";
         public bool FireWhileMoving { get; set; }
+        public bool FireFromTransport { get; set; }
     }
     private sealed class MovementOptions { public string Locomotor { get; set; } = ""; public bool Enabled { get; set; } = true; }
 }

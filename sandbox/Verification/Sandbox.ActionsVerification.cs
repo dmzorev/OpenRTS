@@ -68,7 +68,7 @@ public partial class Sandbox
             }
             if (_actionsCheck == 4 && tick >= 137)
             {
-                Check(poses.Length == 22 && poses.Any(p => p.Id.Value > 21 && p.Order.Destination == poses.Single(owner => owner.Id.Value == 2).Rally), $"Unit production/rally failed: count={poses.Length}; new=" + string.Join(";", poses.Where(p => p.Id.Value > 21).Select(p => $"{p.Id.Value}:{_catalog!.Units[p.UnitType].Id}:{p.Order.Destination}")) + "; rally=" + poses.Single(p => p.Id.Value == 2).Rally);
+                Check(poses.Length == 29 && poses.Any(p => p.Id.Value > 28 && p.Order.Destination == poses.Single(owner => owner.Id.Value == 2).Rally), $"Unit production/rally failed: count={poses.Length}; new=" + string.Join(";", poses.Where(p => p.Id.Value > 28).Select(p => $"{p.Id.Value}:{_catalog!.Units[p.UnitType].Id}:{p.Order.Destination}")) + "; rally=" + poses.Single(p => p.Id.Value == 2).Rally);
                 Check(tasks.Count(t => t.Producer.Value == 5 && t.Ready) == 1, "Ready construction did not wait in its own queue");
                 ClickAction("power"); Check(_placing && _productionPlacement is not null, "Ready button did not arm placement");
                 _readyTask = _productionPlacement!.Value.Id; _beforePlaceCount = poses.Length;
@@ -88,12 +88,56 @@ public partial class Sandbox
                 await CaptureActions("actions-building-placed.png");
                 var commands = _session!.GetCommandLog();
                 Check(commands.Count(c => c.Kind == CommandKind.UseAbility) == 1 && commands.Count(c => c.Kind == CommandKind.PlaceProduced) == 2, "UI actions did not share the command journal");
-                GD.Print("OPENRTS_ACTIONS:PASS type tabs/icons, custom A priority, Q, registered cursor, autocast/cooldown, shift5, repeat stacks, cancellation, parallel production, rally and transactional CnC placement");
+                SpawnTransportFixture();
+                _actionsCheck = 7; Steps(1); return;
+            }
+            if (_actionsCheck == 7 && tick >= 140)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    var site = TransportSite(i);
+                    var carrier = poses.Single(p => p.Current == site);
+                    var passenger = poses.Single(p => p.Current.X == site.X - 768 && p.Current.Y == site.Y);
+                    SelectTypes(passenger.Id.Value);
+                    _pointer = Pixel(site); UpdateRtsCursor();
+                    Check(_rtsOverlay!.Cursor == OpenRTS.Godot.Controls.RtsCursor.Enter, $"Transport cursor {_rtsOverlay.Cursor}; eligible={CanBoard(passenger.Id, carrier)}, armed={_armedAction}/{_armedCustom}, picked={Pick(site)?.Id}, pixel={_pointer}, panel={_rtsPanels.Any(p => p.GetGlobalRect().HasPoint(_pointer))}");
+                    HandleShowcaseClick(new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left, Position = _pointer });
+                }
+                _actionsCheck = 8; Steps(1); return;
+            }
+            if (_actionsCheck == 8 && tick >= 141)
+            {
+                Check(_storedPoses.Count == 2 && _loadedTransports.Count == 2, "Contextual click did not board both passengers");
+                SelectTypes(_loadedTransports.Select(id => id.Value).ToArray());
+                RefreshStoredPanel();
+                var button = _storedRow!.GetChildren().OfType<Button>().Single(b => b.Text == "Вывести всех");
+                Check(_storedRow.GetChildren().OfType<Button>().Count() == 3, "Stored panel must show passengers across selected carriers");
+                button.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left });
+                Check(_armedAction == UnitActionKind.UnloadAt, "Single click did not arm targeted unload");
+                button.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left, DoubleClick = true });
+                _actionsCheck = 9; Steps(1); return;
+            }
+            if (_actionsCheck == 9 && tick >= 142)
+            {
+                Check(_storedPoses.Count == 0 && _session!.GetCommandLog().Last().Recipients?.Count == 2, "Double click did not unload all selected carriers");
+                GD.Print("OPENRTS_ACTIONS:PASS command panel, production, contextual boarding and multi-transport unload");
                 _verificationDone = true; GetTree().Quit();
             }
         }
         catch (Exception error) { _verificationDone = true; GD.PushError(error.ToString()); GetTree().Quit(1); }
         finally { _checkingActions = false; }
+        static WorldPosition TransportSite(int i) => new((30 + i * 5) * 1024, 32 * 1024);
+        void SpawnTransportFixture()
+        {
+            int apc = _catalog!.Units.ToList().FindIndex(u => u.Id == "apc-mg");
+            int infantry = _catalog.Units.ToList().FindIndex(u => u.Id == "rifleman");
+            for (int i = 0; i < 2; i++)
+            {
+                var site = TransportSite(i);
+                _session!.Submit(CommandKind.Spawn, site, unitType: apc, owner: 1);
+                _session.Submit(CommandKind.Spawn, site with { X = site.X - 768 }, unitType: infantry, owner: 1);
+            }
+        }
         void SelectTypes(params uint[] ids) { _selection.Change(ids.Select(id => new EntityId(id)), OpenRTS.Godot.Controls.SelectionChange.Replace); RefreshSelection(); }
         void ClickAction(string action, bool right = false, bool shift = false) => _customButtons[action].EmitSignal(Control.SignalName.GuiInput,
             new InputEventMouseButton { Pressed = true, ButtonIndex = right ? MouseButton.Right : MouseButton.Left, ShiftPressed = shift });

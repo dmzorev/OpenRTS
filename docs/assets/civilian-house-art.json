@@ -1,0 +1,9 @@
+{
+  "tool": "built-in image_gen (generation followed by edit)",
+  "prompt": "Edit: Strict vertical 90-degree overhead orthographic map view, only roofs, no visible front facade or perspective. Five aligned states of the same terracotta-roof civilian house: intact, garrisoned with sandbags, damaged roof, damaged with sandbags, mostly collapsed roof. Clear hand-painted RTS sprites, transparent background.",
+  "source": "docs/assets/sources/civilian-house-states-source.png",
+  "source_sha256": "51e581f9fedb838164eb8a623093554a5ea8b6804ef5508c589d80d113c5a31b",
+  "asset": "sandbox/assets/buildings/civilian-house-states.png",
+  "asset_sha256": "51e581f9fedb838164eb8a623093554a5ea8b6804ef5508c589d80d113c5a31b",
+  "normalization": "Unmodified source; SpriteFrames reference five centered square AtlasTexture regions."
+}

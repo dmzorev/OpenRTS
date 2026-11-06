@@ -9,6 +9,9 @@ rifle:
     WindupTicks: 1
     Versus: {Living: 100, Mechanical: 10, Building: 10}
 
+rifleman:
+  Inherits: rifle
+
 cannon:
   Weapon:
     Range: 6144
@@ -54,3 +57,15 @@ repair:
     WindupTicks: 1
     AnimationTicks: 6
     Versus: {Living: 0, Mechanical: 100, Building: 100}
+
+
+sniper-rifle:
+  Weapon:
+    Range: 8192
+    AcquireRange: 8192
+    Damage: 45
+    ReloadTicks: 65
+    WindupTicks: 6
+    PassengerDamage: 110
+    PassengerDamageSpill: false
+    Versus: {Living: 100, Mechanical: 0, Building: 0}

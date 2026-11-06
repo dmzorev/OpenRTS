@@ -24,15 +24,18 @@ public sealed class WorldView(UnitDefinition definition, int count)
                 _transforms[i * 12 + 10] = 1;
             }
         }
-        Node.Multimesh.VisibleInstanceCount = poses.Length;
+        int visible = 0;
         for (int i = 0; i < poses.Length; i++)
         {
             var pose = poses[i];
-            _transforms[i * 12 + 3] = Lerp(pose.Previous.X, pose.Current.X, alpha);
-            _transforms[i * 12 + 7] = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha) + 0.25f;
-            _transforms[i * 12 + 11] = Lerp(pose.Previous.Y, pose.Current.Y, alpha);
+            if (pose.Carrier.Value != 0) continue;
+            int offset = visible++ * 12;
+            _transforms[offset + 3] = Lerp(pose.Previous.X, pose.Current.X, alpha);
+            _transforms[offset + 7] = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha) + 0.25f;
+            _transforms[offset + 11] = Lerp(pose.Previous.Y, pose.Current.Y, alpha);
         }
-        if (poses.Length > 0) Node.Multimesh.Buffer = _transforms;
+        Node.Multimesh.VisibleInstanceCount = visible;
+        if (visible > 0) Node.Multimesh.Buffer = _transforms;
     }
 
     private static float Lerp(int previous, int current, float alpha) =>

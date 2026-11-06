@@ -160,7 +160,14 @@ public partial class Sandbox : Node3D
             if (_showcase)
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
-                frame.Poses.CopyTo(_displayPoses); _displayCount = frame.Poses.Length;
+                _displayCount = 0;
+                _storedPoses.Clear();
+                _loadedTransports.Clear();
+                foreach (var pose in frame.Poses)
+                {
+                    if (pose.Carrier.Value == 0) _displayPoses[_displayCount++] = pose;
+                    else { _storedPoses.Add(pose); _loadedTransports.Add(pose.Carrier); }
+                }
                 RefreshSelection(); UpdateCommandPanel(frame); UpdateSelection(alpha); UpdateRtsCursor(); if (_buildings) UpdateFootprintPreview();
             }
             _displayGrid = frame.Grid;
@@ -178,6 +185,8 @@ public partial class Sandbox : Node3D
                     WorldEventKind.TaskAdded when _selection.Contains(value.Entity) => "Заказ добавлен в очередь.",
                     WorldEventKind.TaskCancelled when _selection.Contains(value.Entity) => "Задача отменена.",
                     WorldEventKind.InvalidOrder => "Действие недоступно выбранному юниту.",
+                    WorldEventKind.TransportFull => "В транспорте нет свободных слотов.",
+                    WorldEventKind.UnloadBlocked => "Рядом с транспортом нет места для выгрузки.",
                     WorldEventKind.QueueFull => "Очередь приказов заполнена (32).",
                     WorldEventKind.NoRoute => "Маршрут или место остановки недоступны.",
                     WorldEventKind.CellOccupied => "Изменение отклонено: область пересекает тело юнита.",

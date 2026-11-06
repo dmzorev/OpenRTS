@@ -1,0 +1,10 @@
+{
+  "tool": "built-in image_gen, with reference and two edits",
+  "reference": "sandbox/assets/buildings/barracks.png",
+  "prompt": "Near-overhead RTS civilian near-future apartment building, distinct asymmetrical L-shaped low-rise apartment block with garden, broad blue-gray rooftop, skylights, solar panels, light concrete and restrained cyan lights. Five aligned states: intact, garrisoned with sandbags, damaged, damaged and garrisoned, nearly collapsed. Only a narrow strip of facade visible, transparent background.",
+  "source": "docs/assets/sources/civilian-apartments-states-source.png",
+  "source_sha256": "fa9e3a3f9ecc2a36c46785c6f274af14f90320a1a5988c984f9771b585b68780",
+  "asset": "sandbox/assets/buildings/civilian-apartments-states.png",
+  "asset_sha256": "fa9e3a3f9ecc2a36c46785c6f274af14f90320a1a5988c984f9771b585b68780",
+  "normalization": "Unmodified source; SpriteFrames reference five aligned AtlasTexture regions."
+}

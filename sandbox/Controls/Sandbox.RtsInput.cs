@@ -79,6 +79,11 @@ public partial class Sandbox
         return weapon.Effect == WeaponEffect.Repair ? Ally(target) && target.Health < _catalog!.Units[target.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[target.UnitType].Armor) > 0 : Enemy(target);
     }
     private EntityId[] Controlled() => _selection.Snapshot().Where(id => _selectionPoses.TryGetValue(id, out var pose) && Controls(pose.Presentation.Owner)).ToArray();
+    private bool HasAttackMount(EntityPose pose, UnitDefinition type) =>
+        type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage) ||
+        type.Transport is { FireFromInside: true } && _loadedTransports.Contains(pose.Id) &&
+        _storedPoses.Any(cargo => cargo.Carrier == pose.Id && _catalog!.Units[cargo.UnitType].Weapons.Any(m => m.FireFromTransport && m.Weapon.Effect == WeaponEffect.Damage));
+
     private bool CanIssue(UnitActionKind kind)
     {
         if (_catalog is null) return false;
@@ -90,33 +95,51 @@ public partial class Sandbox
                 if (!_selectionPoses.TryGetValue(id, out var pose) || !Controls(pose.Presentation.Owner)) { _canControl = false; break; }
                 var type = _catalog.Units[pose.UnitType];
                 _canMove |= type.Movable || type.TaskQueues.Count > 0;
-                bool damage = type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage);
+                bool damage = HasAttackMount(pose, type);
                 _canAttack |= damage; _canAttackMove |= damage && type.Movable;
                 _canRepair |= type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair);
             }
             _availabilityRevision = _selection.Revision;
         }
+        if (kind == UnitActionKind.Enter) return Controlled().Any(id => _catalog.Units[_selectionPoses[id].UnitType].Passenger is not null);
+        if (kind is UnitActionKind.Unload or UnitActionKind.UnloadAt) return SelectedTransports().Length > 0;
         return _canControl && kind switch { UnitActionKind.Attack => _canAttack, UnitActionKind.AttackMove => _canAttackMove, UnitActionKind.Repair => _canRepair, UnitActionKind.Move => _canMove, _ => true };
     }
     public bool ActivateAction(UnitActionKind kind, bool queued = false)
     {
         _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null;
         if (!CanIssue(kind)) { _notice = "Действие недоступно текущему выбору."; return false; }
-        if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair)
+        if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter or UnitActionKind.UnloadAt)
         { _armedAction = kind; _queueArmed = queued; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; }
         else IssueAction(kind, default, default, queued);
         UpdateRtsCursor(); return true;
     }
     private bool IssueAction(UnitActionKind kind, WorldPosition point, EntityId target, bool queued)
     {
-        if (!CanIssue(kind) || _session is null) { _notice = "Нельзя отдать этот приказ выбранным юнитам."; return false; }
+        if (_session is null) return false;
+        if (kind == UnitActionKind.Enter)
+        {
+            if (!_selectionPoses.TryGetValue(target, out var carrier)) return false;
+            var boarding = Controlled().Where(id => CanBoard(id, carrier)).ToArray();
+            if (boarding.Length == 0) return false;
+            _session.Issue(new(kind, new EntitySet(boarding), Target: target, Queued: queued));
+            return true;
+        }
+        if (kind is UnitActionKind.Unload or UnitActionKind.UnloadAt)
+        {
+            var carriers = SelectedTransports();
+            if (carriers.Length == 0) return false;
+            _session.Issue(new(kind, new EntitySet(carriers), point, Queued: queued));
+            return true;
+        }
+        if (!CanIssue(kind)) { _notice = "Нельзя отдать этот приказ выбранным юнитам."; return false; }
         var ids = Controlled().Where(id =>
         {
             var type = _catalog!.Units[_selectionPoses[id].UnitType];
             return kind switch {
                 UnitActionKind.Move => type.Movable || type.TaskQueues.Count > 0,
-                UnitActionKind.AttackMove => type.Movable && type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage),
-                UnitActionKind.Attack => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage),
+                UnitActionKind.AttackMove => type.Movable && HasAttackMount(_selectionPoses[id], type),
+                UnitActionKind.Attack => HasAttackMount(_selectionPoses[id], type),
                 UnitActionKind.Repair => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair), _ => true };
         });
         if (kind == UnitActionKind.Attack && (!_selectionPoses.TryGetValue(target, out var attacked) || !Enemy(attacked)))
@@ -149,10 +172,11 @@ public partial class Sandbox
         if (click.ButtonIndex == MouseButton.Left && _armedAction is { } armed)
         {
             var kind = armed == UnitActionKind.AttackMove && picked is { } armedEnemy && Enemy(armedEnemy) ? UnitActionKind.Attack : armed;
-            if (IssueAction(kind, point, kind is UnitActionKind.Attack or UnitActionKind.Repair ? picked?.Id ?? default : default, click.ShiftPressed || _queueArmed) && !click.ShiftPressed)
+            if (IssueAction(kind, point, kind is UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter ? picked?.Id ?? default : default, click.ShiftPressed || _queueArmed) && !click.ShiftPressed)
                 _armedAction = null;
             UpdateRtsCursor(); return;
         }
+        if (HandleTransportClick(click, picked)) return;
         if (click.ButtonIndex == MouseButton.Left)
         {
             if ((click.DoubleClick || click.CtrlPressed) && picked is { } same)
@@ -229,7 +253,7 @@ public partial class Sandbox
                 MoveCamera(new((float)poses.Average(p => p.Current.X) / 1024 - center.X, 0, (float)poses.Average(p => p.Current.Y) / 1024 - center.Z));
             return true;
         }
-        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
+        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.Enter => UnitActionKind.Enter, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
         return action is { } kind && ActivateAction(kind, key.ShiftPressed);
     }
     private void UpdateRtsCursor()
@@ -241,6 +265,13 @@ public partial class Sandbox
         {
             var hovered = Pick(point);
             if (_armedAction is not null && !CanIssue(_armedAction.Value)) cursor = RtsCursor.Unavailable;
+            else if (_armedAction == UnitActionKind.UnloadAt) cursor = RtsCursor.Unload;
+            else if (_armedAction == UnitActionKind.Enter)
+                cursor = hovered is { } entry && CanBoardSelected(entry) ? RtsCursor.Enter : RtsCursor.Unavailable;
+            else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) && !Input.IsPhysicalKeyPressed(Key.Alt) && hovered is { } host && CanUnload(host))
+                cursor = RtsCursor.Unload;
+            else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) && !Input.IsPhysicalKeyPressed(Key.Alt) && hovered is { } transport && CanBoardSelected(transport))
+                cursor = RtsCursor.Enter;
             else if (_armedAction == UnitActionKind.Repair || _armedAction is null && CanIssue(UnitActionKind.Repair) && hovered is { } candidate && Ally(candidate) && candidate.Health < _catalog!.Units[candidate.UnitType].MaxHealth && _catalog.Units[candidate.UnitType].Armor != ArmorKind.Living)
             { cursor = hovered is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living ? RtsCursor.Repair : RtsCursor.Unavailable; }
             else if (CanIssue(UnitActionKind.Stop))
@@ -280,7 +311,7 @@ public partial class Sandbox
             bool valid = CommandPoint(_pointer) is not null && (ability.GroundTarget || hovered is { } target && AbilityTarget(ability, _catalog.Units[_activeType], target));
             if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
         }
-        if (_armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
+        if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
         _rtsOverlay.Rally = ActiveRecipients().FirstOrDefault(id => _selectionPoses[id].HasRally) is var rally && rally.Value != 0 ? Screen(_selectionPoses[rally] with { Current = _selectionPoses[rally].Rally }) : null;
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(_pointer)))
         { _rtsOverlay.CustomCursor = null; cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default; }

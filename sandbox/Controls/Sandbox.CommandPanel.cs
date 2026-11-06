@@ -41,6 +41,7 @@ public partial class Sandbox
             VerticalScrollMode = ScrollContainer.ScrollMode.Disabled }; row.AddChild(actions); _customRow = new(); actions.AddChild(_customRow);
         _taskScroll = new() { CustomMinimumSize = new(0, 44), HorizontalScrollMode = ScrollContainer.ScrollMode.Auto, VerticalScrollMode = ScrollContainer.ScrollMode.Disabled };
         column.AddChild(_taskScroll); _tasksRow = new(); _taskScroll.AddChild(_tasksRow); _taskScroll.Visible = false;
+        AddStoredPanel(column);
     }
     private static void ClearChildren(Node node) { foreach (var child in node.GetChildren()) { node.RemoveChild(child); child.QueueFree(); } }
     private Button IconButton(string text, Texture2D? icon, int width = 84)
@@ -184,6 +185,7 @@ public partial class Sandbox
     {
         if (_panelTick == frame.Tick && !_panelDirty) return;
         _panelTick = frame.Tick; _panelDirty = false;
+        RefreshStoredPanel();
         _displayTick = frame.Tick; _displayRate = frame.TickRate;
         if (_displayWeapons.Length < frame.Weapons.Length) Array.Resize(ref _displayWeapons, frame.Weapons.Length);
         frame.Weapons.CopyTo(_displayWeapons); _displayWeaponCount = frame.Weapons.Length;

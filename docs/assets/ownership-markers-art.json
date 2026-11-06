@@ -1,0 +1,21 @@
+{
+  "tool": "built-in image_gen",
+  "assets": [
+    {
+      "name": "ownership-flag",
+      "prompt": "Isolated near-overhead RTS pennant ownership marker; magenta team-color cloth and steel pole, transparent alpha. Background removed in second edit.",
+      "source": "docs/assets/sources/ownership-flag-source.png",
+      "source_sha256": "bfc3e787819f27a2cf3c64a0cfaf3410af0d9d5211309000d6a80a8ea10397d4",
+      "asset": "sandbox/assets/buildings/ownership-flag.png",
+      "sha256": "bfc3e787819f27a2cf3c64a0cfaf3410af0d9d5211309000d6a80a8ea10397d4"
+    },
+    {
+      "name": "civilian-apartments-team-trim",
+      "prompt": "Edit only garrisoned cells 2 and 4 of civilian apartments: add pure magenta team-color strips along roof parapet; preserve building, registration and transparency.",
+      "source": "docs/assets/sources/civilian-apartments-team-trim-source.png",
+      "source_sha256": "cd7674cb6074a02f8edb737daeae961876c6c91db05c44a4f25bd29ad6b0f898",
+      "asset": "sandbox/assets/buildings/civilian-apartments-team-trim.png",
+      "sha256": "cd7674cb6074a02f8edb737daeae961876c6c91db05c44a4f25bd29ad6b0f898"
+    }
+  ]
+}

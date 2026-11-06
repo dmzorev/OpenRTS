@@ -63,7 +63,7 @@ public partial class Sandbox
         AddCommandPanel(column);
         var row = new HBoxContainer(); column.AddChild(row);
         foreach (var action in new[] { (UnitActionKind.Move, "M · Идти"), (UnitActionKind.AttackMove, "A · Атаковать / идти"),
-            (UnitActionKind.Stop, "S · Стоп"), (UnitActionKind.HoldPosition, "H · Удерживать") })
+            (UnitActionKind.Enter, "Enter · Войти"), (UnitActionKind.Stop, "S · Стоп"), (UnitActionKind.HoldPosition, "H · Удерживать") })
         {
             var button = new Button { Text = action.Item2, FocusMode = Control.FocusModeEnum.None };
             var kind = action.Item1; button.Pressed += () => ActivateAction(kind, Input.IsPhysicalKeyPressed(Key.Shift));

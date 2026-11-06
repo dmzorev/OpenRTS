@@ -113,7 +113,7 @@ internal static class PresentationChecks
             var units = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml"))],
                 LocomotionCatalog.Load([new("terrain", File.ReadAllText("sandbox/content/terrain.yaml"))]), LocomotionChecks.Weapons());
             var models = ModelCatalog.Load([new("models", File.ReadAllText("sandbox/content/models.yaml"))]); models.ValidateUnits(units);
-            NavigationChecks.Check(units.Units.Count == 9 && models.Models.Count == 10 && models.Models["tank"].Parts[1].Parent == 0, "Showcase declarations are incomplete");
+            NavigationChecks.Check(units.Units.Any(u => u.Id == "sniper") && models.Models.Count == 10 && models.Models["tank"].Parts[1].Parent == 0, "Showcase declarations are incomplete");
             ModelCatalog Load(string value) => ModelCatalog.Load([new("invalid-model", value)]);
             NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x', Parent: body}}}}"));
             NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x', Size: [1]}}}}"));

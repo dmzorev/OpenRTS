@@ -48,7 +48,7 @@ public sealed partial class SimulationWorld
             ref var entitySpatial = ref entity.Get<SpatialState>();
             var entityIdentity = entity.Get<UnitIdentity>();
             ref var entityMotion = ref entity.Get<MotionState>();
-            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null) continue;
+            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null || IsStored(entity)) continue;
             bool clear = TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             bool newNoStop = !TerrainGeometry.CanStop(candidate, entitySpatial.Position, type.Body, type.Locomotor) &&
                 TerrainGeometry.CanStop(_navigation!.Grid, entitySpatial.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
@@ -80,7 +80,7 @@ public sealed partial class SimulationWorld
             ref var entityOrders = ref entity.Get<OrderState>();
             entityNavigation.PathLength = entityNavigation.PathCursor = 0;
             entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
-            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null) continue;
+            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null || IsStored(entity)) continue;
             bool wasStranded = entityNavigation.TerrainStranded;
             entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             if (entityNavigation.TerrainStranded)

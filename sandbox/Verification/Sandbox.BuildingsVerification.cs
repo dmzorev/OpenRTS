@@ -15,7 +15,7 @@ public partial class Sandbox
             _verificationDone = true;
             long tick = frame.Tick; int rate = frame.TickRate; var grid = frame.Grid!;
             var poses = frame.Poses.ToArray(); var weapons = frame.Weapons.ToArray(); var report = _session!.Completion.GetAwaiter().GetResult();
-            Check(tick == BuildingScenario.VerificationTicks && poses.Length == 20 && _sprites!.WreckCount == 1, "Destroyed object must leave only an adapter wreck");
+            Check(tick == BuildingScenario.VerificationTicks && poses.Length == 27 && _sprites!.WreckCount == 1, "Destroyed object must leave only an adapter wreck");
             Check(grid.TerrainAt(grid.CellAt(new(51 * 1024, 27 * 1024))) == _catalog!.Locomotion!.TerrainIndex("forest"), "Trees did not override road");
             Check(grid.TerrainAt(grid.CellAt(new(68 * 1024, 28 * 1024))) == _catalog.Locomotion.TerrainIndex("mountains"), "Cliff did not override terrain");
             Check(!grid.IsBlocked(grid.CellAt(new(51 * 1024, 42 * 1024))), "Wreck retained a blocking footprint");
@@ -25,6 +25,43 @@ public partial class Sandbox
             Check((snapped.X - fp.HalfWidth) % 1024 == 0 && (snapped.Y - fp.HalfHeight) % 1024 == 0, "Placement anchor not aligned");
             HandleBuildingKey(Key.B); Check(_placing, "Placement mode missing"); HandleBuildingKey(Key.Escape); Check(!_placing, "Placement cancel missing");
             _sprites!.Apply(poses, 1, tick, rate, weapons);
+            foreach (var (id, texture) in new[] { ("civilian-house", "civilian-house-states.png"), ("civilian-apartments", "civilian-apartments-states.png"), ("civilian-clinic", "city-clinic.png"), ("civilian-market", "city-market.png"), ("civilian-library", "city-library.png"), ("civilian-station", "city-station.png"), ("civilian-community", "city-community.png") })
+            {
+            var house = poses.Single(p => _catalog!.Units[p.UnitType].Id == id);
+            uint garrison = _catalog!.Units[house.UnitType].StateMask("garrisoned");
+            foreach (var (health, state, expected) in new[] { (1000, 0u, 0), (1000, garrison, 1), (500, 0u, 2), (500, garrison, 3), (250, garrison, 4) })
+            {
+                _sprites.Apply([house with { Health = health, Presentation = house.Presentation with { States = state } }], 1, tick, rate);
+                var visible = _sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Where(n => n.Multimesh.VisibleInstanceCount > 0 &&
+                    n.Multimesh.Mesh.SurfaceGetMaterial(0) is ShaderMaterial m && m.GetShaderParameter("sprite_texture").AsGodotObject() is Texture2D t && t.ResourcePath.EndsWith(id == "civilian-apartments" && expected is 1 or 3 ? "civilian-apartments-team-trim.png" : texture, StringComparison.Ordinal)).ToArray();
+                Check(visible.Length == 1 && Math.Abs(((ShaderMaterial)visible[0].Multimesh.Mesh.SurfaceGetMaterial(0)).GetShaderParameter("uv_rect").AsVector4().X - expected / 5f) < 0.002f, "Civilian house state selected the wrong sprite");
+            }
+            }
+            foreach (var (id, batch) in new[] { ("civilian-house", "ownership-flag"), ("civilian-apartments", "civilian-apartments-team-trim") })
+            {
+                var house = poses.Single(p => _catalog!.Units[p.UnitType].Id == id);
+                uint garrison = _catalog!.Units[house.UnitType].StateMask("garrisoned");
+                var blue = house with { Presentation = house.Presentation with { Owner = 1, States = garrison } };
+                var red = blue with { Id = new(1000), Presentation = blue.Presentation with { Owner = 2 } };
+                _sprites.Apply([blue, red], 1, tick, rate);
+                var marker = _sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Where(n => n.Multimesh.VisibleInstanceCount > 0 && n.Multimesh.Mesh.SurfaceGetMaterial(0) is ShaderMaterial mat && mat.GetShaderParameter("sprite_texture").AsGodotObject() is Texture2D tex && tex.ResourcePath.EndsWith(batch + ".png", StringComparison.Ordinal)).Select(n => n.Multimesh).Single();
+                var markerColors = marker.Buffer;
+                Check(marker.VisibleInstanceCount == 2 && markerColors[16] < markerColors[18] && markerColors[36] > markerColors[38], "Ownership marker did not use each player's color");
+                _sprites.Apply([blue with { Presentation = blue.Presentation with { States = 0 } }], 1, tick, rate);
+                Check(marker.VisibleInstanceCount == 0, "Ownership marker appeared without a garrison");
+            }
+            foreach (string name in new[] { "clinic", "market", "library", "station", "community" })
+            {
+                using var art = Image.LoadFromFile(ProjectSettings.GlobalizePath($"res://assets/buildings/city-{name}.png"));
+                foreach (int cell in new[] { 1, 3 })
+                {
+                    int pixels = 0, left = (int)Math.Round(cell * art.GetWidth() / 5.0), right = (int)Math.Round((cell + 1) * art.GetWidth() / 5.0);
+                    for (int y = 85; y < 645; y += 2) for (int x = left; x < right; x += 2)
+                    { var color = art.GetPixel(x, y); if (color.A > 0.5f && color.R > 0.7f && color.B > 0.7f && color.G < 0.35f) pixels++; }
+                    Check(pixels > 20, $"Missing team-color trim: {name}, state {cell}");
+                }
+            }
+            _sprites.Apply(poses, 1, tick, rate, weapons);
             var radar = Batch("radar").Multimesh.Buffer; float angle = (float)((tick + 1) / (double)rate * 65 * Math.PI / 180);
             Check(Math.Abs(radar[0] - MathF.Cos(angle) * 1.45f) < 0.001f && Math.Abs(radar[8] - MathF.Sin(angle) * 1.45f) < 0.001f, "Radar did not rotate in simulation time");
             var power = Batch("power-plant").Multimesh; var colors = power.Buffer;

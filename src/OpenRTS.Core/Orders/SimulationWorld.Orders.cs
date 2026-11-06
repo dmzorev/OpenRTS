@@ -10,19 +10,20 @@ public sealed partial class SimulationWorld
         if (command.Recipients is null)
         {
             if (command.Entity.Value == 0 && command.Kind == CommandKind.MoveGroup)
-                return Enumerable.Range(0, Count).OrderBy(i => _unitHandles[i].Get<UnitIdentity>().Id.Value).ToArray();
-            if (_indices.TryGetValue(command.Entity, out int index)) return [index];
+                return Enumerable.Range(0, Count).Where(i => !IsStored(_unitHandles[i])).OrderBy(i => _unitHandles[i].Get<UnitIdentity>().Id.Value).ToArray();
+            if (_indices.TryGetValue(command.Entity, out int index)) return IsStored(_unitHandles[index]) ? [] : [index];
             _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity)); return [];
         }
         var indices = new List<int>(command.Recipients.Count);
         foreach (var id in command.Recipients.Ids)
-            if (_indices.TryGetValue(id, out int index)) indices.Add(index);
+            if (_indices.TryGetValue(id, out int index)) { if (!IsStored(_unitHandles[index])) indices.Add(index); }
             else _events.Add(new(Tick, WorldEventKind.MissingEntity, id));
         return indices.ToArray();
     }
 
     private void IssueOrder(int index, UnitOrder order, bool queued)
     {
+        if (IsStored(_unitHandles[index])) return;
         ref var entity = ref _unitHandles[index];
         var entityIdentity = entity.Get<UnitIdentity>();
         ref var entityOrders = ref entity.Get<OrderState>();
@@ -45,6 +46,9 @@ public sealed partial class SimulationWorld
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
         if (order.Kind == UnitActionKind.Capture && !CanCapture(index, order.Target, out _)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        if (order.Kind == UnitActionKind.Enter && !CanEnter(index, order.Target, out _) ||
+            order.Kind == UnitActionKind.UnloadAt && !HasPassengers(entity))
+        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.UnitType].Movable ||
@@ -53,6 +57,11 @@ public sealed partial class SimulationWorld
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove)
         { if (!SetTarget(index, order.Position)) return false; entityNavigation.GroupMember = order.Group; entityNavigation.OrderGroup = order.Cohort; }
+        else if (order.Kind == UnitActionKind.UnloadAt && TypeOf(entity).Transport!.UnloadDistance >= 0)
+        {
+            int distance = TypeOf(entity).Transport!.UnloadDistance;
+            if (DistanceSquared(entity.Get<SpatialState>().Position, order.Position) > (long)distance * distance && !SetTarget(index, order.Position)) return false;
+        }
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { if (!_types[entityIdentity.UnitType].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
         else Halt(index);
@@ -85,11 +94,14 @@ public sealed partial class SimulationWorld
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
+            if (IsStored(entity)) continue;
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;
             while (!entityOrders.HasOrder && entityOrders.PendingOrders is { Count: > 0 }) StartOrder(i, entityOrders.PendingOrders.Dequeue());
             if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { UpdateEnter(i, entityOrders.ActiveOrder); continue; }
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { UpdateUnload(i, entityOrders.ActiveOrder.Position); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture) { UpdateCapture(i); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
             bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;

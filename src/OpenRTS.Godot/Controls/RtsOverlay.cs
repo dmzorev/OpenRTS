@@ -2,7 +2,7 @@ using Godot;
 
 namespace OpenRTS.Godot.Controls;
 
-public enum RtsCursor { Default, Select, Inspect, Move, AdjustedMove, Attack, Unavailable, Repair }
+public enum RtsCursor { Default, Select, Inspect, Move, AdjustedMove, Attack, Unavailable, Repair, Enter, Unload }
 
 /// <summary>Animated vector cursors and marquee; UI time intentionally continues while the match is paused.</summary>
 public partial class RtsOverlay : Control
@@ -47,7 +47,16 @@ public partial class RtsOverlay : Control
         { RtsCursor.Repair => new Color(0.2f, 1, 0.6f), RtsCursor.Attack => new Color(1, 0.25f, 0.18f), RtsCursor.Unavailable => new Color(1, 0.35f, 0.3f),
             RtsCursor.AdjustedMove => new Color(1, 0.77f, 0.25f), RtsCursor.Move => new Color(0.35f, 1, 0.55f),
             RtsCursor.Select => new Color(0.3f, 0.85f, 1), _ => Colors.White };
-        if (Cursor is RtsCursor.Default or RtsCursor.Select or RtsCursor.Inspect)
+        if (Cursor is RtsCursor.Enter or RtsCursor.Unload)
+        {
+            color = Cursor == RtsCursor.Enter ? new(0.3f, 0.95f, 0.75f) : new(1, 0.78f, 0.28f);
+            DrawRect(new Rect2(p - new Vector2(8, 9), new Vector2(16, 18)), color, false, 2);
+            float direction = Cursor == RtsCursor.Enter ? 1 : -1;
+            Vector2 tip = p + new Vector2(direction * (5 + pulse * 7) - 7, 0);
+            DrawPolyline([tip + new Vector2(-direction * 5, -4), tip, tip + new Vector2(-direction * 5, 4)], color, 2, true);
+            DrawLine(tip, tip - new Vector2(direction * 10, 0), color, 2, true);
+        }
+        else if (Cursor is RtsCursor.Default or RtsCursor.Select or RtsCursor.Inspect)
         {
             Vector2[] arrow = [p, p + new Vector2(0, 23), p + new Vector2(6, 17), p + new Vector2(11, 28), p + new Vector2(15, 26), p + new Vector2(10, 15), p + new Vector2(20, 15)];
             DrawColoredPolygon(arrow, new Color(0.02f, 0.04f, 0.06f, 0.95f)); DrawPolyline([.. arrow, arrow[0]], color, 1.5f, true);

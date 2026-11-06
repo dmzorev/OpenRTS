@@ -5,19 +5,19 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld
 {
     private readonly Dictionary<EntityId, long> _damage = new(), _healing = new();
-    private readonly List<EntityId> _dead = [], _affected = [];
+    private readonly List<EntityId> _dead = [], _affected = [], _disabledTransports = [];
     private readonly List<EntityId> _combatCandidates = [];
     private bool ValidTarget(int index, EntityId id, WeaponDefinition weapon, out int target)
     {
         target = -1;
-        if (!_indices.TryGetValue(id, out target) || index == target) return false;
+        if (!_indices.TryGetValue(id, out target) || index == target || IsStored(_unitHandles[target])) return false;
         uint owner = _unitHandles[index].Get<OwnershipState>().Owner;
         if (owner == 0) return false;
         ref var other = ref _unitHandles[target];
         var otherIdentity = other.Get<UnitIdentity>();
         ref var otherOwnership = ref other.Get<OwnershipState>();
         if (_types[otherIdentity.UnitType].Destruction == DestructionPolicy.Invulnerable) return false;
-        if (weapon.Modifier(_types[otherIdentity.UnitType].Armor) == 0) return false;
+        if ((weapon.Damage == 0 || weapon.Modifier(_types[otherIdentity.UnitType].Armor) == 0) && (weapon.PassengerDamage == 0 || !HasPassengers(other))) return false;
         return weapon.Effect == WeaponEffect.Repair
             ? otherOwnership.Owner == owner && other.Get<HealthState>().Current < _types[otherIdentity.UnitType].MaxHealth
             : otherOwnership.Owner != 0 && otherOwnership.Owner != owner;
@@ -34,6 +34,15 @@ public sealed partial class SimulationWorld
             if (best is null || mount.Weapon.Range < best.Range) best = mount.Weapon;
             if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
         }
+        var carrier = _unitHandles[index];
+        if (!repair && TypeOf(carrier).Transport is { FireFromInside: true } && HasPassengers(carrier))
+            foreach (var id in carrier.Get<TransportState>().Occupants)
+                foreach (var mount in TypeOf(_unitHandles[_indices[id]]).Weapons)
+                {
+                    if (!mount.FireFromTransport || mount.Weapon.Effect != WeaponEffect.Damage) continue;
+                    if (best is null || mount.Weapon.Range < best.Range) best = mount.Weapon;
+                    if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
+                }
         return compatible ?? best;
     }
     private bool InWeaponRange(int index, int target, int range)
@@ -69,31 +78,38 @@ public sealed partial class SimulationWorld
     }
     private void UpdateWeapons()
     {
-        _damage.Clear(); _healing.Clear(); _dead.Clear();
+        _damage.Clear(); _healing.Clear(); _dead.Clear(); _disabledTransports.Clear();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
             _stepCancellation.ThrowIfCancellationRequested();
             int i = _movementOrder[orderIndex]; ref var entity = ref _unitHandles[i];
-            ref var entitySpatial = ref entity.Get<SpatialState>();
             var entityIdentity = entity.Get<UnitIdentity>();
             var type = _types[entityIdentity.UnitType];
             if (type.Weapons.Count == 0) continue;
+            var carrierId = _storedCount != 0 ? CarrierOf(entity) : default;
+            int origin = carrierId.Value == 0 ? i : _indices[carrierId];
+            var carrier = _unitHandles[origin];
+            bool stored = origin != i;
+            var sourceType = stored ? TypeOf(carrier) : type;
+            if (stored && sourceType.Transport is not { FireFromInside: true }) continue;
+            ref var entitySpatial = ref carrier.Get<SpatialState>();
             ref var entityCombat = ref entity.Get<CombatState>();
             ref var entityPresentation = ref entity.Get<PresentationState>();
             ref var entityOwnership = ref entity.Get<OwnershipState>();
-            ref var entityOrders = ref entity.Get<OrderState>();
-            ref var entityMotion = ref entity.Get<MotionState>();
+            ref var entityOrders = ref carrier.Get<OrderState>();
+            ref var entityMotion = ref carrier.Get<MotionState>();
             entityCombat.WeaponReadyTick = 0;
             for (int mountIndex = 0; mountIndex < type.Weapons.Count; mountIndex++)
             {
                 var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
+                if (stored && (!mount.FireFromTransport || weapon.Effect != WeaponEffect.Damage)) continue;
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
-                if (type.Economy is { DisableWeapons: true } && LowPower(entityOwnership.Owner))
+                if (sourceType.Economy is { DisableWeapons: true } && LowPower(entityOwnership.Owner))
                 { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; entityCombat.WeaponReadyTick = Math.Max(entityCombat.WeaponReadyTick, state.ReadyTick); continue; }
-                bool repairOrder = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
+                bool repairOrder = !stored && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
                 bool ordinaryMove = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move;
                 int ability = MountAbility(entityIdentity.UnitType, mountIndex);
-                bool manual = ability >= 0 && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability && entityOrders.ActiveOrder.Ability == ability;
+                bool manual = !stored && ability >= 0 && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability && entityOrders.ActiveOrder.Ability == ability;
                 bool allowed = manual || ability < 0 || state.AutoCast || repairOrder && weapon.Effect == WeaponEffect.Repair;
                 int target = -1; bool ground = false; WorldPosition point = default;
                 if (allowed && (!ordinaryMove || mount.FireWhileMoving) && (!entityMotion.Moving || mount.FireWhileMoving) &&
@@ -108,13 +124,13 @@ public sealed partial class SimulationWorld
                     else
                     {
                         var preferred = repairOrder ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget;
-                        if (!ValidTarget(i, preferred, weapon, out target) || !InWeaponRange(i, target, weapon.Range))
+                        if (!ValidTarget(origin, preferred, weapon, out target) || !InWeaponRange(origin, target, weapon.Range))
                         {
                             target = -1;
                             if (!repairOrder && (weapon.Effect == WeaponEffect.Damage || state.AutoCast))
                             {
-                                if (ValidTarget(i, state.Target, weapon, out int previous) && InWeaponRange(i, previous, weapon.Range)) target = previous;
-                                else if ((Tick + entityIdentity.Id.Value + mountIndex) % 4 == 0 || entityOrders.OrderStarted == Tick) target = AcquireWeaponTarget(i, weapon);
+                                if (ValidTarget(origin, state.Target, weapon, out int previous) && InWeaponRange(origin, previous, weapon.Range)) target = previous;
+                                else if ((Tick + entityIdentity.Id.Value + mountIndex) % 4 == 0 || entityOrders.OrderStarted == Tick) target = AcquireWeaponTarget(origin, weapon);
                             }
                         }
                     }
@@ -123,7 +139,7 @@ public sealed partial class SimulationWorld
                 else
                 {
                     state.Target = ground ? default : _unitHandles[target].Get<UnitIdentity>().Id;
-                    var aim = ground ? point : AimPoint(i, target); state.Facing = new(aim.X - entitySpatial.Position.X, aim.Y - entitySpatial.Position.Y);
+                    var aim = ground ? point : AimPoint(origin, target); state.Facing = new(aim.X - entitySpatial.Position.X, aim.Y - entitySpatial.Position.Y);
                     if (Tick >= state.ReadyTick)
                     {
                         if (state.FireAtTick == 0 || state.ChargingTarget != state.Target)
@@ -136,12 +152,12 @@ public sealed partial class SimulationWorld
                             state.Animation = new(type.AnimationIndex(mount.Animation), Tick, weapon.AnimationTicks);
                             entityPresentation.WeaponAnimation = state.Animation;
                             WorldPosition muzzle, impactPoint;
-                            if (ground) { impactPoint = point; muzzle = ObjectGeometry.ClosestPoint(type, entitySpatial.Position, point); }
-                            else ObjectGeometry.DistanceSquared(type, entitySpatial.Position, _types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, out muzzle, out impactPoint);
+                            if (ground) { impactPoint = point; muzzle = ObjectGeometry.ClosestPoint(sourceType, entitySpatial.Position, point); }
+                            else ObjectGeometry.DistanceSquared(sourceType, entitySpatial.Position, _types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, out muzzle, out impactPoint);
                             _events.Add(new(Tick, WorldEventKind.WeaponFired, entityIdentity.Id, impactPoint, entityIdentity.UnitType,
                                 state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle));
                             if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entityOwnership.Owner, state.Target, impactPoint, entityIdentity.Id, entityIdentity.UnitType, mountIndex);
-                            else Launch(i, target, mountIndex, weapon, ground ? point : null);
+                            else Launch(origin, target, mountIndex, weapon, ground ? point : null, entityIdentity.UnitType);
                             if (manual && state.BurstRemaining == 0) { entityOrders.HasOrder = false; entityOrders.CombatTarget = default; entityOrders.OrderPhase = OrderPhase.Idle; }
                         }
                     }
@@ -158,21 +174,27 @@ public sealed partial class SimulationWorld
         {
             if (!_indices.TryGetValue(id, out int i)) continue;
             ref var entity = ref _unitHandles[i];
-            ref var entitySpatial = ref entity.Get<SpatialState>();
+            var carrierId = CarrierOf(entity);
+            int origin = carrierId.Value == 0 ? i : _indices[carrierId];
+            var carrier = _unitHandles[origin];
+            ref var entitySpatial = ref carrier.Get<SpatialState>();
             var entityIdentity = entity.Get<UnitIdentity>(); ref var health = ref entity.Get<HealthState>(); int before = health.Current;
             _damage.TryGetValue(id, out long damage); health.Current = (int)Math.Max(0, health.Current - damage);
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Damaged, id, entitySpatial.Position, entityIdentity.UnitType, Amount: before - health.Current));
             if (health.Current == 0)
             {
-                if (_types[entityIdentity.UnitType].Destruction == DestructionPolicy.Neutralize) { health.Current = 1; ChangeOwner(i, 0); }
+                if (_types[entityIdentity.UnitType].Destruction == DestructionPolicy.Neutralize) { health.Current = 1;
+                    if (HasPassengers(entity)) _disabledTransports.Add(id);
+                    ChangeOwner(i, 0); }
                 else _dead.Add(id);
                 continue;
             }
             before = health.Current; _healing.TryGetValue(id, out long healing); health.Current = (int)Math.Min(_types[entityIdentity.UnitType].MaxHealth, health.Current + healing);
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Repaired, id, entitySpatial.Position, entityIdentity.UnitType, Amount: health.Current - before));
         }
-        foreach (var id in _dead) DestroyIndex(_indices[id]);
-        if (_dead.Count > 0) RebuildMotionIndex();
+        foreach (var id in _dead) if (_indices.TryGetValue(id, out int index)) DestroyIndex(index);
+        foreach (var id in _disabledTransports) RemovePassengers(_unitHandles[_indices[id]]);
+        if (_dead.Count > 0 || _disabledTransports.Count > 0) RebuildMotionIndex();
     }
     private void Impact(WeaponDefinition weapon, uint owner, EntityId target, WorldPosition position, EntityId source, int unitType, int mount)
     {
@@ -191,9 +213,23 @@ public sealed partial class SimulationWorld
             if (repair ? entityOwnership.Owner != owner || id == source : entityOwnership.Owner == 0 || !weapon.FriendlyFire && entityOwnership.Owner == owner) return;
             if (_types[_unitHandles[i].Get<UnitIdentity>().UnitType].Destruction == DestructionPolicy.Invulnerable) return;
             long value = (long)weapon.Damage * weapon.Modifier(_types[entityIdentity.UnitType].Armor) / 100;
-            if (value == 0) return;
-            var effects = repair ? _healing : _damage;
-            effects.TryGetValue(id, out long previous); effects[id] = previous + value;
+            if (value > 0)
+            {
+                var effects = repair ? _healing : _damage;
+                effects.TryGetValue(id, out long previous);
+                effects[id] = previous + value;
+            }
+            if (weapon.PassengerDamage == 0 || !HasPassengers(entity)) return;
+            int remaining = weapon.PassengerDamage;
+            foreach (var occupant in entity.Get<TransportState>().Occupants)
+            {
+                _damage.TryGetValue(occupant, out long pending);
+                int health = _unitHandles[_indices[occupant]].Get<HealthState>().Current;
+                int dealt = (int)Math.Min(remaining, Math.Max(0, health - pending));
+                if (dealt > 0) _damage[occupant] = pending + dealt;
+                remaining -= dealt;
+                if (!weapon.PassengerDamageSpill || remaining == 0) break;
+            }
         }
     }
     public int WeaponCount => CountWeapons();

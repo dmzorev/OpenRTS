@@ -53,6 +53,7 @@ WeaponChecks.Run(Test);
 FootprintChecks.Run(Test);
 ActionProductionChecks.Run(Test);
 DefinitionChecks.Run(Test);
+TransportChecks.Run(Test);
 EcsMigrationChecks.Run(Test);
 EcsStorageChecks.Run(Test);
 SpatialHealthChecks.Run(Test);

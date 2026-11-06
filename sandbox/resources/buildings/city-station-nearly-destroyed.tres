@@ -1,0 +1,13 @@
+[gd_resource type="SpriteFrames" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/buildings/city-station.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="Atlas"]
+atlas = ExtResource("1")
+region = Rect2(1738, 85, 434, 560)
+
+[resource]
+animations = [{
+"frames": [{"duration": 1.0, "texture": SubResource("Atlas")}],
+"loop": true, "name": &"stand", "speed": 1.0
+}]

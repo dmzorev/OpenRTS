@@ -26,6 +26,7 @@ public partial class Sandbox
         foreach (string id in BuildingScenario.Placeable)
         { int type = _catalog!.Units.ToList().FindIndex(u => u.Id == id); _placeablePicker.AddItem(_catalog.Presentations[type].Name); }
         _placeablePicker.ItemSelected += index => _placeableId = BuildingScenario.Placeable[(int)index]; row.AddChild(_placeablePicker);
+        _placeablePicker.TooltipText = "Гражданские здания: выберите пехоту и кликните по зданию";
         void Button(string text, Action action) { var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None }; b.Pressed += action; row.AddChild(b); }
         Button("B · Разместить", () => { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; });
         Button("Del · Убрать", () => RemoveBuilding(false)); Button("Backspace · Разрушить", () => RemoveBuilding(true));
@@ -45,6 +46,7 @@ public partial class Sandbox
         if (key is Key.Delete or Key.Backspace) { RemoveBuilding(key == Key.Backspace); return true; }
         if (Selected() is not { } selected || _catalog!.Units[selected.UnitType].Footprint is null) return false;
         var type = _catalog.Units[selected.UnitType];
+        if (key == Key.G && type.Transport is null && type.States.Contains("garrisoned")) { _session!.Submit(CommandKind.ToggleVisualState, entity: selected.Id, states: type.StateMask("garrisoned")); return true; }
         if (key == Key.W && type.States.Contains("working")) { _session!.Submit(CommandKind.ToggleVisualState, entity: selected.Id, states: type.StateMask("working")); return true; }
         string? animation = key switch { Key.O => "door", Key.C => "construct", Key.F => "produce", _ => null };
         if (animation is null || type.AnimationIndex(animation) < 0) return false;

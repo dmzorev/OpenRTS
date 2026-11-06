@@ -12,13 +12,19 @@ public sealed record EntityDefinition
     public BuildDefinition? Build { get; }
     public EconomyDefinition? Economy { get; }
     public CapturableDefinition? Capturable { get; }
+    public PassengerDefinition? Passenger { get; }
+    public TransportDefinition? Transport { get; }
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        Economy = economy; Capturable = capturable;
+        Economy = economy; Capturable = capturable; Passenger = passenger; Transport = transport;
+        if (passenger is not null && (spatial is null || !spatial.Movable || spatial.Footprint is not null || health is null || health.Destruction != DestructionPolicy.Destroy || production?.Queues.Count > 0))
+            throw new ArgumentException("Passenger requires a movable unit without a footprint or production.");
+        if (transport is not null && (health is null || spatial is null || !spatial.Movable && transport.UnloadDistance != -1))
+            throw new ArgumentException("Transport requires health and spatial capability; static transports unload in place.");
         if (economy is not null && (spatial is null || spatial.Movable || presentation is null || !presentation.States.Contains(economy.LowPowerState))) throw new ArgumentException("Economy requires an immobile entity and declared lowpower state.");
         if (capturable is not null && (spatial is null || spatial.Movable || health is null || health.Destruction == DestructionPolicy.Invulnerable)) throw new ArgumentException("Capturable requires an immobile attackable entity with health.");
         if (health?.Destruction == DestructionPolicy.Neutralize && capturable is null) throw new ArgumentException("Neutralize requires Capturable.");

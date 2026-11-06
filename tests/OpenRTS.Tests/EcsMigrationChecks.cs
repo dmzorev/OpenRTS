@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for players/economy/capture (catalog8/direct8/nav12); old ECS-only traces are historical in verification015–020.
+    // Rebased for transport definitions and state, plus the Carrier field in frame poses.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "11EB4638474348D172B9385762B3C8FDC1267CAD2F183781B53CFC83B7B9A579",
-        ["navigation"] = "2766F2050E43BC104E3430ED774FC18E1A7C8B2AF7648406A0675E5C37134D54",
-        ["combat"] = "64E8C60CF6E72A5C73D55B0407389C51B38DAB77F2F5EBC9B23AE601B1E23B62",
-        ["buildings"] = "FD2C0DF139D2C64F7082B2ABD117361AD5E2257DC99E48A6848AD33C9AB9A1FE",
-        ["production"] = "FC5A208083E08EDB0094A4E2A99BD1BAA3BDB4F7D4A4D2220FED8E1C932E7C55"
+        ["direct"] = "F9318DBBC4B538E6A686D8B8553C5FA098AD5C67FF1544A3184232A1AACBD9D2",
+        ["navigation"] = "9FB39C6528A62AC7A73908CD5CE14B6B0D6581E9506C5DB30937FF1972746811",
+        ["combat"] = "1F51FC99DD46F26BC3D40DC69E6A23FC3F48EA61287CE6DD097A39423841B376",
+        ["buildings"] = "4F4215CF9564B3BD90BCC531D60023DE3F82B4616E7A981047017FBD6192BFE6",
+        ["production"] = "F9ACED5ED32C905EF40EE65754C81EE7BEC1E5AB42405A2E140851FFA40DFFDE"
     };
 
     private static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

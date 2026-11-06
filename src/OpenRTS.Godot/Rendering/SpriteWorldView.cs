@@ -19,7 +19,7 @@ public sealed class SpriteWorldView
         }
     }
     private sealed record Part(ModelPart Definition, Sequence?[] Sequences, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation);
-    private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed);
+    private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed);
     private readonly Model[] _models;
     private readonly SortedDictionary<EntityId, EntityPose> _wrecks = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
     private EntityPose[] _ordered = [];
@@ -92,7 +92,7 @@ public sealed class SpriteWorldView
                 parts[p] = new(part, sequences, animations, part.Mount is null ? -1 : type.Weapons.ToList().FindIndex(m => m.Id == part.Mount),
                     Mask(part.VisibleWhen), Mask(part.HiddenWhen), State(part.SpinWhen), State(part.LoopWhen), part.LoopAnimation is null ? -1 : type.AnimationIndex(part.LoopAnimation));
             }
-            _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState));
+            _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState), type.States.Contains("nearly-destroyed") ? type.StateMask("nearly-destroyed") : 0);
             MaximumParts = Math.Max(MaximumParts, parts.Length);
         }
     }
@@ -113,7 +113,8 @@ public sealed class SpriteWorldView
         Span<float> angles = stackalloc float[8];
         int count = poses.Length + _wrecks.Count;
         if (_ordered.Length < count) Array.Resize(ref _ordered, Math.Max(count, _ordered.Length * 2));
-        poses.CopyTo(_ordered); int at = poses.Length;
+        int at = 0;
+        foreach (var pose in poses) if (pose.Carrier.Value == 0) _ordered[at++] = pose;
         if (_wrecks.Count > 0)
         {
             _liveIds.Clear(); foreach (var pose in poses) _liveIds.Add(pose.Id);
@@ -127,6 +128,7 @@ public sealed class SpriteWorldView
         {
             var model = _models[pose.UnitType]; var view = pose.Presentation;
             if (model.Damaged != 0 && pose.Health > 0 && (long)pose.Health * 2 <= model.Unit.MaxHealth) view = view with { States = view.States | model.Damaged };
+            if (model.NearlyDestroyed != 0 && pose.Health > 0 && (long)pose.Health * 4 <= model.Unit.MaxHealth) view = view with { States = view.States | model.NearlyDestroyed };
             float depth = model.Unit.Footprint is not null ? _depthRanks[pose.Id] : DepthAt(pose.Current) + (_depthRanks.Count > 0 ? 0.0001f : 0);
             float layerStep = _depthRanks.Count > 0 ? 0.00005f : 0.015f;
             Vector2 origin = new(Lerp(pose.Previous.X, pose.Current.X, alpha), Lerp(pose.Previous.Y, pose.Current.Y, alpha));

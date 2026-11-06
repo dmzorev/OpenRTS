@@ -1,39 +1,47 @@
 ^unit:
-  Buildable: {Ticks: 75, Cost: 100}
-  Movement: {Locomotor: infantry}
-  Health: {HP: 100, Armor: Living}
+  Buildable: { Ticks: 75, Cost: 100 }
+  Movement: { Locomotor: infantry }
+  Health: { HP: 100, Armor: Living }
   Presentation:
     Animations: [idle, move, fire]
     States: [damaged]
 
 rifleman:
   Inherits: ^unit
+  Passenger: {Type: infantry}
   Armaments:
     Mounts:
-      main: {Weapon: rifle}
-      grenade: {Weapon: grenade}
+      main: { Weapon: rifleman, FireFromTransport: true }
+      grenade: { Weapon: grenade }
   Actions:
     Definitions:
-      grenade: {Mount: grenade, GroundTarget: true}
+      grenade: { Mount: grenade, GroundTarget: true }
   ActionPanel:
     Buttons:
-      grenade: {Label: Граната, Cursor: grenade, Icon: res://assets/units/rifleman.png}
-  Presentation: {Model: infantry-rifle, Name: Пехотинец с автоматом}
+      grenade:
+        {
+          Label: Граната,
+          Cursor: grenade,
+          Icon: res://assets/units/rifleman.png,
+        }
+  Presentation: { Model: infantry-rifle, Name: Пехотинец с автоматом }
 
 rocketeer:
   Inherits: ^unit
+  Passenger: {Type: infantry}
   Armaments:
     Mounts:
-      main: {Weapon: missile}
-  Presentation: {Model: infantry-rocket, Name: Пехотинец с ракетницей}
+      main: { Weapon: missile }
+  Presentation: { Model: infantry-rocket, Name: Пехотинец с ракетницей }
 
 apc-mg:
   Inherits: ^unit
+  Transport: {Accepts: [infantry], Slots: 6, FireFromInside: true, UnloadDistance: 768}
   Armaments:
     Mounts:
-      main: {Weapon: rifle, FireWhileMoving: true}
-  Movement: {Locomotor: amphibious}
-  Health: {HP: 250, Armor: Mechanical}
+      main: { Weapon: rifle, FireWhileMoving: true }
+  Movement: { Locomotor: amphibious }
+  Health: { HP: 250, Armor: Mechanical }
   Presentation:
     Model: apc-machinegun
     States: [damaged, swimming]
@@ -43,24 +51,25 @@ apc-rocket:
   Inherits: apc-mg
   Armaments:
     Mounts:
-      main: {Weapon: missile}
-  Presentation: {Model: apc-missiles, Name: БТР · ракеты}
+      main: { Weapon: missile }
+  Presentation: { Model: apc-missiles, Name: БТР · ракеты }
 
 tank:
   Inherits: apc-mg
+  -Transport:
   Armaments:
     Mounts:
-      main: {Weapon: cannon}
-  Movement: {Locomotor: tracked}
-  Health: {HP: 400}
-  Presentation: {Model: tank, Name: Танк}
+      main: { Weapon: cannon }
+  Movement: { Locomotor: tracked }
+  Health: { HP: 400 }
+  Presentation: { Model: tank, Name: Танк }
 
 tank-mixed:
   Inherits: tank
   Armaments:
     Mounts:
-      main: {Weapon: cannon, Animation: fire}
-      missiles: {Weapon: missile, Animation: missiles, FireWhileMoving: true}
+      main: { Weapon: cannon, Animation: fire }
+      missiles: { Weapon: missile, Animation: missiles, FireWhileMoving: true }
   Presentation:
     Model: tank-mixed
     Animations: [idle, move, fire, missiles]
@@ -70,17 +79,17 @@ engineer:
   Inherits: ^unit
   Actions:
     Definitions:
-      capture: {Capture: true, Range: 1024}
-      repair: {Mount: main}
+      capture: { Capture: true, Range: 1024 }
+      repair: { Mount: main }
   ActionPanel:
     Buttons:
-      repair: {Label: Ремонт, Cursor: repair, Order: 0}
-      capture: {Label: Захват, Cursor: capture, Order: 1}
-  Movement: {Locomotor: amphibious}
-  Health: {HP: 220, Armor: Mechanical}
+      repair: { Label: Ремонт, Cursor: repair, Order: 0 }
+      capture: { Label: Захват, Cursor: capture, Order: 1 }
+  Movement: { Locomotor: amphibious }
+  Health: { HP: 220, Armor: Mechanical }
   Armaments:
     Mounts:
-      main: {Weapon: repair, Animation: repair}
+      main: { Weapon: repair, Animation: repair }
   Presentation:
     Model: engineer
     Animations: [idle, move, repair]
@@ -90,21 +99,40 @@ engineer:
 bunker-cannon:
   Inherits: tank
   Capturable: {}
-  Economy: {Energy: -15}
+  Economy: { Energy: -15 }
   Footprint:
-    Rows: ['##', '##']
-    Types: {'#': {Traverse: false, CanStop: false}}
-  Movement: {Enabled: false}
-  Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-cannon, Name: ДОТ · пушка, States: [damaged, working, destroyed, lowpower]}
+    Rows: ["##", "##"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Movement: { Enabled: false }
+  Health: { HP: 700, Armor: Building }
+  Presentation:
+    {
+      Model: bunker-cannon,
+      Name: ДОТ · пушка,
+      States: [damaged, working, destroyed, lowpower],
+    }
 
 bunker-mixed:
   Inherits: tank-mixed
   Capturable: {}
-  Economy: {Energy: -25}
+  Economy: { Energy: -25 }
   Footprint:
-    Rows: ['##', '##']
-    Types: {'#': {Traverse: false, CanStop: false}}
-  Movement: {Enabled: false}
-  Health: {HP: 700, Armor: Building}
-  Presentation: {Model: bunker-mixed, Name: ДОТ · пушка и ракеты, States: [damaged, working, destroyed, lowpower]}
+    Rows: ["##", "##"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Movement: { Enabled: false }
+  Health: { HP: 700, Armor: Building }
+  Presentation:
+    {
+      Model: bunker-mixed,
+      Name: ДОТ · пушка и ракеты,
+      States: [damaged, working, destroyed, lowpower],
+    }
+
+
+sniper:
+  Inherits: ^unit
+  Passenger: {Type: infantry}
+  Armaments:
+    Mounts:
+      main: {Weapon: sniper-rifle, FireFromTransport: true}
+  Presentation: {Model: infantry-rifle, Name: Снайпер}

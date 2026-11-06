@@ -27,10 +27,12 @@ barracks:
   Actions:
     Definitions:
       rifleman: {Unit: rifleman}
+      sniper: {Unit: sniper}
       rocketeer: {Unit: rocketeer}
   ActionPanel:
     Buttons:
       rifleman: {Label: Автоматчик}
+      sniper: {Label: Снайпер}
       rocketeer: {Label: Ракетчик}
   Footprint: {Rows: ['####', '#==#', '#++#']}
   Presentation: {Model: barracks, Name: Бараки}
@@ -151,3 +153,48 @@ box-vehicle:
   Inherits: tank
   Body: {Kind: Box, HalfSize: [640, 320]}
   Presentation: {Name: Техника · прямоугольное тело}
+
+
+civilian-house:
+  Transport: {Accepts: [infantry], Slots: 6, FireFromInside: true}
+  Health: {HP: 1000, Armor: Building}
+  Movement: {Enabled: false}
+  Footprint:
+    Rows: ['###', '###', '###']
+    Types: {'#': {Traverse: false, CanStop: false}}
+  Presentation: {Model: civilian-house, Name: Гражданский дом, Animations: [idle], States: [damaged, garrisoned, nearly-destroyed, destroyed]}
+
+
+civilian-apartments:
+  Inherits: civilian-house
+  Presentation: {Model: civilian-apartments, Name: Жилой комплекс}
+
+
+civilian-clinic:
+  Inherits: civilian-house
+  Footprint: {Rows: ['##', '##']}
+  Presentation: {Model: civilian-clinic, Name: Клиника}
+
+
+civilian-market:
+  Inherits: civilian-house
+  Footprint: {Rows: ['####', '####']}
+  Presentation: {Model: civilian-market, Name: Магазин}
+
+
+civilian-library:
+  Inherits: civilian-house
+  Footprint: {Rows: ['###', '###', '###']}
+  Presentation: {Model: civilian-library, Name: Библиотека}
+
+
+civilian-station:
+  Inherits: civilian-house
+  Footprint: {Rows: ['#####', '#####']}
+  Presentation: {Model: civilian-station, Name: Станция}
+
+
+civilian-community:
+  Inherits: civilian-house
+  Footprint: {Rows: ['####', '####', '####', '####']}
+  Presentation: {Model: civilian-community, Name: Общественный центр}

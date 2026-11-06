@@ -1,0 +1,48 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "sandbox/assets/buildings/civilian-apartments-states.png",
+  "shared_prompt": "Make a five-cell horizontal sprite sheet of the named building. Reference defines city style and camera: mostly top-down RTS, small facade strip, crisp painted light concrete, muted blue roofs, warm windows, subtle cyan accents. Fixed layout and anchor in each cell: intact; garrisoned with sandbags and pure magenta team-color trim; damaged; damaged and garrisoned with magenta trim; nearly destroyed. No labels, people or background; transparent alpha.",
+  "normalization": "Unmodified source; five aligned AtlasTexture regions per sprite sheet.",
+  "assets": [
+    {
+      "name": "clinic",
+      "subject": "compact rectangular neighborhood clinic with neutral medical cross",
+      "source": "docs/assets/sources/city-clinic-source.png",
+      "asset": "sandbox/assets/buildings/city-clinic.png",
+      "sha256": "8d2eb671e10da315455fa1f59c5a67df22f8fd6687388766a89d525ea626e187",
+      "source_sha256": "8d2eb671e10da315455fa1f59c5a67df22f8fd6687388766a89d525ea626e187"
+    },
+    {
+      "name": "market",
+      "subject": "wide low neighborhood market with two entrances",
+      "source": "docs/assets/sources/city-market-source.png",
+      "asset": "sandbox/assets/buildings/city-market.png",
+      "sha256": "c99b8cade94f4dbe544c3bdc0b263299290897f4743e6fa84dc4c8369fda8606",
+      "source_sha256": "c99b8cade94f4dbe544c3bdc0b263299290897f4743e6fa84dc4c8369fda8606"
+    },
+    {
+      "name": "library",
+      "subject": "L-shaped public library with a glass rooflight and reading garden",
+      "source": "docs/assets/sources/city-library-source.png",
+      "asset": "sandbox/assets/buildings/city-library.png",
+      "sha256": "49fed8a10c618a69cf0b102c1d4a1eeadba2893f2ff2314b95794c31fe8dd946",
+      "source_sha256": "49fed8a10c618a69cf0b102c1d4a1eeadba2893f2ff2314b95794c31fe8dd946"
+    },
+    {
+      "name": "station",
+      "subject": "civilian transit station with a sheltered platform",
+      "source": "docs/assets/sources/city-station-source.png",
+      "asset": "sandbox/assets/buildings/city-station.png",
+      "sha256": "5e9b7ac16ed882447b6889ef703cd40718db19e9e704415f20b78d6134105936",
+      "source_sha256": "5e9b7ac16ed882447b6889ef703cd40718db19e9e704415f20b78d6134105936"
+    },
+    {
+      "name": "community",
+      "subject": "large octagonal community center with central skylight",
+      "source": "docs/assets/sources/city-community-source.png",
+      "asset": "sandbox/assets/buildings/city-community.png",
+      "sha256": "f8b79bcf2e4ab0f5f7edef719e8bf19c853f846a34985da5da38d826a8cb9e25",
+      "source_sha256": "f8b79bcf2e4ab0f5f7edef719e8bf19c853f846a34985da5da38d826a8cb9e25"
+    }
+  ]
+}

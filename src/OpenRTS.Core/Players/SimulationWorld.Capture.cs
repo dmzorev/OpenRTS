@@ -8,7 +8,7 @@ public sealed partial class SimulationWorld
     {
         target = -1; var actor = _unitHandles[index];
         return actor.Get<OwnershipState>().Owner != 0 && actor.Has<CaptureState>() &&
-            _indices.TryGetValue(id, out target) && _types[_unitHandles[target].Get<UnitIdentity>().UnitType].Capturable is not null &&
+            _indices.TryGetValue(id, out target) && !HasPassengers(_unitHandles[target]) && _types[_unitHandles[target].Get<UnitIdentity>().UnitType].Capturable is not null &&
             _unitHandles[target].Get<OwnershipState>().Owner != actor.Get<OwnershipState>().Owner;
     }
     private void UpdateCapture(int index)

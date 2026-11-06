@@ -150,7 +150,7 @@ public sealed partial class SimulationWorld
             }
         }
     }
-    private bool FindProductionExit(int type, WorldPosition exit, int radius, out WorldPosition point)
+    private bool FindProductionExit(int type, WorldPosition exit, int radius, out WorldPosition point, int carrier = -1)
     {
         point = default; long best = long.MaxValue; bool found = false;
         // shortcut: bounded256 lattice for exits; add authored lanes when dense factories need exact packing.
@@ -159,6 +159,7 @@ public sealed partial class SimulationWorld
             long distance = (long)x * x + (long)y * y; if (distance > (long)radius * radius || distance >= best) continue;
             var candidate = new WorldPosition(exit.X + x, exit.Y + y, exit.Elevation);
             if (candidate.X < 0 || candidate.X > Width || candidate.Y < 0 || candidate.Y > Depth || !StopAllowed(type, candidate) || candidate.X < _types[type].Body.HalfWidth || candidate.Y < _types[type].Body.HalfHeight || candidate.X + _types[type].Body.HalfWidth > Width || candidate.Y + _types[type].Body.HalfHeight > Depth) continue;
+            if (carrier >= 0 && ObjectGeometry.DistanceSquared(_types[type], candidate, TypeOf(_unitHandles[carrier]), exit, out _, out _) == 0) continue;
             if ((_motion ?? _combatIndex) is { } index && !index.ClearPlacement(candidate, out _, _types[type].Body)) continue;
             best = distance; point = GroundPosition(candidate, exit.Elevation); found = true;
         }

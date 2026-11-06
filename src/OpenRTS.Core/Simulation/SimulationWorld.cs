@@ -76,7 +76,7 @@ public sealed partial class SimulationWorld : IDisposable
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
         }
-        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0)) _combatIndex = new(speedPerTick);
+        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
@@ -118,7 +118,7 @@ public sealed partial class SimulationWorld : IDisposable
                 throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
             if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
                 throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally)
+            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt)
                 ValidatePosition(command.Position);
             if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced)
                 if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
@@ -146,6 +146,7 @@ public sealed partial class SimulationWorld : IDisposable
             CapturePreviousPositions();
             CapturePreviousFacings();
             UpdateOrders();
+            if (_transportIndexDirty) RebuildMotionIndex();
             if (_navigation is not null) UpdateNavigation(cancellationToken);
             else UpdateDirectMovement();
             UpdateWeapons();
@@ -176,6 +177,13 @@ public sealed partial class SimulationWorld : IDisposable
             int health = entity.Get<HealthState>().Current;
             TryGetProducer(i, out var producer);
             uint states = entityPresentation.VisualStates;
+            if (entity.Has<TransportState>() && TypeOf(entity).States.Contains("garrisoned"))
+            {
+                uint mask = TypeOf(entity).StateMask("garrisoned");
+                states = HasPassengers(entity) ? states | mask : states & ~mask;
+            }
+            var carrier = CarrierOf(entity);
+            if (carrier.Value != 0) spatial = ref _unitHandles[_indices[carrier]].Get<SpatialState>();
             if (_types[entityIdentity.UnitType].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.UnitType].StateMask(power.LowPowerState);
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.UnitType].TaskQueues[q].WorkingState is { } state)
@@ -186,7 +194,7 @@ public sealed partial class SimulationWorld : IDisposable
             destination[i] = new(entityIdentity.Id, entityIdentity.UnitType, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -198,7 +206,7 @@ public sealed partial class SimulationWorld : IDisposable
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 8 : 12);
+            writer.Write(_navigation is null ? 9 : 13);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -218,7 +226,7 @@ public sealed partial class SimulationWorld : IDisposable
                 writer.Write(entityMotion.Target.X); writer.Write(entityMotion.Target.Y); writer.Write(entityMotion.Target.Elevation);
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
                 writer.Write(entityMotion.MovementRemainder);
-                WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity);
+                WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity); WriteTransport(writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -250,7 +258,12 @@ public sealed partial class SimulationWorld : IDisposable
     {
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
-        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.Stop or CommandKind.HoldPosition)
+        if (command.Kind == CommandKind.Unload)
+        {
+            foreach (int member in Recipients(command)) Unload(member, command.TargetEntity);
+            return;
+        }
+        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.Enter or CommandKind.UnloadAt or CommandKind.Stop or CommandKind.HoldPosition)
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
@@ -258,7 +271,7 @@ public sealed partial class SimulationWorld : IDisposable
                 members = members.Where(i => _types[_unitHandles[i].Get<UnitIdentity>().UnitType].Movable || !TryGetProducer(i, out _)).ToArray(); }
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair, CommandKind.CaptureTarget => UnitActionKind.Capture,
-                CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
+                CommandKind.Enter => UnitActionKind.Enter, CommandKind.UnloadAt => UnitActionKind.UnloadAt, CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
             if (_navigation is not null && (command.Kind is CommandKind.MoveGroup or CommandKind.MoveSelected || command.Kind == CommandKind.AttackMove && members.Length > 1))
                 SetGroupTarget(command.Position, members, action, command.Queued);
             else foreach (int member in members) IssueOrder(member, new(action, command.Position, command.TargetEntity), command.Queued);
@@ -314,7 +327,11 @@ public sealed partial class SimulationWorld : IDisposable
 
     private void DestroyIndex(int index, bool wreck = true)
     {
-        var id = _unitHandles[index].Get<UnitIdentity>().Id;
+        var actor = _unitHandles[index];
+        var id = actor.Get<UnitIdentity>().Id;
+        if (IsStored(actor)) { DetachPassenger(actor); wreck = false; }
+        RemovePassengers(actor);
+        index = _indices[id];
         if (_unitHandles[index].Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _unitHandles[index].Get<SpatialState>().Position, _unitHandles[index].Get<UnitIdentity>().UnitType, Owner: _unitHandles[index].Get<OwnershipState>().Owner));
@@ -375,6 +392,8 @@ public sealed partial class SimulationWorld : IDisposable
         state = type.TaskQueues.Count == 0
             ? _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
             : _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+        if (type.Passenger is not null) state.Add(new PassengerState());
+        if (type.Transport is not null) state.Add(new TransportState());
         Player(owner);
         if (type.Economy?.Income > 0) state.Add(new IncomeState(checked(Tick + type.Economy.Interval)));
         if (type.Capturable is not null) state.Add(new CapturableState());

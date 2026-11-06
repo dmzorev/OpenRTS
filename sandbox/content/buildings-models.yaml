@@ -139,3 +139,100 @@ nature-debris:
   Model:
     Parts:
       body: {Resource: res://resources/buildings/debris.tres, Size: [3.3103, 2.8405]}
+
+
+civilian-house:
+  Model:
+    Kind: Sprite
+    DamagedState: damaged
+    DestroyedState: destroyed
+    Parts:
+      normal: {Resource: res://resources/buildings/civilian-normal.tres, Size: [3.3, 3.3], HiddenWhen: [damaged, garrisoned, nearly-destroyed, destroyed]}
+      garrison: {Resource: res://resources/buildings/civilian-garrisoned.tres, Size: [3.3, 3.3], VisibleWhen: [garrisoned], HiddenWhen: [damaged, nearly-destroyed, destroyed]}
+      damaged: {Resource: res://resources/buildings/civilian-damaged.tres, Size: [3.3, 3.3], VisibleWhen: [damaged], HiddenWhen: [garrisoned, nearly-destroyed, destroyed]}
+      damaged-garrison: {Resource: res://resources/buildings/civilian-damaged-garrisoned.tres, Size: [3.3, 3.3], VisibleWhen: [damaged, garrisoned], HiddenWhen: [nearly-destroyed, destroyed]}
+      nearly: {Resource: res://resources/buildings/civilian-nearly-destroyed.tres, Size: [3.3, 3.3], VisibleWhen: [nearly-destroyed], HiddenWhen: [destroyed]}
+      ruins: {Resource: res://resources/buildings/building-ruins.tres, Size: [3.3, 3.3], VisibleWhen: [destroyed]}
+      flag: {Resource: res://resources/buildings/ownership-flag.tres, Size: [0.85, 0.85], Offset: [0.65, -0.65], Layer: 12, VisibleWhen: [garrisoned], HiddenWhen: [destroyed]}
+    Animations:
+      idle: {Sequence: stand, Parts: [normal, garrison, damaged, damaged-garrison, nearly, ruins, flag]}
+    States:
+      damaged: {}
+      garrisoned: {}
+      nearly-destroyed: {}
+      destroyed: {}
+
+
+civilian-apartments:
+  Inherits: civilian-house
+  Model:
+    Parts:
+      -flag:
+      normal: {Resource: res://resources/buildings/apartments-normal.tres, Size: [3.3, 4.26]}
+      garrison: {Resource: res://resources/buildings/apartments-garrisoned.tres, Size: [3.3, 4.26]}
+      damaged: {Resource: res://resources/buildings/apartments-damaged.tres, Size: [3.3, 4.26]}
+      damaged-garrison: {Resource: res://resources/buildings/apartments-damaged-garrisoned.tres, Size: [3.3, 4.26]}
+      nearly: {Resource: res://resources/buildings/apartments-nearly-destroyed.tres, Size: [3.3, 4.26]}
+
+    Animations:
+      idle: {Sequence: stand, Parts: [normal, garrison, damaged, damaged-garrison, nearly, ruins]}
+
+
+civilian-clinic:
+  Inherits: civilian-apartments
+  Model:
+    Parts:
+      normal: {Resource: res://resources/buildings/city-clinic-normal.tres, Size: [2.3, 2.97]}
+      garrison: {Resource: res://resources/buildings/city-clinic-garrisoned.tres, Size: [2.3, 2.97]}
+      damaged: {Resource: res://resources/buildings/city-clinic-damaged.tres, Size: [2.3, 2.97]}
+      damaged-garrison: {Resource: res://resources/buildings/city-clinic-damaged-garrisoned.tres, Size: [2.3, 2.97]}
+      nearly: {Resource: res://resources/buildings/city-clinic-nearly-destroyed.tres, Size: [2.3, 2.97]}
+      ruins: {Size: [2.3, 2.3]}
+
+
+civilian-market:
+  Inherits: civilian-apartments
+  Model:
+    Parts:
+      normal: {Resource: res://resources/buildings/city-market-normal.tres, Size: [4.5, 3.1]}
+      garrison: {Resource: res://resources/buildings/city-market-garrisoned.tres, Size: [4.5, 3.1]}
+      damaged: {Resource: res://resources/buildings/city-market-damaged.tres, Size: [4.5, 3.1]}
+      damaged-garrison: {Resource: res://resources/buildings/city-market-damaged-garrisoned.tres, Size: [4.5, 3.1]}
+      nearly: {Resource: res://resources/buildings/city-market-nearly-destroyed.tres, Size: [4.5, 3.1]}
+      ruins: {Size: [4.3, 2.3]}
+
+
+civilian-library:
+  Inherits: civilian-apartments
+  Model:
+    Parts:
+      normal: {Resource: res://resources/buildings/city-library-normal.tres, Size: [3.3, 4.26]}
+      garrison: {Resource: res://resources/buildings/city-library-garrisoned.tres, Size: [3.3, 4.26]}
+      damaged: {Resource: res://resources/buildings/city-library-damaged.tres, Size: [3.3, 4.26]}
+      damaged-garrison: {Resource: res://resources/buildings/city-library-damaged-garrisoned.tres, Size: [3.3, 4.26]}
+      nearly: {Resource: res://resources/buildings/city-library-nearly-destroyed.tres, Size: [3.3, 4.26]}
+      ruins: {Size: [3.3, 3.3]}
+
+
+civilian-station:
+  Inherits: civilian-apartments
+  Model:
+    Parts:
+      normal: {Resource: res://resources/buildings/city-station-normal.tres, Size: [5.4, 3.2]}
+      garrison: {Resource: res://resources/buildings/city-station-garrisoned.tres, Size: [5.4, 3.2]}
+      damaged: {Resource: res://resources/buildings/city-station-damaged.tres, Size: [5.4, 3.2]}
+      damaged-garrison: {Resource: res://resources/buildings/city-station-damaged-garrisoned.tres, Size: [5.4, 3.2]}
+      nearly: {Resource: res://resources/buildings/city-station-nearly-destroyed.tres, Size: [5.4, 3.2]}
+      ruins: {Size: [5.3, 2.3]}
+
+
+civilian-community:
+  Inherits: civilian-apartments
+  Model:
+    Parts:
+      normal: {Resource: res://resources/buildings/city-community-normal.tres, Size: [4.4, 5.68]}
+      garrison: {Resource: res://resources/buildings/city-community-garrisoned.tres, Size: [4.4, 5.68]}
+      damaged: {Resource: res://resources/buildings/city-community-damaged.tres, Size: [4.4, 5.68]}
+      damaged-garrison: {Resource: res://resources/buildings/city-community-damaged-garrisoned.tres, Size: [4.4, 5.68]}
+      nearly: {Resource: res://resources/buildings/city-community-nearly-destroyed.tres, Size: [4.4, 5.68]}
+      ruins: {Size: [4.3, 4.3]}

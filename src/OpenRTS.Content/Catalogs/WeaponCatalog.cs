@@ -20,7 +20,7 @@ public sealed class WeaponCatalog
             var o = registry.Compile(id, node).Create(id).Single<WeaponOptions>();
             try { weapons.Add(id, new(o.Range, o.AcquireRange, o.Damage, o.ReloadTicks, o.WindupTicks, id, o.Projectile, o.Effect,
                 o.Speed, o.TravelLimit, o.SplashRadius, o.Burst, o.BurstIntervalTicks, o.AnimationTicks,
-                o.Versus.Living, o.Versus.Mechanical, o.Versus.Building, o.FriendlyFire)); }
+                o.Versus.Living, o.Versus.Mechanical, o.Versus.Building, o.FriendlyFire, o.PassengerDamage, o.PassengerDamageSpill)); }
             catch (ArgumentException error) { throw node.Error(id + ".Weapon", error.Message); }
         }
         return new(weapons);
@@ -41,6 +41,8 @@ public sealed class WeaponCatalog
         public int TravelLimit { get; set; } = 16384;
         public int SplashRadius { get; set; }
         public bool FriendlyFire { get; set; }
+        public int PassengerDamage { get; set; }
+        public bool PassengerDamageSpill { get; set; }
         public ArmorOptions Versus { get; set; } = new();
     }
     private sealed class ArmorOptions

@@ -8,8 +8,8 @@ namespace OpenRTS.Samples;
 /// <summary>Footprint/size and presentation laboratory; no economy or real production.</summary>
 public static class BuildingScenario
 {
-    public const int Width = 80, Height = 56, UnitCount = 21, VerificationTicks = 24;
-    public static readonly string[] Placeable = ["power-plant", "barracks", "factory", "headquarters", "construction-yard", "mine", "oil-derrick", "nature-trees", "nature-rocks", "nature-cliff", "nature-debris", "bunker-cannon", "bunker-mixed"];
+    public const int Width = 80, Height = 56, UnitCount = 28, VerificationTicks = 24;
+    public static readonly string[] Placeable = ["power-plant", "barracks", "factory", "headquarters", "construction-yard", "mine", "oil-derrick", "nature-trees", "nature-rocks", "nature-cliff", "nature-debris", "bunker-cannon", "bunker-mixed", "civilian-house", "civilian-apartments", "civilian-clinic", "civilian-market", "civilian-library", "civilian-station", "civilian-community"];
     public static string TerrainAt(int x, int y)
     {
         if (x >= 62 && y >= 37 && y < 51) return "water";
@@ -36,6 +36,8 @@ public static class BuildingScenario
             Add("light-infantry", 16, 64); Add("medium-apc", 22, 64); Add("large-tank", 30, 64); Add("box-vehicle", 38, 64); Add("engineer", 46, 64);
             Add("power-plant", 23, 84); Add("power-plant", 43, 84, damaged: true); Add("power-plant", 63, 84, working: true);
             Add("power-plant", 83, 84, working: true, damaged: true); Add("power-plant", 103, 84);
+            Add("civilian-house", 11, 11, 0); Add("civilian-apartments", 21, 11, 0);
+            Add("civilian-clinic", 36, 10, 0); Add("civilian-market", 50, 10, 0); Add("civilian-library", 65, 11, 0); Add("civilian-station", 81, 10, 0); Add("civilian-community", 98, 10, 0);
             return world;
         }
         catch { world.Dispose(); throw; }

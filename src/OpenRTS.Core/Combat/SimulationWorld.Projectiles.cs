@@ -15,7 +15,7 @@ public sealed partial class SimulationWorld
     private readonly List<ProjectileState> _projectiles = [];
     private long _nextProjectileId = 1;
     public int ProjectileCount => _projectiles.Count;
-    private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null)
+    private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null, int weaponUnitType = -1)
     {
         ref var actor = ref _unitHandles[source];
         ref var actorSpatial = ref actor.Get<SpatialState>();
@@ -25,7 +25,7 @@ public sealed partial class SimulationWorld
         if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actorIdentity.UnitType], actorSpatial.Position, p); }
         else ObjectGeometry.DistanceSquared(_types[actorIdentity.UnitType], actorSpatial.Position, _types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actorIdentity.Id, Target = target < 0 ? default : _unitHandles[target].Get<UnitIdentity>().Id,
-            Owner = actorOwnership.Owner, UnitType = actorIdentity.UnitType, Mount = mount, Previous = muzzle, Position = muzzle,
+            Owner = actorOwnership.Owner, UnitType = weaponUnitType < 0 ? actorIdentity.UnitType : weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
             InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
@@ -40,7 +40,7 @@ public sealed partial class SimulationWorld
             if (weapon.Projectile == ProjectileKind.Missile)
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
-                if (!_indices.TryGetValue(shot.Target, out int target)) { Expire(shot); continue; }
+                if (!_indices.TryGetValue(shot.Target, out int target) || IsStored(_unitHandles[target])) { Expire(shot); continue; }
                 shot.Destination = ObjectGeometry.ClosestPoint(_types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, shot.Position);
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
