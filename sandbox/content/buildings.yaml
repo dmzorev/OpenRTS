@@ -3,10 +3,10 @@
   Health: {HP: 1000, Armor: Building}
   Capturable: {}
   Economy: {Energy: -20}
-  Movement: {Enabled: false}
+  Movement: {Enabled: false, Locomotor: tracked}
   Presentation:
     Animations: [idle, construct, produce, door]
-    States: [damaged, working, destroyed, lowpower]
+    States: [damaged, working, destroyed, lowpower, constructing]
   Footprint:
     Types:
       '#': {Traverse: false, CanStop: false}
@@ -66,6 +66,7 @@ headquarters:
 construction-yard:
   Inherits: ^building
   Economy: {Energy: 0}
+  Builder: {Range: 12288}
   TaskQueues:
     Queues:
       construction: {Capacity: 12, Payment: Upfront, WorkingState: working}
@@ -75,19 +76,27 @@ construction-yard:
       power: {Unit: power-plant, Queue: construction}
       barracks: {Unit: barracks, Queue: construction}
       factory: {Unit: factory, Queue: construction}
-      engineer: {Unit: engineer, Queue: vehicles}
+      engineer: {Unit: construction-engineer, Queue: vehicles}
+      site-power: {Unit: power-plant, OnSite: true}
+      site-barracks: {Unit: barracks, OnSite: true}
+      site-factory: {Unit: factory, OnSite: true}
+      site-turret: {Unit: bunker-cannon, OnSite: true}
   ActionPanel:
     Buttons:
       power: {Label: Электростанция, Order: 0}
       barracks: {Label: Бараки, Order: 1}
       factory: {Label: Завод, Order: 2}
       engineer: {Label: Инженер, Order: 3}
+      site-power: {Label: Строить электростанцию, Hotkey: T, Order: 4}
+      site-barracks: {Label: Строить бараки, Hotkey: Y, Order: 5}
+      site-factory: {Label: Строить завод, Hotkey: U, Order: 6}
+      site-turret: {Label: Строить турель, Hotkey: I, Order: 7}
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Presentation: {Model: construction-yard, Name: Construction Yard}
 
 mine:
   Inherits: ^building
-  -Buildable:
+  Buildable: {Ticks: 150, Cost: 900}
   Health: {Destruction: Neutralize}
   Economy: {Energy: 0, Income: 40, Interval: 100}
   Footprint: {Rows: ['###', '###', '#+#', '#+#']}
@@ -95,7 +104,7 @@ mine:
 
 oil-derrick:
   Inherits: ^building
-  -Buildable:
+  Buildable: {Ticks: 125, Cost: 700}
   Health: {Destruction: Neutralize}
   Economy: {Energy: 0, Income: 30, Interval: 100}
   Footprint: {Rows: ['###', '###', '###']}
@@ -198,3 +207,21 @@ civilian-community:
   Inherits: civilian-house
   Footprint: {Rows: ['####', '####', '####', '####']}
   Presentation: {Model: civilian-community, Name: Общественный центр}
+
+construction-engineer:
+  Inherits: engineer
+  Builder: {Range: 1536}
+  Actions:
+    Definitions:
+      site-power: {Unit: power-plant, OnSite: true}
+      site-mine: {Unit: mine, OnSite: true}
+      site-oil: {Unit: oil-derrick, OnSite: true}
+      site-turret: {Unit: bunker-cannon, OnSite: true}
+      site-mixed: {Unit: bunker-mixed, OnSite: true}
+  ActionPanel:
+    Buttons:
+      site-power: {Label: Электростанция, Hotkey: E, Order: 2}
+      site-mine: {Label: Шахта, Hotkey: R, Order: 3}
+      site-oil: {Label: Вышка, Hotkey: T, Order: 4}
+      site-turret: {Label: Пушечная турель, Hotkey: Y, Order: 5}
+      site-mixed: {Label: Смешанная турель, Hotkey: U, Order: 6}

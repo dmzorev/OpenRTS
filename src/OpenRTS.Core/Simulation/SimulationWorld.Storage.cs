@@ -78,13 +78,15 @@ public sealed partial class SimulationWorld
             ref var state = ref motion.Value;
             if (!state.Moving) continue;
             int factor = definition.Value.Spatial!.Locomotor.Rules[0].Speed;
-            if (factor == 1024) spatial.Value.Position = StepTowards(spatial.Value.Position, state.Target);
+            var next = spatial.Value.Position;
+            if (factor == 1024) next = StepTowards(next, state.Target);
             else
             {
                 int budget = SpeedPerTick * factor + state.MovementRemainder;
                 state.MovementRemainder = budget % 1024;
-                if (budget >= 1024) spatial.Value.Position = StepTowards(spatial.Value.Position, state.Target, budget / 1024);
+                if (budget >= 1024) next = StepTowards(next, state.Target, budget / 1024);
             }
+            if (SiteMovementClear(spatial.Value.Position, next, definition.Value.Spatial.Body)) spatial.Value.Position = next;
             state.Moving = spatial.Value.Position != state.Target;
         }
     }

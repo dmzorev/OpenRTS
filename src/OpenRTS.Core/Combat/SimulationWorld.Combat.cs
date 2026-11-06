@@ -85,7 +85,7 @@ public sealed partial class SimulationWorld
             int i = _movementOrder[orderIndex]; ref var entity = ref _unitHandles[i];
             var entityIdentity = entity.Get<UnitIdentity>();
             var type = _types[entityIdentity.UnitType];
-            if (type.Weapons.Count == 0) continue;
+            if (type.Weapons.Count == 0 || IsUnderConstruction(entity)) continue;
             var carrierId = _storedCount != 0 ? CarrierOf(entity) : default;
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
             var carrier = _unitHandles[origin];

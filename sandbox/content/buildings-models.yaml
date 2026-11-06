@@ -29,6 +29,7 @@
       produce: {Sequence: shoot, Parts: [workfx], Flash: 0.12}
       door: {Sequence: stand, Parts: [body]}
     States:
+      constructing: {Tint: [0.8, 0.9, 1.0], Opacity: 0.8}
       lowpower: {Tint: [0.45, 0.45, 0.5]}
       damaged: {Tint: [0.56, 0.42, 0.32]}
       working: {Pulse: 0.1}

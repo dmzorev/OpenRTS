@@ -19,7 +19,7 @@ public sealed partial class SimulationWorld
             ref var eOrders = ref e.Get<OrderState>();
             ref var eNavigation = ref e.Get<NavigationAgentState>();
             int ability = AbilityIndex(eIdentity.UnitType, command.Action);
-            if (ability < 0 || eOwnership.Owner == 0) continue;
+            if (ability < 0 || eOwnership.Owner == 0 || IsUnderConstruction(e)) continue;
             var action = _types[eIdentity.UnitType].Abilities[ability];
             if (action.Kind == AbilityKind.Capture)
             {

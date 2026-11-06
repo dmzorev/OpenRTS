@@ -7,8 +7,10 @@ public sealed partial class SimulationWorld
 {
     private int[][] _productTypes = []; private BuildDefinition[][] _builds = [];
     private long _nextTaskId = 1;
+    private bool _hasBuilders;
     private void InitializeProduction()
     {
+        _hasBuilders = _types.Any(t => t.ConstructionRange > 0);
         _productTypes = new int[_types.Length][]; _builds = new BuildDefinition[_types.Length][];
         for (int t = 0; t < _types.Length; t++)
         {
@@ -18,7 +20,7 @@ public sealed partial class SimulationWorld
                 int target = Array.FindIndex(_types, x => x.Id == products[p].Unit);
                 if (target < 0 || _types[target].Build is null) throw new ArgumentException("Production requires a known buildable unit: " + products[p].Unit);
                 var build = products[p].Override ?? _types[target].Build!;
-                if ((build.Kind == ProductionKind.PlaceBuilding) != (_types[target].Footprint is not null)) throw new ArgumentException("PlaceBuilding requires a footprint; Unit production cannot spawn footprints.");
+                if ((build.Kind == ProductionKind.PlaceBuilding) != (_types[target].Footprint is not null) || products[p].OnSite && (build.Kind != ProductionKind.PlaceBuilding || _types[target].Destruction == DestructionPolicy.Invulnerable)) throw new ArgumentException("PlaceBuilding requires a footprint; Unit production cannot spawn footprints.");
                 _productTypes[t][p] = target; _builds[t][p] = build;
             }
         }
@@ -29,7 +31,7 @@ public sealed partial class SimulationWorld
     {
         ref var actor = ref _unitHandles[index];
         var actorIdentity = actor.Get<UnitIdentity>();
-        if (!TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
+        if (IsUnderConstruction(actor) || !TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
         producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actorIdentity.Id, point));
     }
     private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
@@ -48,7 +50,7 @@ public sealed partial class SimulationWorld
                     var eIdentity = e.Get<UnitIdentity>();
                     ref var eOwnership = ref e.Get<OwnershipState>();
                     int p = ProductIndex(eIdentity.UnitType, command.Action);
-                    if (p < 0 || eOwnership.Owner == 0 || !TryGetProducer(i, out var state)) continue;
+                    if (p < 0 || _types[eIdentity.UnitType].Products[p].OnSite || eOwnership.Owner == 0 || IsUnderConstruction(e) || !TryGetProducer(i, out var state)) continue;
                     int q = QueueIndex(eIdentity.UnitType, _types[eIdentity.UnitType].Products[p].Queue), size = state.Queues[q].Count;
                     if (size >= _types[eIdentity.UnitType].TaskQueues[q].Capacity || size >= length) continue;
                     var settings = _types[eIdentity.UnitType].TaskQueues[q];
@@ -117,6 +119,7 @@ public sealed partial class SimulationWorld
         {
             _stepCancellation.ThrowIfCancellationRequested();
             if (!_indices.TryGetValue(id, out int i)) continue; var actor = _unitHandles[i];
+            if (IsUnderConstruction(actor)) continue;
             var actorIdentity = actor.Get<UnitIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.UnitType];
             uint owner = actor.Get<OwnershipState>().Owner; if (owner == 0) continue;
             for (int q = 0; q < producer.Queues.Length; q++)

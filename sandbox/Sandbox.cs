@@ -133,6 +133,7 @@ public partial class Sandbox : Node3D
         _leftGoal = false;
         if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _armedCustom = null; _productionPlacement = null; _placing = false; _panelRevision = -1; _panelTick = -1; _panelDirty = true; _pointerDown = false; }
         _notice = "";
+        _sitePlacement = null; _selectedProject = default; _visibleProjects = []; _visibleProjectsTick = -1; _constructionViewer = 1;
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
         _session = new SimulationSession(() => _skirmish ? SkirmishScenario.Create(catalog, _workers) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
@@ -157,6 +158,7 @@ public partial class Sandbox : Node3D
             if (frame is null) return;
             float alpha = completed ? 1 : _session.GetInterpolationAlpha(frame.Tick);
             _view?.Apply(frame.Poses, alpha);
+            _displayGrid = frame.Grid;
             if (_showcase)
             {
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
@@ -168,9 +170,8 @@ public partial class Sandbox : Node3D
                     if (pose.Carrier.Value == 0) _displayPoses[_displayCount++] = pose;
                     else { _storedPoses.Add(pose); _loadedTransports.Add(pose.Carrier); }
                 }
-                RefreshSelection(); UpdateCommandPanel(frame); UpdateSelection(alpha); UpdateRtsCursor(); if (_buildings) UpdateFootprintPreview();
+                RefreshSelection(); UpdateConstructionView(frame); UpdateCommandPanel(frame); UpdateSelection(alpha); UpdateRtsCursor(); if (_buildings) UpdateFootprintPreview();
             }
-            _displayGrid = frame.Grid;
             _obstacles?.Apply(frame.Grid);
             while (_session.TryReadEvent(out var value))
             {
@@ -187,6 +188,8 @@ public partial class Sandbox : Node3D
                     WorldEventKind.InvalidOrder => "Действие недоступно выбранному юниту.",
                     WorldEventKind.TransportFull => "В транспорте нет свободных слотов.",
                     WorldEventKind.UnloadBlocked => "Рядом с транспортом нет места для выгрузки.",
+                    WorldEventKind.ConstructionCancelled when value.Owner == _constructionViewer => "Проект отменён.",
+                    WorldEventKind.ConstructionCompleted when value.Owner == _constructionViewer => "Строительство завершено.",
                     WorldEventKind.QueueFull => "Очередь приказов заполнена (32).",
                     WorldEventKind.NoRoute => "Маршрут или место остановки недоступны.",
                     WorldEventKind.CellOccupied => "Изменение отклонено: область пересекает тело юнита.",
@@ -194,12 +197,12 @@ public partial class Sandbox : Node3D
                     _ => _notice
                 };
             }
-            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons);
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             if (_verifySkirmish) { VerifySkirmish(frame); return; }
             if (_verifyActions) { VerifyActions(frame); return; }
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
-            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? "\nSkirmish · управление синим и красным игроками · захват: W или ПКМ инженером" : "");
+            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + ConstructionStatus() + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? "\nSkirmish · управление синим и красным игроками · захват: W или ПКМ инженером" : "");
             else if (_label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."

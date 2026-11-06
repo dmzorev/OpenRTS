@@ -36,6 +36,28 @@ public sealed class FootprintDefinition
     }
     public WorldBox Bounds(FootprintCell cell, WorldPosition position) => new(position.X - HalfWidth + cell.X * CellSize, position.Y - HalfHeight + cell.Y * CellSize,
         position.X - HalfWidth + (cell.X + 1) * CellSize, position.Y - HalfHeight + (cell.Y + 1) * CellSize);
+    public bool AllowsConstruction(NavigationGrid grid, WorldPosition position, Locomotor profile)
+    {
+        int size = grid.CellSize;
+        int left = position.X - HalfWidth, top = position.Y - HalfHeight;
+        if (left < 0 || top < 0 || position.X + HalfWidth > (long)grid.Width * size ||
+            position.Y + HalfHeight > (long)grid.Height * size ||
+            left % size != 0 || top % size != 0 || CellSize % size != 0) return false;
+        foreach (var cell in Cells)
+        {
+            var box = Bounds(cell, position);
+            for (int y = box.MinY / size; y < box.MaxY / size; y++)
+                for (int x = box.MinX / size; x < box.MaxX / size; x++)
+                {
+                    int index = y * grid.Width + x;
+                    int terrain = grid.TerrainAt(index);
+                    bool canStop = terrain < profile.Rules.Count ? profile.At(grid, index).CanStop :
+                        ReferenceEquals(profile, Locomotor.Default) || profile.Rules.Count == 1 && profile.Rules[0] == TerrainRule.Ground;
+                    if (grid.IsBlocked(index) || !grid.CanStop(index) || !canStop || grid.ObstaclesAt(index).Length != 0) return false;
+                }
+        }
+        return true;
+    }
     internal void WriteState(BinaryWriter writer)
     {
         writer.Write(Width); writer.Write(Height); writer.Write(CellSize); writer.Write(Cells.Count);

@@ -32,6 +32,8 @@ public partial class Sandbox
             {
                 var apc = _displayPoses[2]; var target = _displayPoses[7];
                 Vector2 Pixel(OpenRTS.Core.WorldPosition p) => camera.UnprojectPosition(new(p.X / 1024f, 0, p.Y / 1024f));
+                // The initially selected rifleman boards the APC on click. Clear it before testing vehicle selection.
+                _UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
                 _UnhandledInput(new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left, Position = Pixel(apc.Current) });
                 _UnhandledInput(new InputEventMouseButton { Pressed = false, ButtonIndex = MouseButton.Left, Position = Pixel(apc.Current) });
                 if (_selected.Value != 3) throw new InvalidOperationException("Showcase click selection failed.");

@@ -31,6 +31,7 @@ public partial class Sandbox
         _rtsOverlay = new(); layer.AddChild(_rtsOverlay);
         _rtsOverlay.RegisterCursor("ability", new Color(1, 0.7f, 0.2f));
         _rtsOverlay.RegisterCursor("grenade", new Color(1, 0.55f, 0.12f), 18);
+        _rtsOverlay.RegisterCursor("build", new Color(0.35f, 0.95f, 1), 20);
         _rtsOverlay.RegisterCursor("capture", new Color(0.95f, 0.85f, 0.2f), 20);
         _rtsOverlay.RegisterCursor("repair", new Color(0.2f, 1, 0.65f));
         if (DisplayServer.GetName() != "headless") Input.MouseMode = Input.MouseModeEnum.Hidden;
@@ -93,6 +94,7 @@ public partial class Sandbox
             foreach (var id in _selection.Ids)
             {
                 if (!_selectionPoses.TryGetValue(id, out var pose) || !Controls(pose.Presentation.Owner)) { _canControl = false; break; }
+                if (pose.Construction.Active) continue;
                 var type = _catalog.Units[pose.UnitType];
                 _canMove |= type.Movable || type.TaskQueues.Count > 0;
                 bool damage = HasAttackMount(pose, type);
@@ -107,7 +109,7 @@ public partial class Sandbox
     }
     public bool ActivateAction(UnitActionKind kind, bool queued = false)
     {
-        _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null;
+        _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null; _sitePlacement = null;
         if (!CanIssue(kind)) { _notice = "Действие недоступно текущему выбору."; return false; }
         if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter or UnitActionKind.UnloadAt)
         { _armedAction = kind; _queueArmed = queued; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; }
@@ -162,12 +164,14 @@ public partial class Sandbox
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(click.Position))) return;
         if (!click.Pressed)
         { if (click.ButtonIndex == MouseButton.Left && _pointerDown) FinishSelection(click.Position); return; }
+        if (_sitePlacement is not null && click.ButtonIndex == MouseButton.Right) { _sitePlacement = null; _panelDirty = true; return; }
         if (_buildings && _placing && click.ButtonIndex == MouseButton.Right) { _placing = false; return; }
         if (click.ButtonIndex == MouseButton.Right && (_armedAction is not null || _armedCustom is not null || _pointerDown))
         { _armedAction = null; _armedCustom = null; _panelDirty = true; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return; }
         if (CommandPoint(click.Position) is not { } point) { _notice = "Точка вне карты."; return; }
         if (HandlePlacement(click, point)) return;
         var picked = Pick(point);
+        if (HandleConstructionClick(click, point, picked)) return;
         if (HandleCustomTarget(click, point, picked)) return;
         if (click.ButtonIndex == MouseButton.Left && _armedAction is { } armed)
         {
@@ -215,6 +219,7 @@ public partial class Sandbox
     private void FinishSelection(Vector2 end)
     {
         _pointerDown = false; _pointer = end; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null;
+        _selectedProject = default; RefreshProjectButton();
         if (_dragStart.DistanceTo(end) >= 6)
         {
             var box = new Rect2(_dragStart, end - _dragStart).Abs();
@@ -224,6 +229,13 @@ public partial class Sandbox
         else if (CommandPoint(end) is { } point)
         {
             var picked = Pick(point);
+            if (!_dragAdd && PickProject(point) is { } project && (picked is null || _catalog!.Units[picked.Value.UnitType].Footprint is not null))
+            {
+                SelectProject(project);
+                UpdateSelection(1);
+                UpdateRtsCursor();
+                return;
+            }
             if (!_dragAdd || picked is { } controlled && Controls(controlled.Presentation.Owner))
                 _selection.Change(picked is { } pose ? [pose.Id] : [], _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Toggle : SelectionChange.Replace);
         }
@@ -231,6 +243,9 @@ public partial class Sandbox
     }
     private bool HandleRtsKey(InputEventKey key, Key code)
     {
+        if (code is Key.Delete or Key.Backspace && _selectedProject.Value != 0) { CancelProject(); return true; }
+        if (code == Key.Escape && _sitePlacement is not null) { _sitePlacement = null; _panelDirty = true; return true; }
+        if (code == Key.Escape && _selectedProject.Value != 0) { _selectedProject = default; RefreshProjectButton(); return true; }
         if (HandleCustomKey(key, code)) return true;
         if (code == Key.Tab) return CycleCommandType(key.ShiftPressed);
         if (HandleBuildingKey(code)) return true;
@@ -312,6 +327,21 @@ public partial class Sandbox
             if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
         }
         if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
+        if (_sitePlacement is { } placement)
+        {
+            if (CommandPoint(_pointer) is { } buildPoint && CanPlanSite(placement.Type, PlacementPoint(buildPoint, placement.Type)))
+                _rtsOverlay.CustomCursor = "build";
+            else cursor = RtsCursor.Unavailable;
+        }
+        else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) &&
+            !Input.IsPhysicalKeyPressed(Key.Alt) && CommandPoint(_pointer) is { } workPoint)
+        {
+            var ghost = PickProject(workPoint);
+            var site = Pick(workPoint);
+            if (ghost is { } plan && BuildersFor(plan.Owner, plan.Position).Length > 0 ||
+                site is { } unfinished && unfinished.Construction.Active && BuildersFor(unfinished.Presentation.Owner, unfinished.Current).Length > 0)
+                _rtsOverlay.CustomCursor = "build";
+        }
         _rtsOverlay.Rally = ActiveRecipients().FirstOrDefault(id => _selectionPoses[id].HasRally) is var rally && rally.Value != 0 ? Screen(_selectionPoses[rally] with { Current = _selectionPoses[rally].Rally }) : null;
         if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(_pointer)))
         { _rtsOverlay.CustomCursor = null; cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default; }

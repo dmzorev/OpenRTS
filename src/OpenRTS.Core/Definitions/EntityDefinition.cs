@@ -14,12 +14,18 @@ public sealed record EntityDefinition
     public CapturableDefinition? Capturable { get; }
     public PassengerDefinition? Passenger { get; }
     public TransportDefinition? Transport { get; }
+    public int ConstructionRange { get; }
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (constructionRange is < 0 or > WorldPosition.MaximumExtent ||
+            (constructionRange > 0 && spatial is null) ||
+            (constructionRange == 0 && production?.Products.Any(p => p.OnSite) == true))
+            throw new ArgumentException("On-site construction requires a spatial builder and a positive range.");
+        ConstructionRange = constructionRange;
         Economy = economy; Capturable = capturable; Passenger = passenger; Transport = transport;
         if (passenger is not null && (spatial is null || !spatial.Movable || spatial.Footprint is not null || health is null || health.Destruction != DestructionPolicy.Destroy || production?.Queues.Count > 0))
             throw new ArgumentException("Passenger requires a movable unit without a footprint or production.");
@@ -30,7 +36,7 @@ public sealed record EntityDefinition
         if (health?.Destruction == DestructionPolicy.Neutralize && capturable is null) throw new ArgumentException("Neutralize requires Capturable.");
         Id = id; Health = health; Spatial = spatial; Presentation = presentation; Build = build;
         Armament = armament is not null && (armament.Weapons.Count > 0 || armament.Abilities.Count > 0) ? armament : null;
-        Production = production?.Queues.Count > 0 ? production : null;
+        Production = production is not null && (production.Queues.Count > 0 || production.Products.Count > 0) ? production : null;
         if (Armament is not null)
         {
             if (spatial is null) throw new ArgumentException("Armaments require spatial capability.");

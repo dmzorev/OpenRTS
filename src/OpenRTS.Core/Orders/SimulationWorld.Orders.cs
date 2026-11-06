@@ -45,6 +45,11 @@ public sealed partial class SimulationWorld
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
+        if (IsUnderConstruction(entity) || order.Kind == UnitActionKind.Build && !TryBuildTarget(index, order.Target, out _, out _))
+        {
+            _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
+            return false;
+        }
         if (order.Kind == UnitActionKind.Capture && !CanCapture(index, order.Target, out _)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind == UnitActionKind.Enter && !CanEnter(index, order.Target, out _) ||
             order.Kind == UnitActionKind.UnloadAt && !HasPassengers(entity))
@@ -86,6 +91,7 @@ public sealed partial class SimulationWorld
     }
     private void UpdateOrders()
     {
+        _activeBuilders.Clear();
         EnsureMovementOrder();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
@@ -94,7 +100,7 @@ public sealed partial class SimulationWorld
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
-            if (IsStored(entity)) continue;
+            if (IsStored(entity) || IsUnderConstruction(entity)) continue;
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;
@@ -102,6 +108,7 @@ public sealed partial class SimulationWorld
             if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { UpdateEnter(i, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { UpdateUnload(i, entityOrders.ActiveOrder.Position); continue; }
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { UpdateBuildOrder(i, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture) { UpdateCapture(i); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
             bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;

@@ -33,6 +33,7 @@ public sealed partial class SimulationWorld : IDisposable
     public int SpeedPerTick { get; }
     public long Tick { get; private set; }
     public int Count { get; private set; }
+    public NavigationGrid? BaseNavigationGrid => _baseGrid;
     public NavigationGrid? NavigationGrid => _navigation?.Grid;
     public int NavigationWaitingCount { get; private set; }
     public int NavigationBuiltFields => _weighted?.Builds ?? _navigation?.LastBuildCount ?? 0;
@@ -118,9 +119,9 @@ public sealed partial class SimulationWorld : IDisposable
                 throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
             if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
                 throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt)
+            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
                 ValidatePosition(command.Position);
-            if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced)
+            if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.PlanConstruction)
                 if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
                     throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", nameof(commands));
             if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
@@ -150,6 +151,7 @@ public sealed partial class SimulationWorld : IDisposable
             if (_navigation is not null) UpdateNavigation(cancellationToken);
             else UpdateDirectMovement();
             UpdateWeapons();
+            UpdateConstruction();
             UpdateIncome();
             UpdateProduction();
             UpdatePresentation();
@@ -184,17 +186,25 @@ public sealed partial class SimulationWorld : IDisposable
             }
             var carrier = CarrierOf(entity);
             if (carrier.Value != 0) spatial = ref _unitHandles[_indices[carrier]].Get<SpatialState>();
-            if (_types[entityIdentity.UnitType].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.UnitType].StateMask(power.LowPowerState);
+            bool constructing = IsUnderConstruction(entity);
+            if (!constructing && _types[entityIdentity.UnitType].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.UnitType].StateMask(power.LowPowerState);
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.UnitType].TaskQueues[q].WorkingState is { } state)
                     states |= _types[entityIdentity.UnitType].StateMask(state);
             int captureProgress = 0, captureDuration = 0;
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture && entity.Has<CaptureState>() && _indices.TryGetValue(entityOrders.ActiveOrder.Target, out int captureTarget))
             { captureProgress = entity.Get<CaptureState>().Progress; var targetType = _types[_unitHandles[captureTarget].Get<UnitIdentity>().UnitType]; captureDuration = targetType.Capturable?.Ticks ?? targetType.MaxHealth; }
+            ConstructionProgress construction = default;
+            if (constructing)
+            {
+                var site = entity.Get<ConstructionState>();
+                construction = new(site.Work, site.Required);
+                if (TypeOf(entity).States.Contains("constructing")) states |= TypeOf(entity).StateMask("constructing");
+            }
             destination[i] = new(entityIdentity.Id, entityIdentity.UnitType, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -206,7 +216,7 @@ public sealed partial class SimulationWorld : IDisposable
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 9 : 13);
+            writer.Write(_navigation is null ? 10 : 14);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -227,6 +237,15 @@ public sealed partial class SimulationWorld : IDisposable
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
                 writer.Write(entityMotion.MovementRemainder);
                 WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity); WriteTransport(writer, entity);
+                writer.Write(IsUnderConstruction(entity));
+                if (IsUnderConstruction(entity))
+                {
+                    var construction = entity.Get<ConstructionState>();
+                    writer.Write(construction.Work);
+                    writer.Write(construction.Required);
+                    writer.Write(construction.StartingHealth);
+                    writer.Write(construction.StartedAt);
+                }
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -241,6 +260,7 @@ public sealed partial class SimulationWorld : IDisposable
             }
             WriteProjectiles(writer); WriteProduction(writer);
             WritePlayers(writer);
+            WriteConstructionProjects(writer);
             writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
             _navigation?.WriteState(writer);
             writer.Write(_weighted is not null); _weighted?.WriteState(writer);
@@ -258,6 +278,11 @@ public sealed partial class SimulationWorld : IDisposable
     {
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
+        if (command.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite or CommandKind.CancelConstruction)
+        {
+            ApplyConstruction(command);
+            return;
+        }
         if (command.Kind == CommandKind.Unload)
         {
             foreach (int member in Recipients(command)) Unload(member, command.TargetEntity);
@@ -378,29 +403,35 @@ public sealed partial class SimulationWorld : IDisposable
         return true;
     }
 
-    private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
+    private EntityId AllocateEntityId()
     {
         if (_nextId == uint.MaxValue) throw new InvalidOperationException("Entity ID space exhausted.");
+        return new(_nextId++);
+    }
+
+    private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
+        EntityId siteId = default, ConstructionState construction = default)
+    {
         if (Count == _unitHandles.Length)
         {
             Array.Resize(ref _unitHandles, checked(Math.Max(16, Count * 2)));
         }
-        var id = new EntityId(_nextId);
+        var id = siteId.Value == 0 ? AllocateEntityId() : siteId;
         Frent.Entity state;
         var type = _types[unitType];
         _unitStorage ??= new();
         state = type.TaskQueues.Count == 0
-            ? _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-            : _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+            ? _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+            : _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
         if (type.Passenger is not null) state.Add(new PassengerState());
         if (type.Transport is not null) state.Add(new TransportState());
         Player(owner);
-        if (type.Economy?.Income > 0) state.Add(new IncomeState(checked(Tick + type.Economy.Interval)));
+        if (construction.Required > 0) state.Add(construction);
+        else if (type.Economy?.Income > 0) state.Add(new IncomeState(checked(Tick + type.Economy.Interval)));
         if (type.Capturable is not null) state.Add(new CapturableState());
         if (type.Abilities.Any(a => a.Kind == AbilityKind.Capture)) state.Add(new CaptureState());
         _powerDirty = true;
         _unitHandles[Count] = state;
-        _nextId++;
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         _indices.Add(id, Count++);

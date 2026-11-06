@@ -31,7 +31,7 @@ public sealed partial class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(9); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(10); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -57,6 +57,7 @@ public sealed partial class UnitCatalog
             .Register<FootprintOptions>("Footprint", (_, _, options) => options)
             .Register<ArmamentOptions>("Armaments", (_, _, options) => options)
             .Register<BuildOptions>("Buildable", (_, _, options) => options)
+            .Register<BuilderOptions>("Builder", (_, _, options) => options)
             .Register<QueueOptions>("TaskQueues", (_, _, options) => options)
             .Register<ActionsOptions>("Actions", (_, _, options) => options)
             .Register<ActionPanelOptions>("ActionPanel", (_, _, options) => options)
@@ -106,7 +107,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile());
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0);
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons));
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -118,7 +119,7 @@ public sealed partial class UnitCatalog
         for (int i = 0; i < units.Length; i++) foreach (var product in units[i].Products)
         {
             var target = targets[product.Unit];
-            if (((product.Override ?? target.Build!).Kind == ProductionKind.PlaceBuilding) != (target.Footprint is not null))
+            if (((product.Override ?? target.Build!).Kind == ProductionKind.PlaceBuilding) != (target.Footprint is not null) || product.OnSite && target.Destruction == DestructionPolicy.Invulnerable)
                 throw compiled[i].Node.Error(units[i].Id + ".Actions." + product.Id, "PlaceBuilding requires a footprint; Unit production cannot spawn footprints.");
         }
         return new(units, bindings, locomotion);

@@ -43,7 +43,7 @@ internal static class EcsMigrationChecks
                     {
                         State = world.Report(), Commands = world.AppliedCommands.ToArray(), Events = world.Events.ToArray(),
                         Entities = frame.Poses.ToArray(), Weapons = frame.Weapons.ToArray(),
-                        Projectiles = frame.Projectiles.ToArray(), Tasks = frame.Tasks.ToArray(), Players = frame.Players.ToArray()
+                        Projectiles = frame.Projectiles.ToArray(), Tasks = frame.Tasks.ToArray(), Players = frame.Players.ToArray(), Projects = frame.ConstructionProjects.ToArray()
                     }, TraceOptions));
                 }
                 string actual = Convert.ToHexString(trace.GetHashAndReset());
@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for transport definitions and state, plus the Carrier field in frame poses.
+    // Rebased for on-site recipes, project state and frame construction progress (catalog10/direct10/nav14).
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "F9318DBBC4B538E6A686D8B8553C5FA098AD5C67FF1544A3184232A1AACBD9D2",
-        ["navigation"] = "9FB39C6528A62AC7A73908CD5CE14B6B0D6581E9506C5DB30937FF1972746811",
-        ["combat"] = "1F51FC99DD46F26BC3D40DC69E6A23FC3F48EA61287CE6DD097A39423841B376",
-        ["buildings"] = "4F4215CF9564B3BD90BCC531D60023DE3F82B4616E7A981047017FBD6192BFE6",
-        ["production"] = "F9ACED5ED32C905EF40EE65754C81EE7BEC1E5AB42405A2E140851FFA40DFFDE"
+        ["direct"] = "3ACFD3BC7AB782F137488005B36868CF34DB497C156534083FEE71DA4D176E42",
+        ["navigation"] = "BD97DD1596AF8F91F782C18BFABE429C56369F37A5C6E40D8BA9DDFFBDCAF1AB",
+        ["combat"] = "64B114B086E21C89C1AFBC0B739F0E8941FAB94ACB5465976098A706946FAC54",
+        ["buildings"] = "B9FB416479E6115B0A5628238FFBDB6C7C16615FC6B8E025AE7DFBC1EC1F6DE6",
+        ["production"] = "C990050C34DF4938D5538FDAA8A26C5883C67267E38D96A0F0CF9A912B9FBAC0"
     };
 
     private static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

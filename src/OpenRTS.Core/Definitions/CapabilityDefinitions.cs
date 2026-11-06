@@ -102,7 +102,7 @@ public sealed record ProducerDefinition
         Array.Sort(tasks, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id)); Array.Sort(recipes, (a, b) => StringComparer.Ordinal.Compare(a.Id, b.Id));
         if (tasks.Length > 8 || recipes.Length > 64 || tasks.Select(q => q.Id).Distinct(StringComparer.Ordinal).Count() != tasks.Length ||
             recipes.Select(p => p.Id).Distinct(StringComparer.Ordinal).Count() != recipes.Length ||
-            recipes.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.Id.Length > 128 || string.IsNullOrWhiteSpace(p.Unit) || !tasks.Any(q => q.Id == p.Queue)))
+            recipes.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.Id.Length > 128 || string.IsNullOrWhiteSpace(p.Unit) || (p.OnSite ? p.Queue != "" : !tasks.Any(q => q.Id == p.Queue))))
             throw new ArgumentException("Production requires unique action/queue IDs, known queues and bounded counts.");
         Queues = Array.AsReadOnly(tasks); Products = Array.AsReadOnly(recipes);
     }

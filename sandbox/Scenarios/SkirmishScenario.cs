@@ -23,8 +23,8 @@ public static class SkirmishScenario
         try
         {
             void Add(string id, int x2, int y2, uint owner = 0) => world.AddInitialUnit(catalog.Units.ToList().FindIndex(u => u.Id == id), new(x2 * 512, y2 * 512), owner);
-            Add("construction-yard", 27, 24, 1); Add("engineer", 34, 30, 1);
-            Add("construction-yard", 133, 88, 2); Add("engineer", 126, 82, 2);
+            Add("construction-yard", 27, 24, 1); Add("construction-engineer", 34, 30, 1);
+            Add("construction-yard", 133, 88, 2); Add("construction-engineer", 126, 82, 2);
             Add("mine", 65, 48); Add("mine", 93, 56); Add("oil-derrick", 79, 37); Add("oil-derrick", 55, 77);
             Add("nature-trees", 53, 32); Add("nature-cliff", 105, 71); Add("nature-rocks", 84, 84); Add("nature-debris", 39, 56);
             return world;

@@ -13,11 +13,13 @@ public sealed class FrameExchange
         public TaskPose[] Tasks = [];
         public PlayerPose[] Players = [];
         public int PlayerCount;
+        public ConstructionProjectPose[] Projects = [];
+        public int ProjectCount;
         public int TaskCount;
         public int WeaponCount, ProjectileCount;
         public int Count, Readers, TickRate, NavigationWaitingCount, MovingCount, LocalSearches, Yields, GoalExchanges, QueueWaiting;
         public long Tick, Timestamp;
-        public NavigationGrid? Grid;
+        public NavigationGrid? Grid, BaseGrid;
     }
 
     private readonly object _gate = new();
@@ -43,6 +45,9 @@ public sealed class FrameExchange
             slot.PlayerCount = world.PlayerCount;
             if (slot.Players.Length < slot.PlayerCount) Array.Resize(ref slot.Players, slot.PlayerCount);
             world.CopyPlayers(slot.Players);
+            slot.ProjectCount = world.ConstructionProjectCount;
+            if (slot.Projects.Length < slot.ProjectCount) Array.Resize(ref slot.Projects, slot.ProjectCount);
+            world.CopyConstructionProjects(slot.Projects);
             world.CopyTaskPoses(slot.Tasks);
             world.CopyWeaponPoses(slot.Weapons); world.CopyProjectilePoses(slot.Projectiles);
             slot.Count = world.Count;
@@ -50,6 +55,7 @@ public sealed class FrameExchange
             slot.TickRate = world.TickRate;
             slot.Timestamp = Stopwatch.GetTimestamp();
             slot.Grid = world.NavigationGrid;
+            slot.BaseGrid = world.BaseNavigationGrid;
             slot.NavigationWaitingCount = world.NavigationWaitingCount;
             slot.MovingCount = world.MovingCount;
             slot.LocalSearches = world.NavigationLocalSearches;
@@ -90,6 +96,7 @@ public sealed class FrameExchange
         public int TickRate => Data.TickRate;
         public long Timestamp => Data.Timestamp;
         public NavigationGrid? Grid => Data.Grid;
+        public NavigationGrid? BaseGrid => Data.BaseGrid;
         public int NavigationWaitingCount => Data.NavigationWaitingCount;
         public int MovingCount => Data.MovingCount;
         public int NavigationLocalSearches => Data.LocalSearches;
@@ -97,6 +104,7 @@ public sealed class FrameExchange
         public int NavigationGoalExchanges => Data.GoalExchanges;
         public int NavigationQueueWaitingCount => Data.QueueWaiting;
         public ReadOnlySpan<PlayerPose> Players => Data.Players.AsSpan(0, Data.PlayerCount);
+        public ReadOnlySpan<ConstructionProjectPose> ConstructionProjects => Data.Projects.AsSpan(0, Data.ProjectCount);
         public ReadOnlySpan<TaskPose> Tasks => Data.Tasks.AsSpan(0, Data.TaskCount);
         public ReadOnlySpan<WeaponPose> Weapons => Data.Weapons.AsSpan(0, Data.WeaponCount);
         public ReadOnlySpan<ProjectilePose> Projectiles => Data.Projectiles.AsSpan(0, Data.ProjectileCount);

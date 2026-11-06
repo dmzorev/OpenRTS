@@ -153,6 +153,7 @@ public sealed class SimulationSession : IDisposable
             UnitActionKind.Enter => CommandKind.Enter,
             UnitActionKind.Unload => CommandKind.Unload,
             UnitActionKind.UnloadAt => CommandKind.UnloadAt,
+            UnitActionKind.Build => CommandKind.BuildSite,
             UnitActionKind.Capture => CommandKind.CaptureTarget,
             UnitActionKind.Ability => CommandKind.UseAbility,
             UnitActionKind.Stop => CommandKind.Stop,

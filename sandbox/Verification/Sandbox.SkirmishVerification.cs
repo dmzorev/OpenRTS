@@ -25,13 +25,55 @@ public partial class Sandbox
             HandleCustomTarget(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, target.Current, target);
             _skirmishCheck = 1; _session!.StepOnce(); return;
         }
-        if (frame.Tick < 1) return;
-        CheckSkirmish(frame.Players.ToArray().Single(p => p.Id == 1).Credits == 4500 && frame.Players.ToArray().Single(p => p.Id == 2).Credits == 5000, "Production charged the wrong player");
-        CheckSkirmish(frame.Poses.ToArray().Single(p => p.Id.Value == 4).Order.Kind == UnitActionKind.Capture, "Capture button did not issue a simulation action");
-        _selection.Change([new(2), new(4)], SelectionChange.Replace); RefreshSelection();
-        CheckSkirmish(Controlled().Length == 2 && CanIssue(UnitActionKind.Move), "Mixed player control failed");
-        CheckSkirmish(!HandleBuildingKey(Key.B), "Skirmish allowed free editor construction");
-        GD.Print("OPENRTS_SKIRMISH:players, credits, capture cursor/action and dual-player control passed");
+        if (_skirmishCheck == 1)
+        {
+            if (frame.Tick < 1) return;
+            CheckSkirmish(frame.Players.ToArray().Single(p => p.Id == 1).Credits == 4500 && frame.Players.ToArray().Single(p => p.Id == 2).Credits == 5000, "Production charged the wrong player");
+            CheckSkirmish(frame.Poses.ToArray().Single(p => p.Id.Value == 4).Order.Kind == UnitActionKind.Capture, "Capture button did not issue a simulation action");
+            _selection.Change([new(2), new(4)], SelectionChange.Replace); RefreshSelection();
+            CheckSkirmish(Controlled().Length == 2 && CanIssue(UnitActionKind.Move), "Mixed player control failed");
+            CheckSkirmish(!HandleBuildingKey(Key.B), "Skirmish allowed free editor construction");
+
+            void Place(int builder, Key key, params WorldPosition[] sites)
+            {
+                _selection.Change([new((uint)builder)], SelectionChange.Replace);
+                RefreshSelection();
+                UpdateConstructionView(frame);
+                CheckSkirmish(HandleRtsKey(new InputEventKey(), key) && _sitePlacement is not null, "Construction hotkey did not arm placement");
+                foreach (var site in sites)
+                {
+                    HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, ShiftPressed = true }, site, null);
+                    CheckSkirmish(_sitePlacement is not null, "Shift did not keep construction placement armed");
+                }
+            }
+            Place(2, Key.E, new(24 * 1024 + 512, 25 * 1024), new(27 * 1024 + 512, 30 * 1024));
+            Place(4, Key.T, new WorldPosition(55 * 1024 + 512, 37 * 1024 + 512));
+            _skirmishCheck = 2; _session!.StepOnce(); return;
+        }
+        if (_skirmishCheck == 2)
+        {
+            if (frame.Tick < 2) return;
+            CheckSkirmish(frame.ConstructionProjects.Length == 3 && _visibleProjects.Length == 1 && _visibleProjects[0].Owner == 2, "Red project visibility is wrong");
+            var engineer = frame.Poses.ToArray().Single(p => p.Id.Value == 2);
+            CheckSkirmish(engineer.Order.Kind == UnitActionKind.Build && engineer.Order.QueuedCount == 1, "Shift did not queue construction orders");
+            _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection();
+            UpdateConstructionView(frame);
+            CheckSkirmish(_visibleProjects.Length == 2 && _visibleProjects.All(p => p.Owner == 1), "Blue can see an enemy project");
+            UpdateFootprintPreview();
+            CheckSkirmish(_footprintView!.Node.GetNode<MeshInstance3D>("ConstructionRange").Visible, "Yard construction radius is hidden");
+            var project = _visibleProjects[0];
+            CheckSkirmish(PickProject(project.Position)?.Id == project.Id, "Construction ghost is not selectable");
+            _sprites!.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons);
+            int sprites = _sprites.SpriteCount;
+            _sprites.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
+            CheckSkirmish(_sprites.SpriteCount > sprites, "Construction ghosts did not enter sprite batches");
+            SelectProject(project);
+            CheckSkirmish(_cancelProject!.Visible && HandleRtsKey(new InputEventKey(), Key.Delete), "Selected project has no cancel action");
+            _skirmishCheck = 3; _session!.StepOnce(); return;
+        }
+        if (frame.Tick < 3) return;
+        CheckSkirmish(frame.ConstructionProjects.Length == 2 && _visibleProjects.Length == 1, "Cancel action did not remove the selected project");
+        GD.Print("OPENRTS_SKIRMISH:players, capture, dual-player control, construction ghosts, Shift queue, cancel and yard radius passed");
         _verificationDone = true; GetTree().Quit();
     }
 }

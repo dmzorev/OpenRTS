@@ -10,9 +10,9 @@ public partial class Sandbox
     private bool _placing;
     private string _placeableId = "power-plant";
     private int PlaceableType => _catalog!.Units.ToList().FindIndex(u => u.Id == _placeableId);
-    private WorldPosition PlacementPoint(WorldPosition point)
+    private WorldPosition PlacementPoint(WorldPosition point, int? unitType = null)
     {
-        var footprint = _catalog!.Units[PlaceableType].Footprint!; int step = _displayGrid?.CellSize ?? 1024;
+        var footprint = _catalog!.Units[unitType ?? PlaceableType].Footprint!; int step = _displayGrid?.CellSize ?? 1024;
         int x = (int)Math.Round((point.X - footprint.HalfWidth) / (double)step, MidpointRounding.AwayFromZero) * step + footprint.HalfWidth;
         int y = (int)Math.Round((point.Y - footprint.HalfHeight) / (double)step, MidpointRounding.AwayFromZero) * step + footprint.HalfHeight;
         return new(Math.Clamp(x, 0, (int)_mapWidth * 1024), Math.Clamp(y, 0, (int)_mapDepth * 1024));
@@ -28,7 +28,7 @@ public partial class Sandbox
         _placeablePicker.ItemSelected += index => _placeableId = BuildingScenario.Placeable[(int)index]; row.AddChild(_placeablePicker);
         _placeablePicker.TooltipText = "Гражданские здания: выберите пехоту и кликните по зданию";
         void Button(string text, Action action) { var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None }; b.Pressed += action; row.AddChild(b); }
-        Button("B · Разместить", () => { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; });
+        Button("B · Разместить", () => { _placing = true; _sitePlacement = null; _productionPlacement = null; _armedCustom = null; _armedAction = null; });
         Button("Del · Убрать", () => RemoveBuilding(false)); Button("Backspace · Разрушить", () => RemoveBuilding(true));
         Button("Обломки: очистить", () => _sprites!.ClearWrecks());
     }
@@ -41,7 +41,7 @@ public partial class Sandbox
     private bool HandleBuildingKey(Key key)
     {
         if (!_buildings || _skirmish) return false;
-        if (key == Key.B) { _placing = true; _productionPlacement = null; _armedCustom = null; _armedAction = null; return true; }
+        if (key == Key.B) { _placing = true; _sitePlacement = null; _productionPlacement = null; _armedCustom = null; _armedAction = null; return true; }
         if (key == Key.Escape && _placing) { _placing = false; _productionPlacement = null; return true; }
         if (key is Key.Delete or Key.Backspace) { RemoveBuilding(key == Key.Backspace); return true; }
         if (Selected() is not { } selected || _catalog!.Units[selected.UnitType].Footprint is null) return false;
@@ -77,6 +77,22 @@ public partial class Sandbox
             point = PlacementPoint(target); preview = _catalog!.Units[PlaceableType].Footprint;
             valid = point.X >= preview!.HalfWidth && point.Y >= preview.HalfHeight && point.X + preview.HalfWidth <= _mapWidth * 1024 && point.Y + preview.HalfHeight <= _mapDepth * 1024;
         }
-        _footprintView.Apply(definition, selected?.Current ?? default, preview, point, valid);
+        if (_sitePlacement is { } placement && CommandPoint(_pointer) is { } cursor)
+        {
+            point = PlacementPoint(cursor, placement.Type);
+            preview = _catalog!.Units[placement.Type].Footprint;
+            valid = CanPlanSite(placement.Type, point);
+        }
+        var project = _visibleProjects.FirstOrDefault(p => p.Id == _selectedProject);
+        if (project.Id.Value != 0) definition = _catalog!.Units[project.UnitType].Footprint;
+        _footprintView.Apply(definition, project.Id.Value != 0 ? project.Position : selected?.Current ?? default, preview, point, valid);
+
+        int radius = 0;
+        if (selected is { } builder && !builder.Construction.Active && Controls(builder.Presentation.Owner))
+        {
+            var type = _catalog!.Units[builder.UnitType];
+            if (!type.Movable) radius = type.ConstructionRange;
+        }
+        _footprintView.SetRange(selected?.Current ?? default, radius, _sitePlacement is not null);
     }
 }

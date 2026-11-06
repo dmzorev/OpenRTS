@@ -29,8 +29,8 @@ public sealed partial class SimulationWorld
         if (!_powerDirty) return;
         foreach (var p in _players.Values) p.Produced = p.Consumed = 0;
         if (_unitStorage is not null)
-            foreach (var (definition, ownership) in _unitStorage.Query<EntityDefinition, OwnershipState>())
-                if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy)
+            foreach (var (definition, ownership, identity) in _unitStorage.Query<EntityDefinition, OwnershipState, UnitIdentity>())
+                if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_unitHandles[_indices[identity.Value.Id]]))
                 {
                     var p = Player(ownership.Value.Owner);
                     if (economy.Energy >= 0) p.Produced += economy.Energy; else p.Consumed -= economy.Energy;

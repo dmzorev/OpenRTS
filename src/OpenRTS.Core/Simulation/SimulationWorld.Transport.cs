@@ -28,7 +28,7 @@ public sealed partial class SimulationWorld
         if (TypeOf(actor).Passenger is not { } passenger || HasPassengers(actor) ||
             !_indices.TryGetValue(id, out target) || index == target) return false;
         var carrier = _unitHandles[target];
-        if (IsStored(carrier) || TypeOf(carrier).Transport is not { } transport ||
+        if (IsStored(carrier) || IsUnderConstruction(carrier) || TypeOf(carrier).Transport is not { } transport ||
             !transport.Accepts.Contains(passenger.Type) || passenger.Slots > transport.Slots) return false;
         uint owner = actor.Get<OwnershipState>().Owner, host = carrier.Get<OwnershipState>().Owner;
         return owner != 0 && (owner == host || host == 0 && !TypeOf(carrier).Movable);

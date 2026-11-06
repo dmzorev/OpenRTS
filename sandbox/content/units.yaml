@@ -98,6 +98,7 @@ engineer:
 
 bunker-cannon:
   Inherits: tank
+  Buildable: {Ticks: 100, Cost: 550, Kind: PlaceBuilding}
   Capturable: {}
   Economy: { Energy: -15 }
   Footprint:
@@ -109,11 +110,12 @@ bunker-cannon:
     {
       Model: bunker-cannon,
       Name: ДОТ · пушка,
-      States: [damaged, working, destroyed, lowpower],
+      States: [damaged, working, destroyed, lowpower, constructing],
     }
 
 bunker-mixed:
   Inherits: tank-mixed
+  Buildable: {Ticks: 100, Cost: 750, Kind: PlaceBuilding}
   Capturable: {}
   Economy: { Energy: -25 }
   Footprint:
@@ -125,7 +127,7 @@ bunker-mixed:
     {
       Model: bunker-mixed,
       Name: ДОТ · пушка и ракеты,
-      States: [damaged, working, destroyed, lowpower],
+      States: [damaged, working, destroyed, lowpower, constructing],
     }
 
 

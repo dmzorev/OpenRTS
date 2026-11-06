@@ -42,6 +42,9 @@ public partial class Sandbox
         _taskScroll = new() { CustomMinimumSize = new(0, 44), HorizontalScrollMode = ScrollContainer.ScrollMode.Auto, VerticalScrollMode = ScrollContainer.ScrollMode.Disabled };
         column.AddChild(_taskScroll); _tasksRow = new(); _taskScroll.AddChild(_tasksRow); _taskScroll.Visible = false;
         AddStoredPanel(column);
+        _cancelProject = new Button { Text = "Отменить проект · Delete", FocusMode = Control.FocusModeEnum.None, Visible = false };
+        _cancelProject.Pressed += CancelProject;
+        column.AddChild(_cancelProject);
     }
     private static void ClearChildren(Node node) { foreach (var child in node.GetChildren()) { node.RemoveChild(child); child.QueueFree(); } }
     private Button IconButton(string text, Texture2D? icon, int width = 84)
@@ -63,6 +66,7 @@ public partial class Sandbox
     private void RebuildCommandPanel()
     {
         if (_typeRow is null || _customRow is null) return;
+        _sitePlacement = null;
         _panelDirty = true; _activeRecipients = Controlled().Where(id => _selectionPoses[id].UnitType == _activeType).ToArray();
         ClearChildren(_typeRow); ClearChildren(_customRow); if (_tasksRow is not null) ClearChildren(_tasksRow); if (_taskScroll is not null) _taskScroll.Visible = false; _customButtons.Clear(); _cooldowns.Clear(); _taskSignature = "";
         foreach (int type in _panelTypes)
@@ -115,9 +119,10 @@ public partial class Sandbox
     private void ActivateCustom(string id, bool right, bool shift)
     {
         _panelDirty = true;
-        var ids = ActiveRecipients(); if (ids.Length == 0 || _session is null) return;
+        var ids = ActiveRecipients().Where(id => !_selectionPoses[id].Construction.Active).ToArray();
+        if (ids.Length == 0 || _session is null) return;
         var type = _catalog!.Units[_activeType]; var ability = type.Abilities.FirstOrDefault(a => a.Id == id);
-        _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _pointerDown = false;
+        _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _sitePlacement = null; _pointerDown = false;
         if (ability is not null)
         {
             if (right && ability.Kind == AbilityKind.Capture) { _notice = "Захват применяется вручную."; return; }
@@ -127,6 +132,17 @@ public partial class Sandbox
         }
         else
         {
+            var product = type.Products.First(p => p.Id == id);
+            if (product.OnSite)
+            {
+                if (!right)
+                {
+                    int target = _catalog.Units.ToList().FindIndex(u => u.Id == product.Unit);
+                    _sitePlacement = (id, target);
+                    _notice = "Выберите место строительства. Shift сохраняет режим и добавляет приказ в очередь.";
+                }
+                return;
+            }
             var ready = ReadyProduct(id);
             if (!right && ready is { } task)
             { _productionPlacement = task; _placeableId = _catalog.Units[task.UnitType].Id; _placing = true; _armedCustom = null; }
@@ -207,8 +223,8 @@ public partial class Sandbox
                     progress = casts.Length == 0 ? 0 : casts.Max(o => 100.0 * o.CaptureProgress / o.CaptureDuration);
                     button.Text = $"{action.Hotkey} · {action.Label} {(casts.Length == 0 ? "" : $"{progress:0}%")}";
                     button.TooltipText = "Захват: ЛКМ/хоткей → чужой или нейтральный объект. Сохраняет HP.";
-                    button.Disabled = ids.Length == 0; _cooldowns[action.Id].Value = progress;
-                    button.Modulate = _armedCustom == action.Id ? new(0.5f, 0.85f, 1) : Colors.White;
+                    button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); _cooldowns[action.Id].Value = progress;
+                    button.Modulate = (_armedCustom == action.Id || _sitePlacement?.Action == action.Id) ? new(0.5f, 0.85f, 1) : Colors.White;
                     continue;
                 }
                 var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
@@ -222,11 +238,13 @@ public partial class Sandbox
             else
             {
                 var product = type.Products.First(p => p.Id == action.Id); var target = _catalog.Units.First(u => u.Id == product.Unit); var build = product.Override ?? target.Build!;
-                status = ReadyProduct(action.Id) is not null ? " ГОТОВО" : $" {build.Ticks / (double)frame.TickRate:0.#}s";
-                button.TooltipText = $"Цена {build.Cost} · {build.Ticks} тиков\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
+                status = !product.OnSite && ReadyProduct(action.Id) is not null ? " ГОТОВО" : $" {build.Ticks / (double)frame.TickRate:0.#}s";
+                button.TooltipText = product.OnSite
+                    ? $"Цена {build.Cost} · {build.Ticks} тиков\nЛКМ → разместить проект. Shift — добавить в очередь и продолжить размещение."
+                    : $"Цена {build.Cost} · {build.Ticks} тиков\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
             }
             button.Text = $"{action.Hotkey} · {action.Label}{status}{(auto ? " ↻" : "")}";
-            button.Disabled = ids.Length == 0; button.Modulate = auto ? new(0.35f, 1, 0.65f) : _armedCustom == action.Id ? new(0.5f, 0.85f, 1) : Colors.White;
+            button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); button.Modulate = auto ? new(0.35f, 1, 0.65f) : (_armedCustom == action.Id || _sitePlacement?.Action == action.Id) ? new(0.5f, 0.85f, 1) : Colors.White;
             _cooldowns[action.Id].Value = Math.Clamp(progress, 0, 100);
         }
         var selected = ids.ToHashSet();

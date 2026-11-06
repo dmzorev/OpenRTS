@@ -59,8 +59,8 @@ def main():
 
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 9:
-        raise RuntimeError("Expected nine concrete unit definitions")
+    if expected["DefinitionCount"] != 10:
+        raise RuntimeError("Expected ten concrete unit definitions, including the sniper")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -142,7 +142,7 @@ def main():
     parallel = report(run(headless + ["--skirmish", "--ticks=1800", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")
     if solo != parallel or solo["EntityCount"] != 14:
         raise RuntimeError("Skirmish resource/capture/production journal differs by workers")
-    print("PASS Players, resource HUD, capture cursor, dual-player controls and1800-tick skirmish journal", flush=True)
+    print("PASS Players, construction UI, capture cursor, dual-player controls and 1800-tick skirmish journal", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:

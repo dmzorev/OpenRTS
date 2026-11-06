@@ -105,13 +105,15 @@ public sealed class SpriteWorldView
         _textures.Add(key, batch); _batches.Add(batch); Node.AddChild(batch.Node); return batch;
     }
 
-    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate, ReadOnlySpan<WeaponPose> weapons = default)
+    private readonly HashSet<EntityId> _ghostIds = new();
+
+    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate, ReadOnlySpan<WeaponPose> weapons = default, ReadOnlySpan<ConstructionProjectPose> projects = default)
     {
         alpha = Math.Clamp(alpha, 0, 1); double time = tick == 0 ? 0 : tick + alpha; SpriteCount = 0;
         foreach (var batch in _batches) batch.Clear();
         Span<Vector2> pivots = stackalloc Vector2[8];
         Span<float> angles = stackalloc float[8];
-        int count = poses.Length + _wrecks.Count;
+        int count = poses.Length + _wrecks.Count + projects.Length;
         if (_ordered.Length < count) Array.Resize(ref _ordered, Math.Max(count, _ordered.Length * 2));
         int at = 0;
         foreach (var pose in poses) if (pose.Carrier.Value == 0) _ordered[at++] = pose;
@@ -119,6 +121,15 @@ public sealed class SpriteWorldView
         {
             _liveIds.Clear(); foreach (var pose in poses) _liveIds.Add(pose.Id);
             foreach (var wreck in _wrecks.Values) if (wreck.Presentation.Body.StartTick <= tick && !_liveIds.Contains(wreck.Id)) _ordered[at++] = wreck;
+        }
+        _ghostIds.Clear();
+        foreach (var project in projects)
+        {
+            _ghostIds.Add(project.Id);
+            var facing = FacingDirection.North;
+            var presentation = new EntityPresentation(project.Owner, facing, facing, facing, facing,
+                new(_models[project.UnitType].Unit.IdleAnimation, tick, 0), AnimationPlayback.None, 0);
+            _ordered[at++] = new(project.Id, project.UnitType, project.Position, project.Position, presentation);
         }
         count = at;
         bool sorted = true; for (int i = 1; i < count; i++) if (_ordered[i - 1].Id.Value > _ordered[i].Id.Value) { sorted = false; break; }
@@ -134,7 +145,9 @@ public sealed class SpriteWorldView
             Vector2 origin = new(Lerp(pose.Previous.X, pose.Current.X, alpha), Lerp(pose.Previous.Y, pose.Current.Y, alpha));
             float elevation = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha);
             float body = Angle(view.PreviousBodyFacing, view.BodyFacing, alpha), weapon = Angle(view.PreviousWeaponFacing, view.WeaponFacing, alpha);
-            Color tint = Colors.White; float scale = 1, stateFlash = 0;
+            bool ghost = _ghostIds.Contains(pose.Id);
+            Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : Colors.White;
+            float scale = 1, stateFlash = 0;
             for (int state = 0; state < model.States.Length; state++) if ((view.States & (1u << state)) != 0)
             {
                 var style = model.States[state]; stateFlash = Math.Max(stateFlash, (float)style.Pulse * (0.5f + 0.5f * MathF.Sin((float)time * MathF.Tau * 2 / tickRate))); tint *= new Color((float)style.Red, (float)style.Green, (float)style.Blue, (float)style.Opacity); scale *= (float)style.Scale;
@@ -144,7 +157,7 @@ public sealed class SpriteWorldView
                 var runtime = model.Parts[p]; var part = runtime.Definition;
                 if ((view.States & runtime.Visible) != runtime.Visible || (view.States & runtime.Hidden) != 0) { pivots[p] = origin; angles[p] = body; continue; }
                 float angle = part.Facing == ModelFacing.Body ? body : weapon;
-                if (part.Facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
+                if (!ghost && part.Facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
                 {
                     var aim = weapons[pose.WeaponOffset + runtime.Mount];
                     angle = Angle(aim.PreviousFacing, aim.Facing, alpha);

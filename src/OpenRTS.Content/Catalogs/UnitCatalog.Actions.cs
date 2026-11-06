@@ -11,8 +11,10 @@ public sealed partial class UnitCatalog
         [Range(0, 1000000000)] public int Cost { get; set; }
         public ProductionKind Kind { get; set; }
         [Range(0, WorldPosition.MaximumExtent)] public int PlacementRadius { get; set; } = 102400;
-        public BuildDefinition Compile() => new(Ticks, Cost, Kind, PlacementRadius);
+        [Range(1, 100)] public int InitialHealthPercent { get; set; } = 20;
+        public BuildDefinition Compile() => new(Ticks, Cost, Kind, PlacementRadius, InitialHealthPercent);
     }
+    private sealed class BuilderOptions { [Range(1, WorldPosition.MaximumExtent)] public int Range { get; set; } = 1024; }
     private sealed class QueueOptions { public Dictionary<string, QueueSettings> Queues { get; set; } = new(); }
     private sealed class QueueSettings
     {
@@ -34,6 +36,7 @@ public sealed partial class UnitCatalog
     {
         public string? Mount { get; set; }
         public bool Capture { get; set; }
+        public bool OnSite { get; set; }
         public int Range { get; set; } = 1024;
         public bool GroundTarget { get; set; }
         public bool AutoCast { get; set; }
@@ -42,6 +45,7 @@ public sealed partial class UnitCatalog
         [Range(1, 1000000)] public int? Ticks { get; set; }
         [Range(0, 1000000000)] public int? Cost { get; set; }
         [Range(0, WorldPosition.MaximumExtent)] public int? PlacementRadius { get; set; }
+        [Range(1, 100)] public int? InitialHealthPercent { get; set; }
     }
     private sealed class LegacyActionOptions : GameplayActionOptions
     {
@@ -72,6 +76,7 @@ public sealed partial class UnitCatalog
         foreach (var (name, action) in declarations.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(name) || (action.Mount is not null ? 1 : 0) + (action.Unit is not null ? 1 : 0) + (action.Capture ? 1 : 0) != 1) throw new ArgumentException("An action requires exactly one Mount or Unit.");
+            if (action.Unit is null && (action.OnSite || action.InitialHealthPercent is not null)) throw new ArgumentException("OnSite and InitialHealthPercent require a construction product.");
             if (action.Capture)
             {
                 if (action.GroundTarget || action.AutoCast || action.Queue is not null || action.Ticks is not null || action.Cost is not null || action.PlacementRadius is not null) throw new ArgumentException("Capture cannot declare weapon/production settings.");
@@ -88,9 +93,12 @@ public sealed partial class UnitCatalog
                 if (action.GroundTarget || action.AutoCast) throw new ArgumentException("Production cannot specify weapon ability settings: " + name);
                 if (!buildDefaults.TryGetValue(target, out var defaults)) throw new ArgumentException("Unknown product: " + target);
                 if (defaults is null) throw new ArgumentException("Product requires Buildable: " + target);
-                var settings = new BuildDefinition(action.Ticks ?? defaults.Ticks, action.Cost ?? defaults.Cost, defaults.Kind, action.PlacementRadius ?? defaults.PlacementRadius);
-                string queue = action.Queue ?? queues.FirstOrDefault()?.Id ?? throw new ArgumentException("A production action requires a task queue.");
-                products.Add(new(name, target, queue, settings));
+                if (action.OnSite && (defaults.Kind != ProductionKind.PlaceBuilding || action.Queue is not null || action.PlacementRadius is not null))
+                    throw new ArgumentException("On-site products require a building, use builder range and do not use task queues.");
+                var settings = new BuildDefinition(action.Ticks ?? defaults.Ticks, action.Cost ?? defaults.Cost, defaults.Kind,
+                    action.PlacementRadius ?? defaults.PlacementRadius, action.InitialHealthPercent ?? defaults.InitialHealthPercent);
+                string queue = action.OnSite ? "" : action.Queue ?? queues.FirstOrDefault()?.Id ?? throw new ArgumentException("A production action requires a task queue.");
+                products.Add(new(name, target, queue, settings, action.OnSite));
             }
         }
         var bindings = panel?.Buttons ?? (actions?.Buttons ?? new()).ToDictionary(p => p.Key,
