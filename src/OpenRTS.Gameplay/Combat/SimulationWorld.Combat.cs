@@ -47,30 +47,55 @@ public sealed partial class SimulationWorld
                 }
         return compatible ?? best;
     }
-    private bool InWeaponRange(int index, int target, int range)
+    private bool InWeaponRange(int index, int target, int range) => InWeaponRange(index, target, range, out _);
+
+    private bool InWeaponRange(int index, int target, int range, out long distanceSquared)
     {
         ref var source = ref _entityHandles[index];
         var sourceIdentity = source.Get<EntityIdentity>(); ref var other = ref _entityHandles[target];
         var otherIdentity = other.Get<EntityIdentity>();
-        long distance = ObjectGeometry.DistanceSquared(_types[sourceIdentity.Type], source.Get<SpatialState>().Position, _types[otherIdentity.Type], other.Get<SpatialState>().Position, out var from, out var to);
-        return distance <= (long)range * range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, from, to, 0));
+        distanceSquared = ObjectGeometry.DistanceSquared(_types[sourceIdentity.Type], source.Get<SpatialState>().Position, _types[otherIdentity.Type], other.Get<SpatialState>().Position, out var from, out var to);
+        return distanceSquared <= (long)range * range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, from, to, 0));
     }
     private WorldPosition AimPoint(int source, int target) => ObjectGeometry.ClosestPoint(_types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, _entityHandles[source].Get<SpatialState>().Position);
 
     private int AcquireWeaponTarget(int index, WeaponDefinition weapon, int range = -1)
     {
-        if (_entityHandles[index].Get<OwnershipState>().Owner == 0) return -1;
+        var origin = _entityHandles[index];
+        uint owner = origin.Get<OwnershipState>().Owner;
+        if (owner == 0) return -1;
         if (range < 0) range = weapon.Range;
-        var position = _entityHandles[index].Get<SpatialState>().Position; var type = _types[_entityHandles[index].Get<EntityIdentity>().Type];
+        var position = origin.Get<SpatialState>().Position;
+        var identity = origin.Get<EntityIdentity>();
+        var type = _types[identity.Type];
         int x = type.Footprint?.HalfWidth ?? type.Body.HalfWidth, y = type.Footprint?.HalfHeight ?? type.Body.HalfHeight;
         (_motion ?? _combatIndex)!.Query(new(position.X - x, position.Y - y), new(position.X + x, position.Y + y), range, _combatCandidates);
-        int best = -1; long distance = (long)range * range;
+        var rule = _combatTargetRule;
+        var query = new CombatTargetQuery(identity.Id, owner, type, weapon, range);
+        int best = -1;
+        EntityId bestId = default;
+        long bestScore = 0, bestDistance = 0;
         foreach (var candidateId in _combatCandidates)
         {
-            if (!_indices.TryGetValue(candidateId, out int candidate)) continue;
-            if (!ValidTarget(index, _entityHandles[candidate].Get<EntityIdentity>().Id, weapon, out _) || !InWeaponRange(index, candidate, range)) continue;
-            long d = ObjectGeometry.DistanceSquared(type, position, _types[_entityHandles[candidate].Get<EntityIdentity>().Type], _entityHandles[candidate].Get<SpatialState>().Position, out _, out _);
-            if (d < distance || d == distance && (best < 0 || _entityHandles[candidate].Get<EntityIdentity>().Id.Value < _entityHandles[best].Get<EntityIdentity>().Id.Value)) { best = candidate; distance = d; }
+            if (!ValidTarget(index, candidateId, weapon, out int candidate) ||
+                !InWeaponRange(index, candidate, range, out long distance)) continue;
+            long score = 0;
+            if (rule is not null)
+            {
+                var actor = _entityHandles[candidate];
+                var target = new CombatTargetCandidate(candidateId, actor.Get<OwnershipState>().Owner, TypeOf(actor),
+                    actor.Get<HealthState>().Current, distance);
+                if (rule.Score(in query, in target) is not { } priority) continue;
+                score = priority;
+            }
+            if (best < 0 || score > bestScore || score == bestScore &&
+                (distance < bestDistance || distance == bestDistance && candidateId.Value < bestId.Value))
+            {
+                best = candidate;
+                bestId = candidateId;
+                bestScore = score;
+                bestDistance = distance;
+            }
         }
         return best;
     }

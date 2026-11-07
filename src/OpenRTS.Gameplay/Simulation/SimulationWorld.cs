@@ -21,6 +21,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     private readonly CaptureSystem? _capture;
     private readonly ConstructionSystem? _construction;
     private readonly TransportSystem? _transport;
+    private readonly ICombatTargetRule? _combatTargetRule;
     private readonly IEndOfTickRule? _endOfTick;
     private readonly TerrainRoutePlanner? _navigation;
     private readonly MotionIndex? _motion;
@@ -104,6 +105,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _transport = new(this, transport.Create());
         if (mechanics.Construction is { } construction && (usesConstruction || !ReferenceEquals(construction, GameplayMechanics.BuiltInConstruction)))
             _construction = new(this, construction.Create());
+        _combatTargetRule = mechanics.CombatTargeting?.Create();
         _endOfTick = mechanics.EndOfTick?.Create();
     }
 

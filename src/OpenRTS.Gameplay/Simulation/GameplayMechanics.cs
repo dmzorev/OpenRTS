@@ -44,6 +44,8 @@ public sealed class GameplayMechanics
     /// <summary>Optional distance fields for unweighted individual routes that need a detour.</summary>
     /// <remarks>The factory must create a pathfinder with the same initial grid instance as the world.</remarks>
     public GameplayRegistration<IGridPathfinder>? GridPathfinder { get; init; }
+    /// <summary>Optional ranking rule for legal targets during automatic acquisition.</summary>
+    public GameplayRegistration<ICombatTargetRule>? CombatTargeting { get; init; }
 }
 
 /// <summary>Runs after the built-in phases and owns its deterministic state.</summary>
@@ -66,6 +68,13 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
+        if (_mechanics.CombatTargeting is { } targeting)
+        {
+            // The targeting header wraps the existing mechanics format.
+            writer.Write(22);
+            targeting.WriteIdentity(writer);
+            _combatTargetRule!.WriteConfiguration(writer);
+        }
         bool customTransportOrConstruction = !ReferenceEquals(_mechanics.Transport, GameplayMechanics.BuiltInTransport) ||
             !ReferenceEquals(_mechanics.Construction, GameplayMechanics.BuiltInConstruction);
         bool customNavigation = _mechanics.GridPathfinder is not null;
