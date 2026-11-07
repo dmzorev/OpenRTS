@@ -147,13 +147,21 @@ internal static class PlayerChecks
         {
             UnitDefinition[] types = [new("engineer", 100, abilities: [new("capture", "", Kind: AbilityKind.Capture, Range: 4096)]),
                 new("factory", 100, ["idle"], ["lowpower"], movable: false, taskQueues: [new("q")], products: [new("make", "unit", "q")],
-                    economy: new(-20), capturable: new(1)), new("unit", 100, build: new(10, 20)), Building("plant", 100)];
+                    economy: new(-20), capturable: new(1)), new("unit", 100, build: new(10, 20)), Building("plant", 100),
+                new("workshop", 100, movable: false, taskQueues: [new("q", payment: PaymentPolicy.OnCompletion)],
+                    products: [new("finish", "instant", "q")]), new("instant", 100, build: new(1, 98))];
             using var w = new SimulationWorld(types, 20000, 16000, players: [new(1, "blue"), new(2, "red", 100)]);
             w.AddInitialUnit(0, new(1024, 1024), 1); w.AddInitialUnit(1, new(3072, 1024), 2); w.AddInitialUnit(3, new(6144, 6144), 2);
-            w.Step([new(1, 0, 1, CommandKind.EnqueueTask, new(2), Action: "make"), new(1, 0, 2, CommandKind.SetRally, new(2), Position: new(8192, 8192))]);
+            var workshop = w.AddInitialUnit(4, new(10240, 10240), 2);
+            w.Step([new(1, 0, 1, CommandKind.EnqueueTask, new(2), Action: "make"),
+                new(1, 0, 2, CommandKind.SetRally, new(2), Position: new(8192, 8192)),
+                new(1, 0, 3, CommandKind.EnqueueTask, workshop, Action: "finish")]);
+            NavigationChecks.Check(w.TaskCount == 2 && Player(w, 2).Credits == 80, "The workshop must wait for the refund");
             w.Step([new(2, 0, 1, CommandKind.UseAbility, new(1), TargetEntity: new(2), Action: "capture")]);
             var factory = Poses(w).Single(p => p.Id.Value == 2);
-            NavigationChecks.Check(factory.Presentation.Owner == 1 && !factory.HasRally && w.TaskCount == 0 && Player(w, 2).Credits == 98, "Old tasks/rally/payment survived capture");
+            NavigationChecks.Check(factory.Presentation.Owner == 1 && !factory.HasRally && w.TaskCount == 0, "Old tasks or rally survived capture");
+            NavigationChecks.Check(Player(w, 2).Credits == 0 && w.Events.ToArray().Any(e => e.Kind == WorldEventKind.Produced && e.Entity == workshop),
+                "Production on the same tick did not receive the exact refund");
             NavigationChecks.Check(Player(w, 1).Energy == -20 && Player(w, 2).Energy == 100 && factory.Presentation.States == 1, "Power did not transfer with the building");
         });
         test("Players: neutralized footprints remain solid and captured ruins can be repaired", () =>

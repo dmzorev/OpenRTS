@@ -13,8 +13,13 @@ public enum GameplayConditions : byte
 
 public sealed partial class SimulationWorld
 {
+    private bool IsConstructing(Frent.Entity entity) => _construction?.IsFoundation(entity) == true;
+
     private GameplayConditions ReadLocalConditions(Frent.Entity entity) =>
-        _construction?.IsFoundation(entity) == true ? GameplayConditions.Constructing : GameplayConditions.None;
+        IsConstructing(entity) ? GameplayConditions.Constructing : GameplayConditions.None;
+
+    private GameplayConditions ReadConditions(UnitDefinition source, uint owner) =>
+        _economy.ReadConditions(source.Economy, owner, ExistingStorage);
 
     /// <summary>Read the current facts for a live entity on the simulation owner thread.</summary>
     public bool TryGetConditions(EntityId id, out GameplayConditions conditions)

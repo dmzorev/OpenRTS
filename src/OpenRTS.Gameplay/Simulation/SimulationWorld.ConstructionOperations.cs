@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Frent;
+using OpenRTS.Core.Economy;
 using OpenRTS.Core.Construction;
 using OpenRTS.Core.Simulation;
 
@@ -70,8 +71,8 @@ public sealed partial class SimulationWorld
     void IConstructionWorld.CommitFootprint(NavigationGrid candidate) => CommitGrid(candidate);
     EntityId IConstructionWorld.ReserveEntityId() => AllocateEntityId();
     void IConstructionWorld.ReleaseEntityId(EntityId id) => ReleaseEntityId(id);
-    bool IConstructionWorld.CanAfford(uint owner, long cost) => Player(owner).Credits >= cost;
-    bool IConstructionWorld.Spend(uint owner, long cost) => Spend(owner, cost);
+    bool IConstructionWorld.CanAfford(uint owner, long cost) => _economy.CanAfford(owner, cost);
+    bool IConstructionWorld.Spend(uint owner, long cost) => _economy.Spend(owner, cost);
 
     Entity IConstructionWorld.SpawnFoundation(EntityId id, int type, WorldPosition position, uint owner, int health, Action<Entity> initialize)
     {
@@ -84,9 +85,9 @@ public sealed partial class SimulationWorld
         lock (StorageGate)
         {
             clearFoundation(entity);
-            ActivateEconomy(entity, TypeOf(entity));
+            EconomySystem.ActivateIncome(entity, TypeOf(entity).Economy, Tick);
         }
-        _powerDirty = true;
+        _economy.InvalidatePower();
     }
 
     void IConstructionWorld.Emit(WorldEvent value) => _events.Add(value);

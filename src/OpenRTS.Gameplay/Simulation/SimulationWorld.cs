@@ -3,6 +3,7 @@ using System.Text;
 using Frent;
 using OpenRTS.Core.Capture;
 using OpenRTS.Core.Construction;
+using OpenRTS.Core.Economy;
 using OpenRTS.Core.Production;
 using OpenRTS.Core.Simulation;
 using OpenRTS.Core.Transport;
@@ -14,6 +15,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 {
     private readonly UnitDefinition[] _types;
     private readonly GameplayMechanics _mechanics;
+    private readonly EconomySystem _economy;
     private readonly CaptureSystem? _capture;
     private readonly ConstructionSystem? _construction;
     private readonly TransportSystem? _transport;
@@ -76,7 +78,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         bool usesConstruction = _types.Any(type => type.ConstructionRange > 0);
         if (usesConstruction && mechanics.Construction is null)
             throw new ArgumentException("Unit definitions require a construction mechanic.", nameof(mechanics));
-        InitializePlayers(players);
+        _economy = new(players, StorageGate, IsConstructing);
         _productionRate = mechanics.ProductionRate;
         InitializeProduction();
         SpeedPerTick = speedPerTick;
@@ -136,7 +138,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         else UpdateDirectMovement();
         UpdateWeapons();
         _construction?.Advance();
-        UpdateIncome();
+        _economy.AdvanceIncome(ExistingStorage, Tick);
         UpdateProduction();
         UpdatePresentation();
         _endOfTick?.Advance(new(this));
@@ -362,7 +364,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_entityHandles[index].Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
-        _powerDirty = true;
+        _economy.InvalidatePower();
         DeleteEntity(index);
         _orderDirty = true;
         if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
@@ -422,10 +424,10 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
             _transport?.Initialize(state, type);
             initialize?.Invoke(state);
-            InitializeEconomy(state, type, owner);
+            _economy.Initialize(state, type.Economy, owner, Tick);
             _capture?.Initialize(state, type);
         }
-        _powerDirty = true;
+        _economy.InvalidatePower();
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         TrackEntity(state);
