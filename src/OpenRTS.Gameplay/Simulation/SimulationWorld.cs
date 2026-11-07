@@ -132,7 +132,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         catch { _failed = true; throw; }
     }
 
-    protected override void PrepareStep() => RebuildMotionIndex();
+    protected override void PrepareStep()
+    {
+        _conditionGrants?.Expire(Tick + 1);
+        RebuildMotionIndex();
+    }
 
     protected override void Update(CancellationToken cancellationToken)
     {
@@ -172,6 +176,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (command.Kind == CommandKind.PlayAnimation && (command.Animation < 0 || command.DurationTicks < 1 ||
             command.DurationTicks > 1000000 || !Enum.IsDefined(command.Track)))
             throw new ArgumentException("Animation commands require a valid track, nonnegative ID and duration in 1..1000000 ticks.", batchArgument);
+        if (command.Kind is CommandKind.GrantCondition or CommandKind.RevokeCondition && command.Recipients is not null)
+            throw new ArgumentException("Condition commands target a single entity.", batchArgument);
+        if (command.Kind == CommandKind.GrantCondition && (command.Condition != GameplayConditions.WeaponsDisabled || command.DurationTicks is < 0 or > 1000000))
+            throw new ArgumentException("GrantCondition requires WeaponsDisabled and a duration in 0..1000000 ticks.", batchArgument);
+        if (command.Kind == CommandKind.RevokeCondition && command.ConditionGrantId <= 0)
+            throw new ArgumentException("RevokeCondition requires a positive grant ID.", batchArgument);
         if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.MoveGroup) && _navigation is null)
             throw new ArgumentException("This world has no navigation layer.", batchArgument);
     }
@@ -199,6 +209,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             var construction = _construction?.Project(entity, type, ref states) ?? default;
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
                 states |= type.LowPowerVisualMask;
+            if (type.WeaponDisableVisualMask != 0 && WeaponsDisabled(entityIdentity.Id))
+                states |= type.WeaponDisableVisualMask;
             var rally = ProductionSystem.Project(entity, type, ref states);
             var capture = _capture?.GetProgress(entity, entityOrders) ?? default;
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
@@ -280,6 +292,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     protected override void ApplyCommand(WorldCommand command)
     {
+        if (command.Kind is CommandKind.GrantCondition or CommandKind.RevokeCondition) { ApplyConditionCommand(command); return; }
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally)
         {
@@ -376,6 +389,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _economy.InvalidatePower();
+        _conditionGrants?.RemoveEntity(id);
         DeleteEntity(index);
         _orderDirty = true;
         if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));

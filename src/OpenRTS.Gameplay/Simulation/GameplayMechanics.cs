@@ -68,6 +68,11 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
+        if (_conditionGrants is { } grants)
+        {
+            writer.Write(23);
+            grants.WriteState(writer);
+        }
         if (_mechanics.CombatTargeting is { } targeting)
         {
             // The targeting header wraps the existing mechanics format.

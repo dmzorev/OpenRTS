@@ -31,6 +31,7 @@ public sealed record UnitDefinition
     public DestructionPolicy Destruction => Definition.Health!.Destruction;
     internal bool DisableWeaponsOnLowPower { get; }
     internal uint LowPowerVisualMask { get; }
+    internal uint WeaponDisableVisualMask { get; }
 
     public UnitDefinition(EntityDefinition definition)
     {
@@ -38,6 +39,8 @@ public sealed record UnitDefinition
         if (definition.Health is null || definition.Spatial is null || definition.Presentation is null)
             throw new ArgumentException("The current unit simulation requires health, spatial and semantic presentation capabilities.", nameof(definition));
         Definition = definition;
+        int weaponDisableState = definition.Presentation.States.IndexOf("weapons-disabled");
+        if (weaponDisableState >= 0) WeaponDisableVisualMask = 1u << weaponDisableState;
         if (definition.Economy is { } economy)
         {
             DisableWeaponsOnLowPower = economy.DisableWeapons;

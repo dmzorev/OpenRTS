@@ -61,7 +61,7 @@ internal static class EcsMigrationChecks
         ["production"] = "C990050C34DF4938D5538FDAA8A26C5883C67267E38D96A0F0CF9A912B9FBAC0"
     };
 
-    private static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };
+    internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };
     private sealed class EntitySetWriter : JsonConverter<EntitySet>
     {
         public override EntitySet Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();

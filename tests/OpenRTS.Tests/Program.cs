@@ -51,6 +51,7 @@ LocomotionChecks.Run(Test);
 OrderChecks.Run(Test);
 WeaponChecks.Run(Test);
 CombatTargetRuleChecks.Run(Test);
+ConditionGrantChecks.Run(Test);
 FootprintChecks.Run(Test);
 ActionProductionChecks.Run(Test);
 DefinitionChecks.Run(Test);

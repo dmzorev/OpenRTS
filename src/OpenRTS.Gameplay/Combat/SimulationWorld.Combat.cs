@@ -125,14 +125,15 @@ public sealed partial class SimulationWorld
             ref var entityOwnership = ref entity.Get<OwnershipState>();
             ref var entityOrders = ref carrier.Get<OrderState>();
             ref var entityMotion = ref carrier.Get<MotionState>();
-            bool powerDisabled = sourceType.DisableWeaponsOnLowPower && ReadConditions(sourceType, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower);
+            bool weaponsDisabled = WeaponsDisabled(entityIdentity.Id) ||
+                sourceType.DisableWeaponsOnLowPower && ReadConditions(sourceType, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower);
             entityCombat.WeaponReadyTick = 0;
             for (int mountIndex = 0; mountIndex < type.Weapons.Count; mountIndex++)
             {
                 var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
                 if (stored && (!mount.FireFromTransport || weapon.Effect != WeaponEffect.Damage)) continue;
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
-                if (powerDisabled)
+                if (weaponsDisabled)
                 { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; entityCombat.WeaponReadyTick = Math.Max(entityCombat.WeaponReadyTick, state.ReadyTick); continue; }
                 bool repairOrder = !stored && entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;
                 bool ordinaryMove = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Move;
