@@ -1,15 +1,18 @@
 using System.Security.Cryptography;
 using System.Text;
+using Frent;
+using OpenRTS.Core.Capture;
 using OpenRTS.Core.Production;
 using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>
+public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld
 {
     private readonly UnitDefinition[] _types;
     private readonly GameplayMechanics _mechanics;
+    private readonly CaptureSystem? _capture;
     private readonly IEndOfTickRule? _endOfTick;
     private readonly IGridPathfinder? _navigation;
     private readonly MotionIndex? _motion;
@@ -86,7 +89,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _motion.Clear(initialCapacity);
         }
         if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
-        if (usesCapture || !ReferenceEquals(mechanics.Capture, GameplayMechanics.BuiltInCapture)) _capture = mechanics.Capture?.Create();
+        if (mechanics.Capture is { } capture && (usesCapture || !ReferenceEquals(capture, GameplayMechanics.BuiltInCapture)))
+            _capture = new(this, capture.Create());
         if (usesTransport || !ReferenceEquals(mechanics.Transport, GameplayMechanics.BuiltInTransport)) _transport = mechanics.Transport?.Create();
         if (usesConstruction || !ReferenceEquals(mechanics.Construction, GameplayMechanics.BuiltInConstruction)) _construction = mechanics.Construction?.Create();
         _endOfTick = mechanics.EndOfTick?.Create();
@@ -184,7 +188,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
                 states |= type.LowPowerVisualMask;
             states |= ProductionVisualStates(type, producer);
-            var capture = GetCaptureProgress(entity, entityOrders);
+            var capture = _capture?.GetProgress(entity, entityOrders) ?? default;
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
@@ -371,6 +375,14 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         entityMotion.Moving = entitySpatial.Position != entityMotion.Target;
         return true;
     }
+
+    bool ICaptureWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
+    UnitDefinition ICaptureWorld.TypeOf(Entity entity) => TypeOf(entity);
+    bool ICaptureWorld.HasPassengers(Entity entity) => HasPassengers(entity);
+    void ICaptureWorld.IssueOrder(EntityId actor, UnitOrder order, bool queued) => IssueOrder(_indices[actor], order, queued);
+    void ICaptureWorld.SetMovementTarget(EntityId actor, WorldPosition position) => SetTarget(_indices[actor], position);
+    void ICaptureWorld.Halt(EntityId actor) => Halt(_indices[actor]);
+    void ICaptureWorld.ChangeOwner(EntityId target, uint owner) => ChangeOwner(_indices[target], owner);
 
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
         EntityId id = default, int? initialHealth = null, Action<Frent.Entity>? initialize = null)

@@ -23,7 +23,7 @@ public sealed partial class SimulationWorld
             var action = _types[eIdentity.Type].Abilities[ability];
             if (action.Kind != AbilityKind.Weapon)
             {
-                if (TryApplyNonWeaponAbility(i, action, command)) return;
+                if (_capture?.TryApplyAbility(e, action, command) == true) return;
                 continue;
             }
             int mount = AbilityMount(eIdentity.Type, ability); ref var state = ref eCombat.Weapons[mount];

@@ -1,4 +1,5 @@
 using Frent;
+using OpenRTS.Core.Capture;
 using OpenRTS.Core.Simulation;
 using OpenRTS.Core.Production;
 
@@ -121,7 +122,7 @@ public sealed partial class SimulationWorld
         foreach (var entity in _entityHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<EntityIdentity>().Id.Value))
         {
             writer.Write(entity.Has<IncomeState>()); if (entity.Has<IncomeState>()) writer.Write(entity.Get<IncomeState>().NextTick);
-            WriteCaptureState(writer, entity);
+            CaptureSystem.WriteEntityState(_capture, writer, entity);
         }
     }
 }
