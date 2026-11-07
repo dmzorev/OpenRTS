@@ -288,6 +288,7 @@ public partial class Sandbox : Node3D
             {
                 Key code = key.PhysicalKeycode == Key.None ? key.Keycode : key.PhysicalKeycode;
                 if (_terminal is not null && code == Key.F10) ToggleTerminalLayout();
+                else if (_terminal is not null && code == Key.F11) SetTerminalFullscreen(!_exclusiveFullscreen);
                 else if (_matchMenu?.Visible == true) { if (code == Key.Escape) ToggleMatchMenu(); }
                 else if (_diagnostics is not null && code == Key.F12) _diagnostics.Visible = !_diagnostics.Visible;
                 else if (_terminal is not null && code == Key.Escape && !HasTargetingMode()) ToggleMatchMenu();
@@ -375,7 +376,8 @@ public partial class Sandbox : Node3D
 
     private void PanCamera(double delta)
     {
-        if (_camera is null || _matchMenu?.Visible == true || _terminal is not null && !GetWindow().HasFocus()) return;
+        var window = GetWindow();
+        if (_camera is null || _matchMenu?.Visible == true || _terminal is not null && !window.HasFocus()) return;
         int x = (!_showcase && Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0)
             - (!_showcase && Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         int z = (!_showcase && Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0)
@@ -383,18 +385,23 @@ public partial class Sandbox : Node3D
         float speed = 0.7f;
         if (_terminal is not null && _edgeScroll && x == 0 && z == 0 && !_pointerDown && !Input.IsMouseButtonPressed(MouseButton.Middle))
         {
-            var mouse = GetViewport().GetMousePosition();
-            var field = Playfield();
-            const float edge = 12;
-            if (field.HasPoint(mouse) && !OverRtsPanel(mouse))
-            {
-                x = mouse.X < field.Position.X + edge ? -1 : mouse.X >= field.End.X - edge ? 1 : 0;
-                z = mouse.Y < field.Position.Y + edge ? -1 : mouse.Y >= field.End.Y - edge ? 1 : 0;
-                speed = _edgeSpeed;
-            }
+            int id = window.GetWindowId();
+            var bounds = new Rect2I(DisplayServer.WindowGetPosition(id), DisplayServer.WindowGetSize(id));
+            var edge = WindowEdgeDirection(DisplayServer.MouseGetPosition(), bounds);
+            x = edge.X;
+            z = edge.Y;
+            speed = _edgeSpeed;
         }
         var direction = new Vector3(x, 0, z);
         if (direction != Vector3.Zero) MoveCamera(direction.Normalized() * _camera.Size * (float)delta * speed);
+    }
+
+    private static Vector2I WindowEdgeDirection(Vector2I mouse, Rect2I bounds)
+    {
+        const int edge = 12;
+        return new(
+            mouse.X < bounds.Position.X + edge ? -1 : mouse.X >= bounds.End.X - edge ? 1 : 0,
+            mouse.Y < bounds.Position.Y + edge ? -1 : mouse.Y >= bounds.End.Y - edge ? 1 : 0);
     }
 
     private void MoveCamera(Vector3 offset)

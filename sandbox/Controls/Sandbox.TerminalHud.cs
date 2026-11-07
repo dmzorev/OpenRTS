@@ -19,6 +19,9 @@ public partial class Sandbox
     private ProgressBar? _terminalHealth;
     private Control? _matchMenu;
     private Button? _layoutButton;
+    private CheckButton? _fullscreenButton;
+    private bool _exclusiveFullscreen, _windowedBorderless;
+    private Window.ModeEnum _windowedMode = Window.ModeEnum.Windowed;
     private bool _rightHud = true, _edgeScroll = true, _allHealth, _pauseBeforeMenu, _focusStartingBase;
     private float _edgeSpeed = 0.7f;
 
@@ -96,6 +99,8 @@ public partial class Sandbox
             _edgeScroll = (bool)settings.GetValue("camera", "edge_scroll", true);
             _edgeSpeed = Mathf.Clamp((float)settings.GetValue("camera", "edge_speed", 0.7f), 0.2f, 1.4f);
             _allHealth = (bool)settings.GetValue("hud", "all_health", false);
+            if ((bool)settings.GetValue("display", "exclusive_fullscreen", false))
+                SetTerminalFullscreen(true, save: false);
         }
 
         var layer = new CanvasLayer { Layer = 2 };
@@ -198,7 +203,28 @@ public partial class Sandbox
         settings.SetValue("hud", "all_health", _allHealth);
         settings.SetValue("camera", "edge_scroll", _edgeScroll);
         settings.SetValue("camera", "edge_speed", _edgeSpeed);
+        settings.SetValue("display", "exclusive_fullscreen", _exclusiveFullscreen);
         if (settings.Save(TerminalSettingsPath) != Error.Ok) GD.PushWarning("Не удалось сохранить настройки HUD.");
+    }
+
+    private void SetTerminalFullscreen(bool enabled, bool save = true)
+    {
+        if (_exclusiveFullscreen == enabled || DisplayServer.GetName() == "headless") return;
+        var window = GetWindow();
+        if (enabled)
+        {
+            _windowedMode = window.Mode == Window.ModeEnum.Maximized ? Window.ModeEnum.Maximized : Window.ModeEnum.Windowed;
+            _windowedBorderless = window.Mode == Window.ModeEnum.Windowed && window.Borderless;
+            window.Mode = Window.ModeEnum.ExclusiveFullscreen;
+        }
+        else
+        {
+            window.Mode = _windowedMode;
+            window.Borderless = _windowedBorderless;
+        }
+        _exclusiveFullscreen = enabled;
+        _fullscreenButton?.SetPressedNoSignal(enabled);
+        if (save) SaveTerminalSettings();
     }
 
     private void AddMatchMenu()
@@ -218,6 +244,13 @@ public partial class Sandbox
         menu.CustomMinimumSize = new(280, 0);
         menu.AddChild(TerminalButton("Продолжить", "Esc", ToggleMatchMenu));
         menu.AddChild(TerminalButton("Сменить расположение панели", "F10", ToggleTerminalLayout));
+        _fullscreenButton = new CheckButton
+        {
+            Text = "Полноэкранный режим", TooltipText = "F11", ButtonPressed = _exclusiveFullscreen,
+            FocusMode = Control.FocusModeEnum.None
+        };
+        _fullscreenButton.Toggled += enabled => SetTerminalFullscreen(enabled);
+        menu.AddChild(_fullscreenButton);
         var edge = new CheckButton { Text = "Прокрутка у края", ButtonPressed = _edgeScroll, FocusMode = Control.FocusModeEnum.None };
         edge.Toggled += enabled => { _edgeScroll = enabled; SaveTerminalSettings(); };
         menu.AddChild(edge);

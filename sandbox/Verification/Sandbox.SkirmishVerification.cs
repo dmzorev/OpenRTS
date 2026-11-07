@@ -18,6 +18,11 @@ public partial class Sandbox
             CheckSkirmish(frame.Poses.Length == 12 && frame.Players.Length == 3, "Skirmish players/objects not initialized");
             CheckSkirmish(frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 5000), "Initial funds wrong");
             CheckSkirmish(_rtsOverlay!.HealthBars.Count == 1, "Selected base has no world health bar");
+            var window = new Rect2I(-1200, 100, 960, 600);
+            CheckSkirmish(WindowEdgeDirection(new(-241, 400), window) == Vector2I.Right &&
+                WindowEdgeDirection(new(-200, 750), window) == new Vector2I(1, 1) &&
+                WindowEdgeDirection(new(-1300, 50), window) == new Vector2I(-1, -1) &&
+                WindowEdgeDirection(new(-500, 550), window) == Vector2I.Zero, "Edge scroll ignored window bounds or an outside pointer");
             var radarCenter = _minimap!.GetGlobalRect().GetCenter();
             foreach (bool pressed in new[] { true, false })
                 GetViewport().PushInput(new InputEventMouseButton { Position = radarCenter, ButtonIndex = MouseButton.Left, Pressed = pressed }, inLocalCoords: true);
