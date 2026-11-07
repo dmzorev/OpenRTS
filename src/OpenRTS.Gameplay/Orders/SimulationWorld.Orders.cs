@@ -46,7 +46,7 @@ public sealed partial class SimulationWorld
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
         if ((ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0 ||
-            order.Kind == UnitActionKind.Build && !CanBuild(index, order.Target))
+            order.Kind == UnitActionKind.Build && _construction?.CanBuild(entity, order.Target) != true)
         {
             _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
             return false;
@@ -91,7 +91,7 @@ public sealed partial class SimulationWorld
     }
     private void UpdateOrders()
     {
-        BeginConstructionOrders();
+        _construction?.BeginOrders();
         EnsureMovementOrder();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
@@ -108,7 +108,7 @@ public sealed partial class SimulationWorld
             if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { UpdateEnter(i, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { UpdateUnload(i, entityOrders.ActiveOrder.Position); continue; }
-            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { UpdateBuildOrder(i, entityOrders.ActiveOrder); continue; }
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { _construction!.UpdateOrder(entity, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture) { _capture!.Advance(entity, Tick); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Ability) { UpdateAbilityOrder(i); continue; }
             bool repair = entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Repair;

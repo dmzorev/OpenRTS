@@ -2,17 +2,19 @@ using System.Security.Cryptography;
 using System.Text;
 using Frent;
 using OpenRTS.Core.Capture;
+using OpenRTS.Core.Construction;
 using OpenRTS.Core.Production;
 using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld
+public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld, IConstructionWorld
 {
     private readonly UnitDefinition[] _types;
     private readonly GameplayMechanics _mechanics;
     private readonly CaptureSystem? _capture;
+    private readonly ConstructionSystem? _construction;
     private readonly IEndOfTickRule? _endOfTick;
     private readonly IGridPathfinder? _navigation;
     private readonly MotionIndex? _motion;
@@ -92,7 +94,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (mechanics.Capture is { } capture && (usesCapture || !ReferenceEquals(capture, GameplayMechanics.BuiltInCapture)))
             _capture = new(this, capture.Create());
         if (usesTransport || !ReferenceEquals(mechanics.Transport, GameplayMechanics.BuiltInTransport)) _transport = mechanics.Transport?.Create();
-        if (usesConstruction || !ReferenceEquals(mechanics.Construction, GameplayMechanics.BuiltInConstruction)) _construction = mechanics.Construction?.Create();
+        if (mechanics.Construction is { } construction && (usesConstruction || !ReferenceEquals(construction, GameplayMechanics.BuiltInConstruction)))
+            _construction = new(this, construction.Create());
         _endOfTick = mechanics.EndOfTick?.Create();
     }
 
@@ -129,7 +132,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_navigation is not null) UpdateNavigation(cancellationToken);
         else UpdateDirectMovement();
         UpdateWeapons();
-        UpdateConstruction();
+        _construction?.Advance();
         UpdateIncome();
         UpdateProduction();
         UpdatePresentation();
@@ -184,7 +187,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             var type = _types[entityIdentity.Type];
             uint states = entityPresentation.VisualStates;
             var carrier = ProjectTransport(entity, type, ref states, out var spatial);
-            var construction = ProjectConstruction(entity, type, ref states);
+            var construction = _construction?.Project(entity, type, ref states) ?? default;
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
                 states |= type.LowPowerVisualMask;
             states |= ProductionVisualStates(type, producer);
@@ -195,6 +198,16 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
             weaponOffset += entityCombat.Weapons.Length;
         }
+    }
+
+    public int ConstructionProjectCount => _construction?.ProjectCount ?? 0;
+
+    public void CopyConstructionProjects(Span<ConstructionProjectPose> destination)
+    {
+        ThrowIfDisposed();
+        if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
+        if (destination.Length < ConstructionProjectCount) throw new ArgumentException("Destination is too small.", nameof(destination));
+        _construction?.CopyProjects(destination);
     }
 
     public override SimulationReport Report()
@@ -225,7 +238,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
                 writer.Write(entityMotion.MovementRemainder);
                 WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity); WriteTransport(writer, entity);
-                WriteConstruction(writer, entity);
+                ConstructionSystem.WriteFoundation(_construction, writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -240,7 +253,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             }
             WriteProjectiles(writer); WriteProduction(writer);
             WritePlayers(writer);
-            WriteConstructionProjects(writer);
+            ConstructionSystem.WriteProjects(_construction, writer);
             writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
             _navigation?.WriteState(writer);
             writer.Write(_weighted is not null); _weighted?.WriteState(writer);
@@ -260,7 +273,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
         if (command.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite or CommandKind.CancelConstruction)
         {
-            ApplyConstruction(command);
+            ConstructionSystem.Apply(_construction, this, command);
             return;
         }
         if (command.Kind is CommandKind.Enter or CommandKind.Unload or CommandKind.UnloadAt)

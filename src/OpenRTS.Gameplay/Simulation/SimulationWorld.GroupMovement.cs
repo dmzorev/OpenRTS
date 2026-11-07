@@ -81,7 +81,7 @@ public sealed partial class SimulationWorld
 
     private void TryBulkStep()
     {
-        if (!_bulkAllowed || HasSiteReservations) return;
+        if (!_bulkAllowed || _construction?.HasReservations == true) return;
         var grid = _navigation!.Grid;
         int dx = 0, dy = 0, members = 0;
         Array.Clear(_cohort, 0, Count);

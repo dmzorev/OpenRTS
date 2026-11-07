@@ -48,5 +48,5 @@ public static class ObjectGeometry
         return best;
     }
     internal static WorldBox Box(BodyShape shape, WorldPosition position) => new(position.X - shape.HalfWidth, position.Y - shape.HalfHeight, position.X + shape.HalfWidth, position.Y + shape.HalfHeight);
-    private static long Squared(WorldPosition a, WorldPosition b) { long x = (long)a.X - b.X, y = (long)a.Y - b.Y; return x * x + y * y; }
+    internal static long Squared(WorldPosition a, WorldPosition b) { long x = (long)a.X - b.X, y = (long)a.Y - b.Y; return x * x + y * y; }
 }

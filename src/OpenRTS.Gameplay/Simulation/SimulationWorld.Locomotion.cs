@@ -41,9 +41,10 @@ public sealed partial class SimulationWorld
     private bool ClearTerrain(int index, WorldPosition from, WorldPosition to) =>
         ClearTerrain(_types[_entityHandles[index].Get<EntityIdentity>().Type], from, to);
     private bool ClearTerrain(UnitDefinition type, WorldPosition from, WorldPosition to) =>
-        TerrainGeometry.Clear(_navigation!.Grid, from, to, type.Body, _weighted is null ? null : type.Locomotor) && SiteMovementClear(from, to, type.Body);
+        TerrainGeometry.Clear(_navigation!.Grid, from, to, type.Body, _weighted is null ? null : type.Locomotor) &&
+        _construction?.SiteMovementClear(from, to, type.Body) != false;
     private bool StopAllowed(int unitType, WorldPosition position) =>
-        SiteStopClear(position, _types[unitType].Body) &&
+        _construction?.SiteStopClear(position, _types[unitType].Body) != false &&
         (_navigation is null ? _types[unitType].Locomotor.Rules[0].CanStop :
             TerrainGeometry.CanStop(_navigation.Grid, position, _types[unitType].Body, _types[unitType].Locomotor));
 
