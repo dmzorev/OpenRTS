@@ -36,6 +36,34 @@ internal static class MapChecks
             NavigationChecks.Check(poses[0].Presentation.Owner == 17 && poses[3].Presentation.Owner == 23 &&
                 poses[4].Current == new WorldPosition(64512, 41984), "Slots or reversed offsets were resolved incorrectly");
         });
+        test("Maps: both city maps support every start with either mode and allow open slots", () =>
+        {
+            foreach (string path in new[] { MapScenario.CrossroadsMap, MapScenario.RiversideMap })
+            {
+                var map = GameMap.Load(Read(path), catalog);
+                CheckCityStarts(map);
+                using var solo = MapScenario.Prepare(map, StartingSet.Load(Read(MapScenario.DefaultStartSet)), [map.Slots[^1]]).CreateWorld();
+                var poses = Poses(solo);
+                NavigationChecks.Check(solo.PlayerCount == 2 && poses.Count(p => p.Presentation.Owner == 1) == 2 &&
+                    poses.Any(p => p.Presentation.Owner == 1 && p.Current == map.StartPosition(map.Slots[^1])),
+                    "An unassigned start spawned a player or the assigned start moved.");
+                NavigationChecks.Check(poses.Any(p => p.Presentation.Owner == 0 && catalog.Units[p.UnitType].Id.StartsWith("civilian-", StringComparison.Ordinal)),
+                    "The map lacks neutral civilian buildings.");
+            }
+
+            void CheckCityStarts(GameMap map)
+            {
+                foreach (string path in new[] { MapScenario.DefaultStartSet, MapScenario.InfantryStartSet })
+                {
+                    var mode = StartingSet.Load(Read(path));
+                    using var world = MapScenario.Prepare(map, mode, map.Slots).CreateWorld();
+                    NavigationChecks.Check(world.PlayerCount == 5, "Four configured slots did not spawn four players.");
+                }
+                var standard = StartingSet.Load(Read(MapScenario.DefaultStartSet));
+                NavigationChecks.Reject<ContentException>(() => MapScenario.Prepare(map, standard, []));
+                NavigationChecks.Reject<ArgumentException>(() => MapScenario.Prepare(map, standard, [map.Slots[0], map.Slots[0]]));
+            }
+        });
         test("Maps: malformed files, slot assignments and late placement failures are rejected", () =>
         {
             var source = Read(fixturePath);

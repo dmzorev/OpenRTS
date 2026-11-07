@@ -19,6 +19,7 @@ public sealed class GameMap
     public NavigationGrid Grid { get; }
     public IReadOnlyList<string> Slots { get; }
     public IReadOnlyList<string> TerrainIds { get; }
+    public IEnumerable<WorldPosition> ObjectPositions => _objects.Select(obj => obj.Position);
 
     private GameMap(string id, bool skirmish, UnitCatalog catalog, Dictionary<string, int> types, NavigationGrid grid,
         string[] terrainIds, Dictionary<string, Slot> slots, Placed[] objects, Source source)
@@ -36,6 +37,12 @@ public sealed class GameMap
     }
 
     public string TerrainAt(int x, int y) => _catalog.Locomotion!.Terrains[Grid.TerrainAt(Grid.Index(new(x, y)))];
+
+    public WorldPosition StartPosition(string slot)
+    {
+        if (!IsSkirmish) throw new InvalidOperationException("Fixed placements have no start positions.");
+        return _slots[slot].Position;
+    }
 
     public static GameMap Load(ContentSource source, UnitCatalog catalog)
     {
@@ -161,6 +168,8 @@ public sealed class GameMap
         if (IsSkirmish != (startingSet is not null))
             throw new ContentException(_source, Id, IsSkirmish ? "Select a starting set." : "Fixture maps do not use starting sets.");
         var assigned = new Dictionary<string, PlayerDefinition>(assignments, StringComparer.Ordinal);
+        if (IsSkirmish && assigned.Count == 0)
+            throw new ContentException(_source, Id, "Assign at least one player to a start.");
         foreach (string slot in assigned.Keys)
             if (!_slots.ContainsKey(slot)) throw new ContentException(_source, Id, $"Unknown player slot '{slot}'.");
 
@@ -171,7 +180,10 @@ public sealed class GameMap
         {
             string path = $"{Id}.{slot}";
             if (!assigned.TryGetValue(slot, out var player))
+            {
+                if (IsSkirmish) continue;
                 throw new ContentException(_source, path, "Missing player assignment.");
+            }
             if (player.Id == 0 || !playerIds.Add(player.Id) || string.IsNullOrWhiteSpace(player.Name)
                 || player.Credits is < 0 or > SimulationWorld.MaximumCredits)
                 throw new ContentException(_source, path, "Expected a unique nonzero player ID, a name and bounded credits.");

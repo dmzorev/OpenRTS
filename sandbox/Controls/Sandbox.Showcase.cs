@@ -27,7 +27,14 @@ public partial class Sandbox
         string selection = "Выберите юнита";
         if (Selected() is { } pose)
         {
-            selection = (_selection.Count > 1 ? $"Выбрано: {_selection.Count} · " : "") + (pose.Presentation.Owner == 1 ? "Синяя команда" : pose.Presentation.Owner == 0 ? "Нейтральный объект" : "Красная команда") + " · " + _catalog!.Presentations[pose.UnitType].Name;
+            uint owner = pose.Presentation.Owner;
+            string side = owner switch
+            {
+                0 => "Нейтральный объект",
+                <= MapScenario.MaximumPlayers => MapScenario.PlayerName((int)owner - 1),
+                _ => $"Игрок {owner}"
+            };
+            selection = (_selection.Count > 1 ? $"Выбрано: {_selection.Count} · " : "") + side + " · " + _catalog!.Presentations[pose.UnitType].Name;
             var type = _catalog.Units[pose.UnitType];
             if (_displayGrid is { } grid && _catalog.Locomotion is { } locomotion)
             {

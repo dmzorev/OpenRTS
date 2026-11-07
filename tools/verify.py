@@ -144,6 +144,11 @@ def main():
         raise RuntimeError("Skirmish resource/capture/production journal differs by workers")
     print("PASS Players, construction UI, capture cursor, dual-player controls and 1800-tick skirmish journal", flush=True)
 
+    setup = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-match-setup"])
+    if "ERROR:" in setup.stderr or "OPENRTS_MATCH_SETUP:PASS" not in setup.stdout:
+        raise RuntimeError("Match setup UI failed:\n" + setup.stdout + setup.stderr)
+    print("PASS match setup UI and selected map/mode/player count/start assignments", flush=True)
+
     for file, count, extra in [
         ("fixture.yaml", 3, []),
         ("skirmish.yaml", 14, ["--start-set=content/start-sets/infantry.yaml"]),

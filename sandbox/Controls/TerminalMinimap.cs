@@ -21,11 +21,7 @@ public partial class TerminalMinimap : Control
         if (changed)
         {
             _grid = grid;
-            using var image = Image.CreateEmpty(grid.Width, grid.Height, false, Image.Format.Rgb8);
-            for (int y = 0; y < grid.Height; y++)
-            for (int x = 0; x < grid.Width; x++)
-                image.SetPixel(x, y, TerrainColor(locomotion.Terrains[grid.TerrainAt(y * grid.Width + x)]));
-            _terrain = ImageTexture.CreateFromImage(image);
+            _terrain = CreateTerrainTexture(grid, locomotion);
         }
         if (changed || _tick != tick)
         {
@@ -33,10 +29,7 @@ public partial class TerminalMinimap : Control
             _markers.Clear();
             foreach (var pose in poses)
             {
-                var color = pose.Presentation.Owner switch
-                {
-                    1 => new Color("#70baff"), 2 => new Color("#ff6651"), _ => new Color("#c2bea4")
-                };
+                var color = Sandbox.TeamMarkerColor(pose.Presentation.Owner);
                 _markers.Add((new Vector2(pose.Current.X, pose.Current.Y) / WorldPosition.UnitsPerCell, color,
                     pose.Presentation.Owner == 0));
             }
@@ -44,6 +37,15 @@ public partial class TerminalMinimap : Control
         }
         if (changed || _camera != camera) QueueRedraw();
         _camera = camera;
+    }
+
+    internal static Texture2D CreateTerrainTexture(NavigationGrid grid, LocomotionCatalog locomotion)
+    {
+        using var image = Image.CreateEmpty(grid.Width, grid.Height, false, Image.Format.Rgb8);
+        for (int y = 0; y < grid.Height; y++)
+        for (int x = 0; x < grid.Width; x++)
+            image.SetPixel(x, y, TerrainColor(locomotion.Terrains[grid.TerrainAt(y * grid.Width + x)]));
+        return ImageTexture.CreateFromImage(image);
     }
 
     private static Color TerrainColor(string id) => id switch

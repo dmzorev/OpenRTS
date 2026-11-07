@@ -68,7 +68,7 @@ public partial class Sandbox
     }
     private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f));
     private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
-    private bool Controls(uint owner) => owner == 1 || _mapMatch is not null && owner == 2;
+    private bool Controls(uint owner) => owner == 1 || _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
     private uint CommandOwner => Selected()?.Presentation.Owner ?? 1;
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
     private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;
@@ -366,8 +366,14 @@ public partial class Sandbox
             _ringBuffer[at + 10] = ((type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f + 0.2f) / 0.88f; _ringBuffer[at + 5] = 1;
             _ringBuffer[at + 3] = (p.Previous.X + ((long)p.Current.X - p.Previous.X) * alpha) / 1024;
             _ringBuffer[at + 7] = 0.015f; _ringBuffer[at + 11] = (p.Previous.Y + ((long)p.Current.Y - p.Previous.Y) * alpha) / 1024;
-            _ringBuffer[at + 12] = p.Presentation.Owner == 1 ? 0.6f : 1;
-            _ringBuffer[at + 13] = p.Presentation.Owner == 1 ? 1 : 0.35f; _ringBuffer[at + 14] = 0.6f; _ringBuffer[at + 15] = 1;
+            var color = p.Presentation.Owner switch
+            {
+                1 => new Color(0.6f, 1, 0.6f),
+                3 or 4 => TeamMarkerColor(p.Presentation.Owner),
+                _ => new Color(1, 0.35f, 0.6f)
+            };
+            _ringBuffer[at + 12] = color.R; _ringBuffer[at + 13] = color.G;
+            _ringBuffer[at + 14] = color.B; _ringBuffer[at + 15] = 1;
         }
         _selectionRing.Visible = ring > 0; _selectionRing.Multimesh.VisibleInstanceCount = ring;
         if (ring > 0) _selectionRing.Multimesh.Buffer = _ringBuffer;

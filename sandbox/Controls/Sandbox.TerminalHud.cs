@@ -29,7 +29,7 @@ public partial class Sandbox
     private bool DiagnosticsVisible => _terminal is null || _diagnostics?.Visible == true;
     private bool OverRtsPanel(Vector2 pixel) => _rtsPanels.Exists(panel => panel.IsVisibleInTree() && panel.GetGlobalRect().HasPoint(pixel));
 
-    private static StyleBoxFlat TerminalBox(Color background, Color border, int padding = 6) => new()
+    internal static StyleBoxFlat TerminalBox(Color background, Color border, int padding = 6) => new()
     {
         BgColor = background, BorderColor = border,
         BorderWidthTop = 1, BorderWidthBottom = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
@@ -53,7 +53,7 @@ public partial class Sandbox
         return theme;
     }
 
-    private static Label TerminalHeading(string text)
+    internal static Label TerminalHeading(string text)
     {
         var heading = new Label { Text = text };
         heading.AddThemeColorOverride("font_color", TerminalAmber);
@@ -93,7 +93,7 @@ public partial class Sandbox
     private void AddTerminalHud()
     {
         var settings = new ConfigFile();
-        if (!_verifySkirmish && settings.Load(TerminalSettingsPath) == Error.Ok)
+        if (!_verifySkirmish && !_verifyMatchSetup && settings.Load(TerminalSettingsPath) == Error.Ok)
         {
             _rightHud = (bool)settings.GetValue("hud", "right", true);
             _edgeScroll = (bool)settings.GetValue("camera", "edge_scroll", true);
@@ -263,6 +263,8 @@ public partial class Sandbox
         menu.AddChild(health);
         menu.AddChild(TerminalButton("Консоль разработчика", "F12", () => { ToggleMatchMenu(); _diagnostics!.Visible = !_diagnostics.Visible; }));
         menu.AddChild(TerminalButton("Перезапустить матч", "Сбросить текущий матч", () => { ToggleMatchMenu(); StartSession(); }));
+        if (_startedFromSetup)
+            menu.AddChild(TerminalButton("Новый матч", "Вернуться к выбору карты и игроков", () => GetTree().CallDeferred(SceneTree.MethodName.ReloadCurrentScene)));
         menu.AddChild(TerminalButton("Выйти", "Закрыть OpenRTS", () => GetTree().Quit()));
     }
 

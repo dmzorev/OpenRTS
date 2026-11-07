@@ -54,6 +54,7 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--map=", StringComparison.Ordinal) && arg.Length > 6) { mapPath = arg[6..]; continue; }
                 if (arg.StartsWith("--start-set=", StringComparison.Ordinal) && arg.Length > 12) { startSetPath = arg[12..]; continue; }
                 if (arg == "--skirmish") { _skirmish = _buildings = _showcase = true; continue; }
+                if (arg == "--verify-match-setup") { _verifyMatchSetup = true; continue; }
                 if (arg == "--verify-skirmish") { _verifySkirmish = _skirmish = _buildings = _showcase = true; _paused = true; continue; }
                 if (arg == "--buildings") { _buildings = _showcase = true; continue; }
                 if (arg == "--verify-buildings") { _verifyBuildings = _buildings = _showcase = true; _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; continue; }
@@ -70,12 +71,17 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --skirmish, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --skirmish, --verify-match-setup, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
             if (mapPath is not null && (_showcase || _navigation || _verifyControls || verify))
                 throw new ArgumentException("--map выбирает отдельный сценарий.");
             if (mapPath is not null) _buildings = _showcase = true;
-            if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)) && !_showcase) _skirmish = _buildings = _showcase = true;
+            bool defaultSkirmish = !_navigation && !_verifySimulation && !_verifyControls && !verify && !_showcase &&
+                !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal));
+            bool showSetup = defaultSkirmish && startSetPath is null;
+            if (_verifyMatchSetup && !showSetup)
+                throw new ArgumentException("--verify-match-setup требует запуск через экран настройки.");
+            if (defaultSkirmish) _skirmish = _buildings = _showcase = true;
             if (_showcase && _navigation) throw new ArgumentException("Полигон и диагностическая навигация — отдельные режимы.");
             if (_showcase && _count != ShowcaseScenario.UnitCount && Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)))
                 throw new ArgumentException("Полигон содержит 10 юнитов; для нагрузок используйте --navigation --count=... .");
@@ -93,6 +99,11 @@ public partial class Sandbox : Node3D
             _catalog = UnitCatalog.Load(unitSources,
                 LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]),
                 WeaponCatalog.Load([new("weapons.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/weapons.yaml")))]));
+            if (showSetup)
+            {
+                OpenMatchSetup(_catalog);
+                return;
+            }
             if (_skirmish || mapPath is not null)
             {
                 _mapMatch = MapScenario.Load(_catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath);
@@ -110,43 +121,48 @@ public partial class Sandbox : Node3D
             }
             else
             {
-                if (_showcase)
-                {
-                    using var models = Godot.FileAccess.Open("res://content/models.yaml", Godot.FileAccess.ModeFlags.Read)
-                        ?? throw new InvalidOperationException("Не удалось открыть models.yaml.");
-                    var modelSources = new System.Collections.Generic.List<ContentSource> { new("models.yaml", models.GetAsText()) };
-                    if (_buildings) modelSources.Add(new("buildings-models.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/buildings-models.yaml"))));
-                    _modelCatalog = ModelCatalog.Load(modelSources);
-                    _sprites = new(_catalog, _modelCatalog, TeamColor);
-                    _combatEffects = new(_catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
-                    AddChild(_combatEffects.Node);
-                    Texture2D TextureFor(string id) => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres");
-                    var map = _mapMatch?.Map;
-                    var view = map is not null
-                        ? new TerrainView(map.Grid.Width, map.Grid.Height, 1, map.TerrainIds, map.TerrainAt, TextureFor)
-                        : new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width,
-                            _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize,
-                            ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, TextureFor);
-                    AddChild(view.Node);
-                    AddChild(_sprites.Node);
-                    CreateSelectionRing();
-                }
-                else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
-                if (_navigation)
-                {
-                    _obstacles = new ObstacleView();
-                    AddChild(_obstacles.Node);
-                }
-                BuildScene(_count, _catalog);
+                BuildBattleScene(_catalog);
                 StartSession();
             }
         }
         catch (Exception error)
         {
             GD.PushError(error.ToString());
-            if (verify || _verifySimulation || _verifyControls || _verifySkirmish || _verifyActions) GetTree().Quit(1);
+            if (verify || _verifySimulation || _verifyControls || _verifySkirmish || _verifyActions || _verifyMatchSetup) GetTree().Quit(1);
             else AddOverlay("Ошибка загрузки контента\n" + error.Message);
         }
+    }
+
+    private void BuildBattleScene(UnitCatalog catalog)
+    {
+        if (_showcase)
+        {
+            using var models = Godot.FileAccess.Open("res://content/models.yaml", Godot.FileAccess.ModeFlags.Read)
+                ?? throw new InvalidOperationException("Не удалось открыть models.yaml.");
+            var modelSources = new System.Collections.Generic.List<ContentSource> { new("models.yaml", models.GetAsText()) };
+            if (_buildings) modelSources.Add(new("buildings-models.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/buildings-models.yaml"))));
+            _modelCatalog = ModelCatalog.Load(modelSources);
+            _sprites = new(catalog, _modelCatalog, TeamColor);
+            _combatEffects = new(catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
+            AddChild(_combatEffects.Node);
+            Texture2D TextureFor(string id) => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres");
+            var map = _mapMatch?.Map;
+            var view = map is not null
+                ? new TerrainView(map.Grid.Width, map.Grid.Height, 1, map.TerrainIds, map.TerrainAt, TextureFor)
+                : new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width,
+                    _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize,
+                    ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, TextureFor);
+            AddChild(view.Node);
+            AddChild(_sprites.Node);
+            CreateSelectionRing();
+        }
+        else { _view = new WorldView(catalog.Units[0], _count); AddChild(_view.Node); }
+        if (_navigation)
+        {
+            _obstacles = new ObstacleView();
+            AddChild(_obstacles.Node);
+        }
+        BuildScene(_count, catalog);
     }
 
     private static ContentSource ReadMapSource(string path)
@@ -163,7 +179,7 @@ public partial class Sandbox : Node3D
         _session?.Dispose();
         _session = null;
         _leftGoal = false;
-        if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _armedCustom = null; _productionPlacement = null; _placing = false; _panelRevision = -1; _panelTick = -1; _panelDirty = true; _pointerDown = false; }
+        if (_showcase) { _selection.Reset(); _selected = _skirmish ? default : new(1); _armedAction = null; _armedCustom = null; _productionPlacement = null; _placing = false; _panelRevision = -1; _panelTick = -1; _panelDirty = true; _pointerDown = false; }
         _notice = "";
         _focusStartingBase = _terminal is not null;
         _sitePlacement = null; _selectedProject = default; _visibleProjects = []; _visibleProjectsTick = -1; _constructionViewer = 1;
@@ -175,13 +191,27 @@ public partial class Sandbox : Node3D
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
-            playbackSpeed: _verifySimulation ? 1 : _playbackSpeed, startPaused: !_verifySimulation && _paused);
+            playbackSpeed: _verifySimulation ? 1 : _playbackSpeed, startPaused: !_verifySimulation && (_paused || _matchSetup is not null));
     }
 
-    private static Color TeamColor(uint owner) => owner switch { 1 => new(0.14f, 0.52f, 1), 2 => new(1, 0.20f, 0.16f), _ => new(0.72f, 0.78f, 0.80f) };
+    private static Color TeamColor(uint owner) => owner switch
+    {
+        1 => new(0.14f, 0.52f, 1), 2 => new(1, 0.20f, 0.16f), 3 => new("#66bf53"), 4 => new("#ffc149"),
+        _ => new(0.72f, 0.78f, 0.80f)
+    };
+
+    internal static Color TeamMarkerColor(uint owner) => owner switch
+    {
+        1 => new("#70baff"), 2 => new("#ff6651"), 0 => new("#c2bea4"), _ => TeamColor(owner)
+    };
 
     public override void _Process(double delta)
     {
+        if (_matchSetup is not null)
+        {
+            UpdateMatchSetup();
+            return;
+        }
         if (!_verifySimulation) PanCamera(delta);
         if (_session is null || _view is null && _sprites is null || _verificationDone) return;
         try
@@ -204,6 +234,13 @@ public partial class Sandbox : Node3D
                     if (pose.Carrier.Value == 0) _displayPoses[_displayCount++] = pose;
                     else { _storedPoses.Add(pose); _loadedTransports.Add(pose.Carrier); }
                 }
+                if (_focusStartingBase && _selected.Value == 0)
+                    for (int i = 0; i < _displayCount; i++)
+                        if (_displayPoses[i].Presentation.Owner == 1)
+                        {
+                            _selected = _displayPoses[i].Id;
+                            break;
+                        }
                 RefreshSelection(); UpdateConstructionView(frame); UpdateCommandPanel(frame); UpdateSelection(alpha); UpdateRtsCursor(); if (_buildings) UpdateFootprintPreview();
             }
             _obstacles?.Apply(frame.Grid);
@@ -234,6 +271,7 @@ public partial class Sandbox : Node3D
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             UpdateTerminal(frame, alpha);
+            if (_verifyMatchSetup) { VerifyConfiguredMatch(frame); return; }
             if (_verifySkirmish) { VerifySkirmish(frame); return; }
             if (_verifyActions) { VerifyActions(frame); return; }
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
@@ -313,7 +351,7 @@ public partial class Sandbox : Node3D
             GD.PushError(error.ToString());
             _session.Dispose();
             _session = null;
-            if (_verifySimulation || _verifyControls || _verifySkirmish || _verifyActions) GetTree().Quit(1);
+            if (_verifySimulation || _verifyControls || _verifySkirmish || _verifyActions || _verifyMatchSetup) GetTree().Quit(1);
             else if (_label is not null)
             {
                 if (_diagnostics is not null) _diagnostics.Show();
@@ -324,7 +362,7 @@ public partial class Sandbox : Node3D
 
     public override void _UnhandledInput(InputEvent input)
     {
-        if (_verifySimulation || _session is null) return;
+        if (_verifySimulation || _session is null || _matchSetup is not null) return;
         try
         {
             if (input is InputEventKey { Pressed: true, Echo: false } key)
