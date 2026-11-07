@@ -6,30 +6,18 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private SharedRouteTree? _routeTree;
     private bool _bulkAllowed;
-    private int _treeRoot;
     private bool[] _handled = [], _cohort = [];
     private EntityId[] _cohortIds = [];
     private WorldPosition[] _groupSlots = [];
     public bool GroupTranslating { get; private set; }
-    public int GroupRouteBuilds { get; private set; }
-    public int GroupRouteVisitedCells { get; private set; }
+    public int GroupRouteBuilds => _navigation?.GroupBuilds ?? 0;
+    public int GroupRouteVisitedCells => _navigation?.GroupVisitedCells ?? 0;
     public double GroupRouteBuildMilliseconds { get; private set; }
     public int NavigationGoalExchanges { get; private set; }
     public int NavigationQueueWaitingCount { get; private set; }
     public int GroupSlotCount => _groupSlots.Length;
 
-    private static WorldPosition[] RoutePoints(int[] cells, NavigationGrid grid, WorldPosition goal)
-    {
-        if (cells.Length == 0) return [goal];
-        var points = cells.Select(c => grid.Center(c, goal.Elevation)).ToArray(); points[^1] = goal; return points;
-    }
-    private WorldPosition[] WeightedPoints(int[] cells, WorldPosition goal)
-    {
-        if (cells.Length == 0) return [goal];
-        var points = cells.Select(c => _weighted!.Point(c) with { Elevation = goal.Elevation }).ToArray(); points[^1] = goal; return points;
-    }
     private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
     {
         bool Eligible(int i) => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
@@ -64,8 +52,9 @@ public sealed partial class SimulationWorld
         slots = GroupDestinations.Slots(grid, destination, members.Length, components.Keys.ToArray(), Valid);
         if (slots is null) { Reject(); return; }
         if (destination != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, default, destination));
-        _routeTree = null; _weightedTrees.Clear(); _bulkAllowed = _weighted is null;
-        _treeRoot = grid.CellAt(slots.OrderBy(point => DistanceSquared(point, destination)).ThenBy(point => point.Y).ThenBy(point => point.X).First());
+        _bulkAllowed = !_navigation.UsesWeightedRoutes;
+        int root = grid.CellAt(slots.OrderBy(point => DistanceSquared(point, destination)).ThenBy(point => point.Y).ThenBy(point => point.X).First());
+        _navigation.ResetGroup(root);
         long group = checked(++_orderGroupSequence);
         GroupDestinations.Assign(assignments, slots, (index, goal) => IssueOrder(index, new(action, goal, Group: true, Cohort: group), queued));
         Array.Sort(slots, (a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X)); _groupSlots = slots;
@@ -151,14 +140,9 @@ public sealed partial class SimulationWorld
                 entityNavigation.Route = new([entityMotion.Target], grid.Revision);
             else
             {
-                if (_routeTree is null || !ReferenceEquals(_routeTree.Grid, grid))
-                {
-                    _routeTree = new(grid, _treeRoot, token);
-                    GroupRouteBuilds++; GroupRouteVisitedCells += _routeTree.VisitedCells;
-                }
-                var route = _routeTree.Route(grid.CellAt(entitySpatial.Position), entityNavigation.GoalCell, token);
+                var route = _navigation.GroupRoute(grid.CellAt(entitySpatial.Position), entityNavigation.GoalCell, entityMotion.Target, token);
                 if (route is null) RejectRoute(ref entity);
-                else entityNavigation.Route = new(RoutePoints(route, grid, entityMotion.Target), grid.Revision);
+                else entityNavigation.Route = new(route, grid.Revision);
             }
         }
         GroupRouteBuildMilliseconds += Stopwatch.GetElapsedTime(started).TotalMilliseconds;
@@ -203,9 +187,7 @@ public sealed partial class SimulationWorld
     private void WriteGroupState(BinaryWriter writer)
     {
         writer.Write(MotionIndex.BodyRadius); writer.Write(_bulkAllowed);
-        writer.Write(_treeRoot); writer.Write(_routeTree?.Grid.Revision ?? -1);
-        writer.Write(_weightedTrees.Count);
-        foreach (var pair in _weightedTrees.OrderBy(p => p.Key)) { writer.Write(pair.Key); writer.Write(pair.Value.Grid.Revision); }
+        _navigation!.WriteGroupState(writer);
         foreach (var entity in _entityHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<EntityIdentity>().Id.Value))
         {
             if (entity.Get<NavigationAgentState>().Route is { } route)

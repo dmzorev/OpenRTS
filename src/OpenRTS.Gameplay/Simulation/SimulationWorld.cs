@@ -22,7 +22,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     private readonly ConstructionSystem? _construction;
     private readonly TransportSystem? _transport;
     private readonly IEndOfTickRule? _endOfTick;
-    private readonly IGridPathfinder? _navigation;
+    private readonly TerrainRoutePlanner? _navigation;
     private readonly MotionIndex? _motion;
     private readonly MotionIndex? _combatIndex;
     private long _orderGroupSequence;
@@ -34,9 +34,9 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     public NavigationGrid? BaseNavigationGrid => _baseGrid;
     public NavigationGrid? NavigationGrid => _navigation?.Grid;
     public int NavigationWaitingCount { get; private set; }
-    public int NavigationBuiltFields => _weighted?.Builds ?? _navigation?.LastBuildCount ?? 0;
-    public int NavigationVisitedCells => _weighted?.Visited ?? _navigation?.LastVisitedCells ?? 0;
-    public double NavigationBuildMilliseconds => _weighted?.Milliseconds ?? _navigation?.LastBuildMilliseconds ?? 0;
+    public int NavigationBuiltFields => _navigation?.BuiltFields ?? 0;
+    public int NavigationVisitedCells => _navigation?.VisitedCells ?? 0;
+    public double NavigationBuildMilliseconds => _navigation?.BuildMilliseconds ?? 0;
     public int MovingCount => CountMoving();
 
     public SimulationWorld(IEnumerable<UnitDefinition> unitTypes, int width, int depth, ulong seed = 1,
@@ -80,6 +80,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         bool usesConstruction = _types.Any(type => type.ConstructionRange > 0);
         if (usesConstruction && mechanics.Construction is null)
             throw new ArgumentException("Unit definitions require a construction mechanic.", nameof(mechanics));
+        if (mechanics.GridPathfinder is not null && navigationGrid is null)
+            throw new ArgumentException("A registered grid pathfinder requires a navigation grid.", nameof(navigationGrid));
         _economy = new(players, StorageGate, IsConstructing);
         _buildRecipes = new(_types);
         _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);
@@ -91,8 +93,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (width != (long)navigationGrid.Width * navigationGrid.CellSize || depth != (long)navigationGrid.Height * navigationGrid.CellSize)
                 throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
             _baseGrid = navigationGrid;
-            _navigation = new GridNavigator(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
-            InitializeLocomotion(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
+            _navigation = new(navigationGrid, _types, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs, mechanics.GridPathfinder);
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
         }
@@ -263,10 +264,10 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             WritePlayers(writer);
             ConstructionSystem.WriteProjects(_construction, writer);
             writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
-            _navigation?.WriteState(writer);
-            writer.Write(_weighted is not null); _weighted?.WriteState(writer);
-            if (_navigation is not null)
+            if (_navigation is null) writer.Write(false);
+            else
             {
+                _navigation.WriteState(writer);
                 writer.Write(_groupSlots.Length);
                 foreach (var point in _groupSlots) { writer.Write(point.X); writer.Write(point.Y); }
                 WriteGroupState(writer);

@@ -68,7 +68,8 @@ public sealed partial class SimulationWorld
     private void CommitGrid(NavigationGrid candidate)
     {
         if (ReferenceEquals(candidate, _navigation!.Grid)) return;
-        _navigation.SetGrid(candidate); _weighted?.SetGrid(candidate); _plainResolver = null; _routeTree = null; _weightedTrees.Clear(); _bulkAllowed = false;
+        _navigation.SetGrid(candidate);
+        _bulkAllowed = false;
         // Local paths and exact destinations are also invalidated, not only shared global fields.
         for (int i = 0; i < Count; i++)
         {

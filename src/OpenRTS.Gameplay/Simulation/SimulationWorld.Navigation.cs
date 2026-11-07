@@ -19,9 +19,10 @@ public sealed partial class SimulationWorld
         { Array.Resize(ref _handled, _entityHandles.Length); Array.Resize(ref _cohort, _entityHandles.Length); Array.Resize(ref _cohortIds, _entityHandles.Length); }
         Array.Clear(_handled, 0, Count);
         NavigationWaitingCount = NavigationLocalSearches = NavigationYields = NavigationGoalExchanges = NavigationQueueWaitingCount = 0;
-        GroupRouteBuilds = GroupRouteVisitedCells = 0; GroupRouteBuildMilliseconds = 0; GroupTranslating = false;
+        _navigation.ResetGroupMetrics();
+        GroupRouteBuildMilliseconds = 0; GroupTranslating = false;
         TryBulkStep();
-        if (_weighted is not null) PrepareWeightedRoutes(token);
+        if (_navigation.UsesWeightedRoutes) PrepareWeightedRoutes(token);
         else { PrepareGroupRoutes(token); PreparePointRoutes(token); }
         for (int order = 0; order < Count; order++)
         {
@@ -129,7 +130,7 @@ public sealed partial class SimulationWorld
                 entityNavigation.Route = new([entityMotion.Target], grid.Revision);
             else _navigationGoals[goals++] = entityNavigation.GoalCell;
         }
-        _navigation.Prepare(_navigationGoals.AsSpan(0, goals), token);
+        _navigation.PreparePoints(_navigationGoals.AsSpan(0, goals), token);
         for (int i = 0; i < Count; i++)
         {
             token.ThrowIfCancellationRequested();
@@ -139,27 +140,9 @@ public sealed partial class SimulationWorld
             if (!entityMotion.Moving || entityNavigation.GroupMember || entityNavigation.YieldFor.Value != 0 ||
                 entityNavigation.Route is { } existing && existing.Revision == grid.Revision) continue;
             int start = grid.CellAt(entity.Get<SpatialState>().Position);
-            if (!_navigation.TryDistance(entityNavigation.GoalCell, start, out int distance)) continue;
-            if (distance < 0) { RejectRoute(ref entity); continue; }
-            var turns = new List<int> { start };
-            int cell = start, lastDirection = 0;
-            while (cell != entityNavigation.GoalCell)
-            {
-                if ((distance & 1023) == 0) token.ThrowIfCancellationRequested();
-                int next = -1;
-                for (int direction = 0; direction < 4; direction++)
-                {
-                    int neighbor = GridNeighbors.Neighbor(grid, cell, direction);
-                    if (neighbor >= 0 && _navigation.TryDistance(entityNavigation.GoalCell, neighbor, out int value) && value == distance - 1 &&
-                        (next < 0 || neighbor < next)) next = neighbor;
-                }
-                if (next < 0) throw new InvalidOperationException("Terrain distance field has no descending edge.");
-                int step = next - cell;
-                if (cell != start && step != lastDirection) turns.Add(cell);
-                cell = next; lastDirection = step; distance--;
-            }
-            turns.Add(entityNavigation.GoalCell);
-            entityNavigation.Route = new(RoutePoints(turns.ToArray(), grid, entityMotion.Target), grid.Revision);
+            if (!_navigation.TryPointRoute(start, entityNavigation.GoalCell, entityMotion.Target, out var points, token)) continue;
+            if (points is null) RejectRoute(ref entity);
+            else entityNavigation.Route = new(points, grid.Revision);
         }
     }
 
@@ -172,7 +155,8 @@ public sealed partial class SimulationWorld
         if (entityNavigation.Route is not { } route || route.Revision != grid.Revision) return false;
         if (route.HasWaypoint && entitySpatial.Position != route.Waypoint) { waypoint = route.Waypoint; return true; }
         if (route.HasWaypoint) route.Cursor++;
-        if (_weighted is not null)
+        bool weighted = _navigation.UsesWeightedRoutes;
+        if (weighted)
         {
             route.CostPrefix ??= new long[route.Points.Length];
             var previous = entitySpatial.Position; long cost = 0;
@@ -188,7 +172,7 @@ public sealed partial class SimulationWorld
         {
             var target = GroundPosition(route.Points[i], entitySpatial.Position.Elevation);
             if (!ClearTerrain(index, entitySpatial.Position, target)) continue;
-            if (_weighted is not null && TerrainCost.Segment(grid, PhysicalProfile(index)!, entitySpatial.Position, target) > route.CostPrefix![i]) continue;
+            if (weighted && TerrainCost.Segment(grid, PhysicalProfile(index)!, entitySpatial.Position, target) > route.CostPrefix![i]) continue;
             route.Cursor = i; route.Waypoint = waypoint = target; route.HasWaypoint = true; return true;
         }
         // A conservative start-cell center is also a useful recovery after a local detour.

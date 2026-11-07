@@ -67,6 +67,7 @@ ConstructionChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);
+NavigationMechanicChecks.Run(Test);
 GroupNavigationChecks.Run(Test);
 PlaybackChecks.Run(Test);
 GroupPlanningChecks.Run(Test);

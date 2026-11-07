@@ -41,6 +41,9 @@ public sealed class GameplayMechanics
     public GameplayRegistration<IConstructionMechanic>? Construction { get; init; } = BuiltInConstruction;
     public GameplayRegistration<IEndOfTickRule>? EndOfTick { get; init; }
     public ProductionRateRule? ProductionRate { get; init; }
+    /// <summary>Optional distance fields for unweighted individual routes that need a detour.</summary>
+    /// <remarks>The factory must create a pathfinder with the same initial grid instance as the world.</remarks>
+    public GameplayRegistration<IGridPathfinder>? GridPathfinder { get; init; }
 }
 
 /// <summary>Runs after the built-in phases and owns its deterministic state.</summary>
@@ -65,9 +68,12 @@ public sealed partial class SimulationWorld
     {
         bool customTransportOrConstruction = !ReferenceEquals(_mechanics.Transport, GameplayMechanics.BuiltInTransport) ||
             !ReferenceEquals(_mechanics.Construction, GameplayMechanics.BuiltInConstruction);
-        bool custom = customTransportOrConstruction || !ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture) || _endOfTick is not null;
+        bool customNavigation = _mechanics.GridPathfinder is not null;
+        bool custom = customNavigation || customTransportOrConstruction ||
+            !ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture) || _endOfTick is not null;
         int format = _navigation is null ? 10 : 14;
-        if (customTransportOrConstruction) format = _navigation is null ? 19 : 20;
+        if (customNavigation) format = 21;
+        else if (customTransportOrConstruction) format = _navigation is null ? 19 : 20;
         else if (custom) format = _navigation is null ? 17 : 18;
         else if (_mechanics.ProductionRate is not null) format = _navigation is null ? 15 : 16;
         writer.Write(format);
@@ -81,7 +87,7 @@ public sealed partial class SimulationWorld
         writer.Write(_endOfTick is not null);
         _mechanics.EndOfTick?.WriteIdentity(writer);
         _endOfTick?.WriteState(writer);
-        if (!customTransportOrConstruction) return;
+        if (!customTransportOrConstruction && !customNavigation) return;
 
         writer.Write(_mechanics.Transport is not null);
         _mechanics.Transport?.WriteIdentity(writer);
@@ -89,5 +95,10 @@ public sealed partial class SimulationWorld
         writer.Write(_mechanics.Construction is not null);
         _mechanics.Construction?.WriteIdentity(writer);
         _construction?.WriteState(writer);
+        if (_mechanics.GridPathfinder is { } pathfinder)
+        {
+            pathfinder.WriteIdentity(writer);
+            _navigation!.Grid.WriteState(writer);
+        }
     }
 }
