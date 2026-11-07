@@ -26,16 +26,5 @@ public sealed record EconomyDefinition
         Energy = energy; Income = income; Interval = interval; LowPowerState = lowPowerState; DisableWeapons = disableWeapons;
     }
 }
-public sealed record CapturableDefinition
-{
-    public int? Ticks { get; }
-    public CapturableDefinition(int? ticks = null)
-    {
-        if (ticks is < 1 or > 1000000) throw new ArgumentOutOfRangeException(nameof(ticks));
-        Ticks = ticks;
-    }
-}
 public enum DestructionPolicy { Destroy, Invulnerable, Neutralize }
 internal struct IncomeState(long nextTick) { public long NextTick = nextTick; }
-internal struct CapturableState { public long ChangedTick; }
-internal struct CaptureState { public int Progress; public uint Owner; }

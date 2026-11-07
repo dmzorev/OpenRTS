@@ -50,7 +50,7 @@ public sealed partial class SimulationWorld
             _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
             return false;
         }
-        if (order.Kind == UnitActionKind.Capture && !CanCapture(index, order.Target, out _)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        if (order.Kind == UnitActionKind.Capture && !CanStartCapture(index, order.Target)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind == UnitActionKind.Enter && !CanEnter(index, order.Target, out _) ||
             order.Kind == UnitActionKind.UnloadAt && !HasPassengers(entity))
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
@@ -73,7 +73,7 @@ public sealed partial class SimulationWorld
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
         entityOrders.CombatTarget = default; CancelWindups(index);
-        if (entity.Has<CaptureState>()) entity.Get<CaptureState>().Progress = 0;
+        _capture?.Reset(entity);
         entityOrders.ActiveOrder = order; entityOrders.HasOrder = order.Kind != UnitActionKind.Stop || entityMotion.Moving;
         entityOrders.OrderStarted = Tick;
         entityOrders.OrderPhase = order.Kind == UnitActionKind.HoldPosition ? OrderPhase.Holding : entityMotion.Moving ? OrderPhase.Moving : OrderPhase.Idle;

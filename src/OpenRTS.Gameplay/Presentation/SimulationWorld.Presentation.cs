@@ -38,41 +38,44 @@ public sealed partial class SimulationWorld
     private void UpdatePresentation()
     {
         if (ExistingStorage is null) return;
-        foreach (var (presentation, combat, motion, position, definition) in
-            ExistingStorage.Query<PresentationState, CombatState, MotionState, SpatialState, EntityDefinition>())
+        lock (StorageGate)
         {
-            ref var entityPresentation = ref presentation.Value;
-            ref var entityCombat = ref combat.Value;
-            ref var entityMotion = ref motion.Value;
-            ref var spatial = ref position.Value;
-            var type = definition.Value.Presentation!;
-            int dx = spatial.Position.X - spatial.Previous.X, dy = spatial.Position.Y - spatial.Previous.Y;
-            if (dx != 0 || dy != 0) entityPresentation.BodyFacing = new(dx, dy);
-            if (entityPresentation.BodyAnimationOverride && !entityPresentation.BodyAnimation.IsActive(Tick)) entityPresentation.BodyAnimationOverride = false;
-            if (!entityPresentation.BodyAnimationOverride)
+            foreach (var (presentation, combat, motion, position, definition) in
+                ExistingStorage.Query<PresentationState, CombatState, MotionState, SpatialState, EntityDefinition>())
             {
-                int animation = (dx != 0 || dy != 0) && type.MoveAnimation >= 0 ? type.MoveAnimation : type.IdleAnimation;
-                if (entityPresentation.BodyAnimation.Animation != animation || entityPresentation.BodyAnimation.DurationTicks != 0)
-                    entityPresentation.BodyAnimation = new(animation, Tick, 0);
-            }
-            if (!entityPresentation.WeaponAnimation.IsActive(Tick)) entityPresentation.WeaponAnimation = AnimationPlayback.None;
-            var aim = entityMotion.Target;
-            if (entityPresentation.HasAim)
-            {
-                if (entityPresentation.AimEntity.Value != 0)
+                ref var entityPresentation = ref presentation.Value;
+                ref var entityCombat = ref combat.Value;
+                ref var entityMotion = ref motion.Value;
+                ref var spatial = ref position.Value;
+                var type = definition.Value.Presentation!;
+                int dx = spatial.Position.X - spatial.Previous.X, dy = spatial.Position.Y - spatial.Previous.Y;
+                if (dx != 0 || dy != 0) entityPresentation.BodyFacing = new(dx, dy);
+                if (entityPresentation.BodyAnimationOverride && !entityPresentation.BodyAnimation.IsActive(Tick)) entityPresentation.BodyAnimationOverride = false;
+                if (!entityPresentation.BodyAnimationOverride)
                 {
-                    if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _entityHandles[target].Get<SpatialState>().Position;
-                    else { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; entityPresentation.AimPoint = default; }
+                    int animation = (dx != 0 || dy != 0) && type.MoveAnimation >= 0 ? type.MoveAnimation : type.IdleAnimation;
+                    if (entityPresentation.BodyAnimation.Animation != animation || entityPresentation.BodyAnimation.DurationTicks != 0)
+                        entityPresentation.BodyAnimation = new(animation, Tick, 0);
                 }
-                else aim = entityPresentation.AimPoint;
+                if (!entityPresentation.WeaponAnimation.IsActive(Tick)) entityPresentation.WeaponAnimation = AnimationPlayback.None;
+                var aim = entityMotion.Target;
+                if (entityPresentation.HasAim)
+                {
+                    if (entityPresentation.AimEntity.Value != 0)
+                    {
+                        if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _entityHandles[target].Get<SpatialState>().Position;
+                        else { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; entityPresentation.AimPoint = default; }
+                    }
+                    else aim = entityPresentation.AimPoint;
+                }
+                if (entityPresentation.HasAim || entityMotion.Moving)
+                {
+                    dx = aim.X - spatial.Position.X; dy = aim.Y - spatial.Position.Y;
+                    if (dx != 0 || dy != 0) entityPresentation.WeaponFacing = new(dx, dy);
+                }
+                else entityPresentation.WeaponFacing = entityPresentation.BodyFacing;
+                foreach (ref var mount in entityCombat.Weapons.AsSpan()) if (mount.Target.Value == 0) mount.Facing = entityPresentation.WeaponFacing;
             }
-            if (entityPresentation.HasAim || entityMotion.Moving)
-            {
-                dx = aim.X - spatial.Position.X; dy = aim.Y - spatial.Position.Y;
-                if (dx != 0 || dy != 0) entityPresentation.WeaponFacing = new(dx, dy);
-            }
-            else entityPresentation.WeaponFacing = entityPresentation.BodyFacing;
-            foreach (ref var mount in entityCombat.Weapons.AsSpan()) if (mount.Target.Value == 0) mount.Facing = entityPresentation.WeaponFacing;
         }
     }
 

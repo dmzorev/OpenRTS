@@ -21,9 +21,9 @@ public sealed partial class SimulationWorld
             int ability = AbilityIndex(eIdentity.Type, command.Action);
             if (ability < 0 || eOwnership.Owner == 0 || IsUnderConstruction(e)) continue;
             var action = _types[eIdentity.Type].Abilities[ability];
-            if (action.Kind == AbilityKind.Capture)
+            if (action.Kind != AbilityKind.Weapon)
             {
-                if (!toggling && CanCapture(i, command.TargetEntity, out _)) { IssueOrder(i, new(UnitActionKind.Capture, default, command.TargetEntity), command.Queued); return; }
+                if (TryApplyNonWeaponAbility(i, action, command)) return;
                 continue;
             }
             int mount = AbilityMount(eIdentity.Type, ability); ref var state = ref eCombat.Weapons[mount];

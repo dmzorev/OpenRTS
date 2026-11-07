@@ -246,8 +246,11 @@ public sealed partial class SimulationWorld
         ref var health = ref actor.Get<HealthState>().Current;
         health = (int)Math.Min(type.MaxHealth, (long)health + increment);
         if (site.Work < site.Required) return;
-        actor.Remove<ConstructionState>();
-        if (type.Economy is { Income: > 0 } economy) actor.Add(new IncomeState(checked(Tick + economy.Interval)));
+        lock (StorageGate)
+        {
+            actor.Remove<ConstructionState>();
+            if (type.Economy is { Income: > 0 } economy) actor.Add(new IncomeState(checked(Tick + economy.Interval)));
+        }
         _powerDirty = true;
         var identity = actor.Get<EntityIdentity>();
         _events.Add(new(Tick, WorldEventKind.ConstructionCompleted, identity.Id, actor.Get<SpatialState>().Position, identity.Type, Owner: actor.Get<OwnershipState>().Owner));

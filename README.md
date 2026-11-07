@@ -8,6 +8,7 @@
 - [Архитектурные договорённости](docs/architecture.md)
 - [Граница ядра и встроенных механик](docs/decisions/023-core-and-gameplay.md)
 - [Сменный темп производства и условие lowpower](docs/decisions/024-production-rate-and-lowpower.md)
+- [Подключаемый захват и правило конца тика](docs/decisions/025-capture-mechanic.md)
 - [ECS: выбор Frent, архитектура и план миграции](docs/research/ecs-selection/README.md)
 - [Первый ECS-перенос: lifecycle, производство и проверки](docs/verification/015-ecs-production.md)
 - [Составные definitions и независимые UI Actions](docs/decisions/015-composed-definitions-and-actions.md)

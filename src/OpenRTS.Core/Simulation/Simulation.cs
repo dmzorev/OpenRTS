@@ -4,6 +4,12 @@ using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
 
+internal static class FrentStorageAccess
+{
+    // Frent shares world and archetype registration. Closing a query can play its command buffer.
+    internal static readonly object Gate = new();
+}
+
 /// <summary>Single-owner simulation with game-defined commands, events and tick rules.</summary>
 public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand : struct, ISimulationCommand
 {
@@ -65,7 +71,10 @@ public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand 
                 StepCancellation = cancellationToken;
                 foreach (var command in AppliedCommands) ApplyCommand(command);
                 if (_storage is not null)
-                    foreach (ref var spatial in _storage.Query<SpatialState>()) spatial.Previous = spatial.Position;
+                    lock (StorageGate)
+                    {
+                        foreach (ref var spatial in _storage.Query<SpatialState>()) spatial.Previous = spatial.Position;
+                    }
                 Update(cancellationToken);
             }
             catch { _failed = true; throw; }
@@ -80,8 +89,18 @@ public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand 
     public abstract SimulationReport Report();
 
     protected World? ExistingStorage => _storage;
+    /// <summary>Shared gate for native structural operations and the lifetime of a native query.</summary>
+    protected static object StorageGate => FrentStorageAccess.Gate;
     /// <summary>Native component storage for the owner thread. Use the membership operations for entity lifetime.</summary>
-    protected World Storage { get { ThrowIfDisposed(); return _storage ??= new(); } }
+    protected World Storage
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (_storage is not null) return _storage;
+            lock (StorageGate) return _storage ??= new();
+        }
+    }
 
     protected EntityId AllocateEntityId()
     {
@@ -99,7 +118,8 @@ public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand 
     {
         ValidatePosition(position);
         var id = AllocateEntityId();
-        var entity = Storage.Create(new EntityIdentity(id, type), new SpatialState(position));
+        Entity entity;
+        lock (StorageGate) entity = Storage.Create(new EntityIdentity(id, type), new SpatialState(position));
         TrackEntity(entity);
         return entity;
     }
@@ -131,7 +151,7 @@ public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand 
         if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
         var entity = _entityHandles[index];
         var id = entity.Get<EntityIdentity>().Id;
-        entity.Delete();
+        lock (StorageGate) entity.Delete();
         _indices.Remove(id);
         Count--;
         if (index != Count)
@@ -155,7 +175,8 @@ public abstract class Simulation<TCommand, TEvent> : IDisposable where TCommand 
     {
         if (_disposed) return;
         if (_stepping) throw new InvalidOperationException("Cannot dispose a simulation during its step.");
-        _storage?.Dispose();
+        if (_storage is not null)
+            lock (StorageGate) _storage.Dispose();
         _storage = null;
         _disposed = true;
     }

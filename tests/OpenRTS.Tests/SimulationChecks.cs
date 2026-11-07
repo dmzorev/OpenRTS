@@ -188,9 +188,16 @@ internal static class SimulationChecks
         test("Real-time pacing changes elapsed time, not state", () =>
         {
             WorldCommand[] commands = [new(1, 0, 1, CommandKind.MoveAll, Position: new(10000, 10000))];
-            using var paced = new SimulationSession(() => World(), commands, 4, realtime: true);
-            using var fast = new SimulationSession(() => World(), commands, 4, realtime: false);
+            using var start = new Barrier(2);
+            using var paced = new SimulationSession(Create, commands, 4, realtime: true);
+            using var fast = new SimulationSession(Create, commands, 4, realtime: false);
             Check(Completed(paced) == Completed(fast), "Pacing changed simulation");
+
+            SimulationWorld Create()
+            {
+                if (!start.SignalAndWait(TimeSpan.FromSeconds(5))) throw new TimeoutException("Session start was not synchronized.");
+                return World();
+            }
         });
         test("Events survive skipped frames and backlog overflow is explicit", () =>
         {

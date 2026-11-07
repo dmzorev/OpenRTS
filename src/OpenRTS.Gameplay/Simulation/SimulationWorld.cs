@@ -9,6 +9,8 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>
 {
     private readonly UnitDefinition[] _types;
+    private readonly GameplayMechanics _mechanics;
+    private readonly IEndOfTickRule? _endOfTick;
     private readonly IGridPathfinder? _navigation;
     private readonly MotionIndex? _motion;
     private readonly MotionIndex? _combatIndex;
@@ -30,21 +32,39 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
         NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
         int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
-        : this(null, unitTypes, width, depth, seed, initialCapacity, tickRate, speedPerTick,
+        : this((ProductionRateRule?)null, unitTypes, width, depth, seed, initialCapacity, tickRate, speedPerTick,
             navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs, players) { }
 
     public SimulationWorld(ProductionRateRule? productionRate, IEnumerable<UnitDefinition> unitTypes, int width, int depth,
         ulong seed = 1, int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
         NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
         int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
+        : this(new GameplayMechanics { ProductionRate = productionRate }, unitTypes, width, depth, seed, initialCapacity, tickRate,
+            speedPerTick, navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs, players) { }
+
+    public static SimulationWorld CreateWithMechanics(GameplayMechanics mechanics, IEnumerable<UnitDefinition> unitTypes, int width, int depth,
+        ulong seed = 1, int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
+        NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
+        int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
+        => new(mechanics, unitTypes, width, depth, seed, initialCapacity, tickRate, speedPerTick,
+            navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs, players);
+
+    private SimulationWorld(GameplayMechanics mechanics, IEnumerable<UnitDefinition> unitTypes, int width, int depth,
+        ulong seed, int initialCapacity, int tickRate, int speedPerTick, NavigationGrid? navigationGrid, int navigationWorkers,
+        int fieldsPerTick, int cachedFields, bool reverseNavigationJobs, IEnumerable<PlayerDefinition>? players)
         : base(width, depth, seed, initialCapacity, tickRate)
     {
+        ArgumentNullException.ThrowIfNull(mechanics);
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
         _types = unitTypes.ToArray();
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
+        _mechanics = mechanics;
+        bool usesCapture = _types.Any(type => type.Capturable is not null || type.Abilities.Any(a => a.Kind == AbilityKind.Capture));
+        if (usesCapture && mechanics.Capture is null)
+            throw new ArgumentException("Unit definitions require a capture mechanic.", nameof(mechanics));
         InitializePlayers(players);
-        _productionRate = productionRate;
+        _productionRate = mechanics.ProductionRate;
         InitializeProduction();
         SpeedPerTick = speedPerTick;
         _idOrder = Comparer<int>.Create((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
@@ -60,6 +80,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _motion.Clear(initialCapacity);
         }
         if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
+        if (usesCapture || !ReferenceEquals(mechanics.Capture, GameplayMechanics.BuiltInCapture)) _capture = mechanics.Capture?.Create();
+        _endOfTick = mechanics.EndOfTick?.Create();
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
@@ -99,6 +121,14 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         UpdateIncome();
         UpdateProduction();
         UpdatePresentation();
+        _endOfTick?.Advance(new(this));
+    }
+
+    internal bool TryGetGameplayOwner(EntityId id, out uint owner)
+    {
+        if (TryGetEntity(id, out var entity)) { owner = entity.Get<OwnershipState>().Owner; return true; }
+        owner = 0;
+        return false;
     }
 
     protected override void ValidateCommand(WorldCommand command)
@@ -155,9 +185,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.Type].TaskQueues[q].WorkingState is { } state)
                     states |= _types[entityIdentity.Type].StateMask(state);
-            int captureProgress = 0, captureDuration = 0;
-            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture && entity.Has<CaptureState>() && _indices.TryGetValue(entityOrders.ActiveOrder.Target, out int captureTarget))
-            { captureProgress = entity.Get<CaptureState>().Progress; var targetType = _types[_entityHandles[captureTarget].Get<EntityIdentity>().Type]; captureDuration = targetType.Capturable?.Ticks ?? targetType.MaxHealth; }
+            var capture = GetCaptureProgress(entity, entityOrders);
             ConstructionProgress construction = default;
             if (constructing)
             {
@@ -168,7 +196,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -180,10 +208,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            int format = _navigation is null ? 10 : 14;
-            if (_productionRate is not null) format = _navigation is null ? 15 : 16;
-            writer.Write(format);
-            _productionRate?.WriteState(writer);
+            WriteMechanics(writer);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(NextEntityId); writer.Write(_random.State);
             writer.Write(_types.Length);
@@ -370,17 +395,19 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         var id = siteId.Value == 0 ? AllocateEntityId() : siteId;
         Frent.Entity state;
         var type = _types[unitType];
-        var storage = Storage;
-        state = type.TaskQueues.Count == 0
-            ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-            : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
-        if (type.Passenger is not null) state.Add(new PassengerState());
-        if (type.Transport is not null) state.Add(new TransportState());
-        Player(owner);
-        if (construction.Required > 0) state.Add(construction);
-        else if (type.Economy?.Income > 0) state.Add(new IncomeState(checked(Tick + type.Economy.Interval)));
-        if (type.Capturable is not null) state.Add(new CapturableState());
-        if (type.Abilities.Any(a => a.Kind == AbilityKind.Capture)) state.Add(new CaptureState());
+        lock (StorageGate)
+        {
+            var storage = Storage;
+            state = type.TaskQueues.Count == 0
+                ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+                : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+            if (type.Passenger is not null) state.Add(new PassengerState());
+            if (type.Transport is not null) state.Add(new TransportState());
+            Player(owner);
+            if (construction.Required > 0) state.Add(construction);
+            else if (type.Economy?.Income > 0) state.Add(new IncomeState(checked(Tick + type.Economy.Interval)));
+            _capture?.Initialize(state, type);
+        }
         _powerDirty = true;
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);

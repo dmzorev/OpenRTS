@@ -28,7 +28,10 @@ public sealed partial class SimulationWorld
         if (!_producersDirty) return _producerOrder;
         var ids = new List<EntityId>();
         if (ExistingStorage is not null)
-            foreach (var (identity, _) in ExistingStorage.Query<EntityIdentity, ProducerState>()) ids.Add(identity.Value.Id);
+            lock (StorageGate)
+            {
+                foreach (var (identity, _) in ExistingStorage.Query<EntityIdentity, ProducerState>()) ids.Add(identity.Value.Id);
+            }
         ids.Sort(static (a, b) => a.Value.CompareTo(b.Value));
         _producerOrder = ids.ToArray();
         _producersDirty = false;
@@ -38,12 +41,15 @@ public sealed partial class SimulationWorld
     private void CapturePreviousFacings()
     {
         if (ExistingStorage is null) return;
-        foreach (var (presentation, combat) in ExistingStorage.Query<PresentationState, CombatState>())
+        lock (StorageGate)
         {
-            ref var state = ref presentation.Value;
-            state.PreviousBodyFacing = state.BodyFacing;
-            state.PreviousWeaponFacing = state.WeaponFacing;
-            foreach (ref var mount in combat.Value.Weapons.AsSpan()) mount.PreviousFacing = mount.Facing;
+            foreach (var (presentation, combat) in ExistingStorage.Query<PresentationState, CombatState>())
+            {
+                ref var state = ref presentation.Value;
+                state.PreviousBodyFacing = state.BodyFacing;
+                state.PreviousWeaponFacing = state.WeaponFacing;
+                foreach (ref var mount in combat.Value.Weapons.AsSpan()) mount.PreviousFacing = mount.Facing;
+            }
         }
     }
 
@@ -51,7 +57,10 @@ public sealed partial class SimulationWorld
     {
         int count = 0;
         if (ExistingStorage is not null)
-            foreach (ref var motion in ExistingStorage.Query<MotionState>()) if (motion.Moving) count++;
+            lock (StorageGate)
+            {
+                foreach (ref var motion in ExistingStorage.Query<MotionState>()) if (motion.Moving) count++;
+            }
         return count;
     }
 
@@ -59,28 +68,34 @@ public sealed partial class SimulationWorld
     {
         int count = 0;
         if (ExistingStorage is not null)
-            foreach (ref var combat in ExistingStorage.Query<CombatState>()) count += combat.Weapons.Length;
+            lock (StorageGate)
+            {
+                foreach (ref var combat in ExistingStorage.Query<CombatState>()) count += combat.Weapons.Length;
+            }
         return count;
     }
 
     private void UpdateDirectMovement()
     {
         if (ExistingStorage is null) return;
-        foreach (var (spatial, motion, definition) in ExistingStorage.Query<SpatialState, MotionState, EntityDefinition>())
+        lock (StorageGate)
         {
-            ref var state = ref motion.Value;
-            if (!state.Moving) continue;
-            int factor = definition.Value.Spatial!.Locomotor.Rules[0].Speed;
-            var next = spatial.Value.Position;
-            if (factor == 1024) next = StepTowards(next, state.Target);
-            else
+            foreach (var (spatial, motion, definition) in ExistingStorage.Query<SpatialState, MotionState, EntityDefinition>())
             {
-                int budget = SpeedPerTick * factor + state.MovementRemainder;
-                state.MovementRemainder = budget % 1024;
-                if (budget >= 1024) next = StepTowards(next, state.Target, budget / 1024);
+                ref var state = ref motion.Value;
+                if (!state.Moving) continue;
+                int factor = definition.Value.Spatial!.Locomotor.Rules[0].Speed;
+                var next = spatial.Value.Position;
+                if (factor == 1024) next = StepTowards(next, state.Target);
+                else
+                {
+                    int budget = SpeedPerTick * factor + state.MovementRemainder;
+                    state.MovementRemainder = budget % 1024;
+                    if (budget >= 1024) next = StepTowards(next, state.Target, budget / 1024);
+                }
+                if (SiteMovementClear(spatial.Value.Position, next, definition.Value.Spatial.Body)) spatial.Value.Position = next;
+                state.Moving = spatial.Value.Position != state.Target;
             }
-            if (SiteMovementClear(spatial.Value.Position, next, definition.Value.Spatial.Body)) spatial.Value.Position = next;
-            state.Moving = spatial.Value.Position != state.Target;
         }
     }
 }

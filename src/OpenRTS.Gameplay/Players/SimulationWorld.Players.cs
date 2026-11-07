@@ -29,12 +29,15 @@ public sealed partial class SimulationWorld
         if (!_powerDirty) return;
         foreach (var p in _players.Values) p.Produced = p.Consumed = 0;
         if (ExistingStorage is not null)
-            foreach (var (definition, ownership, identity) in ExistingStorage.Query<EntityDefinition, OwnershipState, EntityIdentity>())
-                if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_entityHandles[_indices[identity.Value.Id]]))
-                {
-                    var p = Player(ownership.Value.Owner);
-                    if (economy.Energy >= 0) p.Produced += economy.Energy; else p.Consumed -= economy.Energy;
-                }
+            lock (StorageGate)
+            {
+                foreach (var (definition, ownership, identity) in ExistingStorage.Query<EntityDefinition, OwnershipState, EntityIdentity>())
+                    if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_entityHandles[_indices[identity.Value.Id]]))
+                    {
+                        var p = Player(ownership.Value.Owner);
+                        if (economy.Energy >= 0) p.Produced += economy.Energy; else p.Consumed -= economy.Energy;
+                    }
+            }
         _powerDirty = false;
     }
     private GameplayConditions ReadConditions(UnitDefinition source, uint owner)
@@ -74,12 +77,15 @@ public sealed partial class SimulationWorld
     private void UpdateIncome()
     {
         if (ExistingStorage is null) return;
-        foreach (var (income, owner, definition) in ExistingStorage.Query<IncomeState, OwnershipState, EntityDefinition>())
+        lock (StorageGate)
         {
-            var settings = definition.Value.Economy!;
-            if (Tick < income.Value.NextTick) continue;
-            income.Value.NextTick = checked(Tick + settings.Interval);
-            Credit(owner.Value.Owner, settings.Income);
+            foreach (var (income, owner, definition) in ExistingStorage.Query<IncomeState, OwnershipState, EntityDefinition>())
+            {
+                var settings = definition.Value.Economy!;
+                if (Tick < income.Value.NextTick) continue;
+                income.Value.NextTick = checked(Tick + settings.Interval);
+                Credit(owner.Value.Owner, settings.Income);
+            }
         }
     }
     private void Refund(ProductionTask task, BuildDefinition build)
@@ -101,10 +107,9 @@ public sealed partial class SimulationWorld
         ref var orders = ref entity.Get<OrderState>(); orders.HasOrder = false; orders.PendingOrders?.Clear(); orders.CombatTarget = default;
         Halt(index); CancelWindups(index);
         ref var visual = ref entity.Get<PresentationState>(); visual.HasAim = false; visual.AimEntity = default;
-        if (entity.Has<CaptureState>()) entity.Get<CaptureState>().Progress = 0;
         entity.Get<OwnershipState>().Owner = owner;
         if (entity.Has<IncomeState>()) entity.Get<IncomeState>().NextTick = checked(Tick + _types[identity.Type].Economy!.Interval);
-        if (entity.Has<CapturableState>()) entity.Get<CapturableState>().ChangedTick = Tick;
+        _capture?.OwnerChanged(entity, Tick);
         _powerDirty = true;
         _events.Add(new(Tick, WorldEventKind.OwnerChanged, identity.Id, entity.Get<SpatialState>().Position, identity.Type, Owner: owner, PreviousOwner: previous));
     }
@@ -115,8 +120,7 @@ public sealed partial class SimulationWorld
         foreach (var entity in _entityHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<EntityIdentity>().Id.Value))
         {
             writer.Write(entity.Has<IncomeState>()); if (entity.Has<IncomeState>()) writer.Write(entity.Get<IncomeState>().NextTick);
-            writer.Write(entity.Has<CapturableState>()); if (entity.Has<CapturableState>()) writer.Write(entity.Get<CapturableState>().ChangedTick);
-            writer.Write(entity.Has<CaptureState>()); if (entity.Has<CaptureState>()) { writer.Write(entity.Get<CaptureState>().Progress); writer.Write(entity.Get<CaptureState>().Owner); }
+            WriteCaptureState(writer, entity);
         }
     }
 }
