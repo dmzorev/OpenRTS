@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
@@ -14,11 +15,50 @@ public sealed partial class SimulationWorld
     }
 
     private const int BoardingRange = 512;
-    private bool _transportIndexDirty;
     private int _storedCount;
+    private bool HasStoredActors => _storedCount != 0;
     private static EntityId CarrierOf(Frent.Entity actor) => actor.Has<PassengerState>() ? actor.Get<PassengerState>().Carrier : default;
     private static bool IsStored(Frent.Entity actor) => CarrierOf(actor).Value != 0;
     private static bool HasPassengers(Frent.Entity actor) => actor.Has<TransportState>() && actor.Get<TransportState>().Occupants.Count != 0;
+    // The caller consumes the view before any boarding or removal.
+    private static ReadOnlySpan<EntityId> Passengers(Frent.Entity actor) => actor.Has<TransportState>()
+        ? CollectionsMarshal.AsSpan(actor.Get<TransportState>().Occupants) : [];
+    private static bool AllowsPassengerFire(UnitDefinition type) => type.Transport is { FireFromInside: true };
+    private ReadOnlySpan<EntityId> FiringPassengers(Frent.Entity carrier) => AllowsPassengerFire(TypeOf(carrier)) ? Passengers(carrier) : [];
+
+    private static void InitializeTransport(Frent.Entity entity, UnitDefinition type)
+    {
+        if (type.Passenger is not null) entity.Add(new PassengerState());
+        if (type.Transport is not null) entity.Add(new TransportState());
+    }
+
+    private void ApplyTransport(WorldCommand command)
+    {
+        if (command.Kind == CommandKind.Unload)
+        {
+            foreach (int member in Recipients(command)) Unload(member, command.TargetEntity);
+            return;
+        }
+
+        var action = command.Kind == CommandKind.Enter ? UnitActionKind.Enter : UnitActionKind.UnloadAt;
+        foreach (int member in Recipients(command))
+            IssueOrder(member, new(action, command.Position, command.TargetEntity), command.Queued);
+    }
+
+    private bool CanStartTransportOrder(int index, UnitOrder order) => order.Kind switch
+    {
+        UnitActionKind.Enter => CanEnter(index, order.Target, out _),
+        UnitActionKind.UnloadAt => HasPassengers(_entityHandles[index]),
+        _ => true
+    };
+
+    private bool PrepareUnloadOrder(int index, WorldPosition destination)
+    {
+        var carrier = _entityHandles[index];
+        int distance = TypeOf(carrier).Transport!.UnloadDistance;
+        if (distance < 0) { Halt(index); return true; }
+        return DistanceSquared(carrier.Get<SpatialState>().Position, destination) <= (long)distance * distance || SetTarget(index, destination);
+    }
 
     private bool CanEnter(int index, EntityId id, out int target)
     {
@@ -27,7 +67,7 @@ public sealed partial class SimulationWorld
         if (TypeOf(actor).Passenger is not { } passenger || HasPassengers(actor) ||
             !_indices.TryGetValue(id, out target) || index == target) return false;
         var carrier = _entityHandles[target];
-        if (IsStored(carrier) || IsUnderConstruction(carrier) || TypeOf(carrier).Transport is not { } transport ||
+        if (IsStored(carrier) || (ReadLocalConditions(carrier) & GameplayConditions.Constructing) != 0 || TypeOf(carrier).Transport is not { } transport ||
             !transport.Accepts.Contains(passenger.Type) || passenger.Slots > transport.Slots) return false;
         uint owner = actor.Get<OwnershipState>().Owner, host = carrier.Get<OwnershipState>().Owner;
         return owner != 0 && (owner == host || host == 0 && !TypeOf(carrier).Movable);
@@ -85,7 +125,7 @@ public sealed partial class SimulationWorld
         _storedCount++;
         cargo.UsedSlots += slots;
         CancelWindups(index);
-        _transportIndexDirty = true;
+        _motionIndexDirty = true;
         _events.Add(new(Tick, WorldEventKind.EnteredTransport, identity.Id, carrierPosition, identity.Type, TargetEntity: order.Target, Owner: owner));
     }
 
@@ -118,7 +158,7 @@ public sealed partial class SimulationWorld
     {
         var carrier = _entityHandles[index];
         if (IsStored(carrier) || !HasPassengers(carrier)) return;
-        if (_transportIndexDirty) RebuildMotionIndex();
+        EnsureMotionIndex();
         var cargo = carrier.Get<TransportState>();
         var position = carrier.Get<SpatialState>().Position;
         var type = TypeOf(carrier);
@@ -130,7 +170,7 @@ public sealed partial class SimulationWorld
             int actorIndex = _indices[id];
             var actor = _entityHandles[actorIndex];
             int unitType = actor.Get<EntityIdentity>().Type;
-            if (!TryFindExitPlacement(unitType, position, radius, out var exit, index))
+            if (!TryFindExitPlacement(unitType, position, radius, out var exit, type))
             {
                 _events.Add(new(Tick, WorldEventKind.UnloadBlocked, id, position, unitType, TargetEntity: carrier.Get<EntityIdentity>().Id));
                 i++;
@@ -170,6 +210,26 @@ public sealed partial class SimulationWorld
         var cargo = carrier.Get<TransportState>();
         cargo.ClaimedNeutral = false;
         while (cargo.Occupants.Count > 0) DestroyIndex(_indices[cargo.Occupants[^1]], wreck: false);
+    }
+
+    private bool RemoveFromTransport(Frent.Entity entity, bool wreck)
+    {
+        if (IsStored(entity)) { DetachPassenger(entity); wreck = false; }
+        RemovePassengers(entity);
+        return wreck;
+    }
+
+    private EntityId ProjectTransport(Frent.Entity entity, UnitDefinition type, ref uint visualStates, out SpatialState spatial)
+    {
+        if (type.Transport is not null && type.States.Contains("garrisoned"))
+        {
+            uint mask = type.StateMask("garrisoned");
+            visualStates = HasPassengers(entity) ? visualStates | mask : visualStates & ~mask;
+        }
+
+        var carrier = CarrierOf(entity);
+        spatial = (carrier.Value != 0 ? _entityHandles[_indices[carrier]] : entity).Get<SpatialState>();
+        return carrier;
     }
 
     private static void WriteTransport(BinaryWriter writer, Frent.Entity actor)

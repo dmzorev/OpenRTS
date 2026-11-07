@@ -106,19 +106,4 @@ public sealed partial class SimulationWorld
         _baseGrid = candidateBase; CommitGrid(candidate);
     }
 
-    private bool TryFindExitPlacement(int type, WorldPosition exit, int radius, out WorldPosition point, int carrier = -1)
-    {
-        point = default; long best = long.MaxValue; bool found = false;
-        // shortcut: bounded256 lattice for exits; add authored lanes when dense factories need exact packing.
-        for (int y = -(radius / 256) * 256; y <= radius; y += 256) for (int x = -(radius / 256) * 256; x <= radius; x += 256)
-        {
-            long distance = (long)x * x + (long)y * y; if (distance > (long)radius * radius || distance >= best) continue;
-            var candidate = new WorldPosition(exit.X + x, exit.Y + y, exit.Elevation);
-            if (candidate.X < 0 || candidate.X > Width || candidate.Y < 0 || candidate.Y > Depth || !StopAllowed(type, candidate) || candidate.X < _types[type].Body.HalfWidth || candidate.Y < _types[type].Body.HalfHeight || candidate.X + _types[type].Body.HalfWidth > Width || candidate.Y + _types[type].Body.HalfHeight > Depth) continue;
-            if (carrier >= 0 && ObjectGeometry.DistanceSquared(_types[type], candidate, TypeOf(_entityHandles[carrier]), exit, out _, out _) == 0) continue;
-            if ((_motion ?? _combatIndex) is { } index && !index.ClearPlacement(candidate, out _, _types[type].Body)) continue;
-            best = distance; point = GroundPosition(candidate, exit.Elevation); found = true;
-        }
-        return found;
-    }
 }

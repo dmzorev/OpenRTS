@@ -8,10 +8,19 @@ public sealed partial class SimulationWorld
     private readonly ProductionRateRule? _productionRate;
     private int[][] _productTypes = []; private BuildDefinition[][] _builds = [];
     private long _nextTaskId = 1;
-    private bool _hasBuilders;
+
+    private static uint ProductionVisualStates(UnitDefinition type, ProducerState? producer)
+    {
+        if (producer is null) return 0;
+        uint states = 0;
+        for (int q = 0; q < producer.Queues.Length; q++)
+            if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && type.TaskQueues[q].WorkingState is { } state)
+                states |= type.StateMask(state);
+        return states;
+    }
+
     private void InitializeProduction()
     {
-        _hasBuilders = _types.Any(t => t.ConstructionRange > 0);
         _productTypes = new int[_types.Length][]; _builds = new BuildDefinition[_types.Length][];
         for (int t = 0; t < _types.Length; t++)
         {
@@ -32,7 +41,7 @@ public sealed partial class SimulationWorld
     {
         ref var actor = ref _entityHandles[index];
         var actorIdentity = actor.Get<EntityIdentity>();
-        if (IsUnderConstruction(actor) || !TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
+        if ((ReadLocalConditions(actor) & GameplayConditions.Constructing) != 0 || !TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
         producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actorIdentity.Id, point));
     }
     private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
@@ -51,7 +60,8 @@ public sealed partial class SimulationWorld
                     var eIdentity = e.Get<EntityIdentity>();
                     ref var eOwnership = ref e.Get<OwnershipState>();
                     int p = ProductIndex(eIdentity.Type, command.Action);
-                    if (p < 0 || _types[eIdentity.Type].Products[p].OnSite || eOwnership.Owner == 0 || IsUnderConstruction(e) || !TryGetProducer(i, out var state)) continue;
+                    if (p < 0 || _types[eIdentity.Type].Products[p].OnSite || eOwnership.Owner == 0 ||
+                        (ReadLocalConditions(e) & GameplayConditions.Constructing) != 0 || !TryGetProducer(i, out var state)) continue;
                     int q = QueueIndex(eIdentity.Type, _types[eIdentity.Type].Products[p].Queue), size = state.Queues[q].Count;
                     if (size >= _types[eIdentity.Type].TaskQueues[q].Capacity || size >= length) continue;
                     var settings = _types[eIdentity.Type].TaskQueues[q];
@@ -120,7 +130,7 @@ public sealed partial class SimulationWorld
         {
             StepCancellation.ThrowIfCancellationRequested();
             if (!_indices.TryGetValue(id, out int i)) continue; var actor = _entityHandles[i];
-            if (IsUnderConstruction(actor)) continue;
+            if ((ReadLocalConditions(actor) & GameplayConditions.Constructing) != 0) continue;
             var actorIdentity = actor.Get<EntityIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.Type];
             uint owner = actor.Get<OwnershipState>().Owner; if (owner == 0) continue;
             for (int q = 0; q < producer.Queues.Length; q++)

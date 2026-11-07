@@ -45,14 +45,14 @@ public sealed partial class SimulationWorld
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
-        if (IsUnderConstruction(entity) || order.Kind == UnitActionKind.Build && !TryBuildTarget(index, order.Target, out _, out _))
+        if ((ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0 ||
+            order.Kind == UnitActionKind.Build && !CanBuild(index, order.Target))
         {
             _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
             return false;
         }
         if (order.Kind == UnitActionKind.Capture && !CanStartCapture(index, order.Target)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
-        if (order.Kind == UnitActionKind.Enter && !CanEnter(index, order.Target, out _) ||
-            order.Kind == UnitActionKind.UnloadAt && !HasPassengers(entity))
+        if (!CanStartTransportOrder(index, order))
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
@@ -62,10 +62,9 @@ public sealed partial class SimulationWorld
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove)
         { if (!SetTarget(index, order.Position)) return false; entityNavigation.GroupMember = order.Group; entityNavigation.OrderGroup = order.Cohort; }
-        else if (order.Kind == UnitActionKind.UnloadAt && TypeOf(entity).Transport!.UnloadDistance >= 0)
+        else if (order.Kind == UnitActionKind.UnloadAt)
         {
-            int distance = TypeOf(entity).Transport!.UnloadDistance;
-            if (DistanceSquared(entity.Get<SpatialState>().Position, order.Position) > (long)distance * distance && !SetTarget(index, order.Position)) return false;
+            if (!PrepareUnloadOrder(index, order.Position)) return false;
         }
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { if (!_types[entityIdentity.Type].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
@@ -91,7 +90,7 @@ public sealed partial class SimulationWorld
     }
     private void UpdateOrders()
     {
-        _activeBuilders.Clear();
+        BeginConstructionOrders();
         EnsureMovementOrder();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
@@ -100,7 +99,7 @@ public sealed partial class SimulationWorld
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
-            if (IsStored(entity) || IsUnderConstruction(entity)) continue;
+            if (IsStored(entity) || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;

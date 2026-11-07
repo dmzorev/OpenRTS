@@ -10,6 +10,42 @@ internal static class TransportChecks
 
     public static void Run(Action<string, Action> test)
     {
+        test("Transport: blocked unloading preserves cargo and a pinned frame until the exit opens", () =>
+        {
+            var blocked = from y in Enumerable.Range(0, 12)
+                          from x in Enumerable.Range(0, 12)
+                          where (x, y) != (4, 5) && (x, y) != (5, 5)
+                          select new GridCell(x, y);
+            var house = new UnitDefinition("house", 100, states: ["garrisoned"], movable: false,
+                footprint: new(1, 1, [new(0, 0, new(false, false))]), transport: new(["infantry"], 1));
+            using var world = new SimulationWorld([house, new("infantry", 100, passenger: Infantry)],
+                12 * 1024, 12 * 1024, navigationGrid: new(12, 12, blocked));
+            var carrier = world.AddInitialUnit(0, new(5632, 5632));
+            var passenger = world.AddInitialUnit(1, new(4608, 5632), 1);
+            world.Step([new(1, 0, 1, CommandKind.Enter, passenger, TargetEntity: carrier)]);
+            NavigationChecks.Check(Poses(world).Single(p => p.Id == passenger).Carrier == carrier, "Passenger did not board");
+            var frames = new FrameExchange();
+            frames.TryPublish(world);
+            using var pinned = frames.AcquireLatest()!;
+            var oldPoses = pinned.Poses.ToArray();
+
+            world.Step([new(2, 0, 1, CommandKind.BlockCell, Position: new(4608, 5632)),
+                new(2, 0, 2, CommandKind.Unload, carrier)]);
+            NavigationChecks.Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.UnloadBlocked && e.Entity == passenger) &&
+                Poses(world).Single(p => p.Id == passenger).Carrier == carrier &&
+                Poses(world).Single(p => p.Id == carrier).Presentation.Owner == 1, "Blocked unload changed cargo or neutral ownership");
+            var report = world.Report();
+            Poses(world);
+            NavigationChecks.Check(report == world.Report(), "Publishing a stored position changed simulation state");
+
+            world.Step([new(3, 0, 1, CommandKind.UnblockCell, Position: new(4608, 5632)),
+                new(3, 0, 2, CommandKind.Unload, carrier)]);
+            NavigationChecks.Check(Poses(world).Single(p => p.Id == passenger) is { Carrier.Value: 0 } exited &&
+                exited.Current == new WorldPosition(4608, 5632) &&
+                Poses(world).Single(p => p.Id == carrier).Presentation is { Owner: 0, States: 0 }, "Opening the exit did not release cargo and ownership");
+            NavigationChecks.Check(pinned.Poses.SequenceEqual(oldPoses), "Unloading changed the pinned frame");
+        });
+
         test("Transport: ten infantry board six then four using queued Enter", () =>
         {
             foreach (int workers in new[] { 1, 4 })

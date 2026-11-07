@@ -1,3 +1,4 @@
+using OpenRTS.Core.Construction;
 using OpenRTS.Core.Orders;
 using OpenRTS.Core.Simulation;
 
@@ -5,8 +6,17 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
+    private struct ConstructionState(int required, int startingHealth, long startedAt)
+    {
+        public readonly int Required = required, StartingHealth = startingHealth;
+        public readonly long StartedAt = startedAt;
+        public int Work;
+    }
+
     private const int MaximumPlayerProjects = 256;
     private const int ClearanceTimeout = 250;
+    private readonly bool _hasBuilders;
+    private readonly SortedDictionary<uint, SortedDictionary<uint, ConstructionProject>> _constructionProjects = new();
     private readonly List<ConstructionProject> _siteReservations = [];
     private readonly List<int> _siteOccupants = [];
     private readonly List<EntityId> _activeBuilders = [];
@@ -14,12 +24,14 @@ public sealed partial class SimulationWorld
     private readonly List<(WorldPosition Position, BodyShape Body)> _evacuationGoals = [];
 
     private bool IsUnderConstruction(Frent.Entity actor) => _hasBuilders && actor.Has<ConstructionState>();
+    private bool HasSiteReservations => _siteReservations.Count != 0;
+    private void BeginConstructionOrders() => _activeBuilders.Clear();
 
     private void ApplyConstruction(WorldCommand command)
     {
         if (command.Kind == CommandKind.CancelConstruction)
         {
-            if (_players.TryGetValue(command.Owner, out var player) && player.Projects.TryGetValue(command.TargetEntity.Value, out var project))
+            if (_constructionProjects.TryGetValue(command.Owner, out var projects) && projects.TryGetValue(command.TargetEntity.Value, out var project))
                 RemoveProject(project, cancelled: true);
             else RejectAction();
             return;
@@ -51,7 +63,8 @@ public sealed partial class SimulationWorld
                     !type.Movable && DistanceSquared(actor.Get<SpatialState>().Position, position) > (long)type.ConstructionRange * type.ConstructionRange)
                     continue;
 
-                var projects = Player(owner).Projects;
+                if (!_constructionProjects.TryGetValue(owner, out var projects))
+                    _constructionProjects.Add(owner, projects = new());
                 var replaced = projects.Values.Where(p => SitesOverlap(target, position, p.UnitType, p.Position)).ToArray();
                 if (projects.Count - replaced.Length >= MaximumPlayerProjects) continue;
                 var id = AllocateEntityId();
@@ -65,6 +78,8 @@ public sealed partial class SimulationWorld
         if (plan is null) RejectAction();
     }
 
+    private bool CanBuild(int index, EntityId id) => TryBuildTarget(index, id, out _, out _);
+
     private bool TryBuildTarget(int index, EntityId id, out ConstructionProject? project, out int foundation)
     {
         var actor = _entityHandles[index];
@@ -73,7 +88,7 @@ public sealed partial class SimulationWorld
         project = null;
         var type = TypeOf(actor);
         if (owner == 0 || IsUnderConstruction(actor) || type.ConstructionRange == 0) return false;
-        if (Player(owner).Projects.TryGetValue(id.Value, out project))
+        if (_constructionProjects.TryGetValue(owner, out var projects) && projects.TryGetValue(id.Value, out project))
             return type.Movable || BuildInRange(actor, project.UnitType, project.Position);
         if (!_indices.TryGetValue(id, out foundation)) return false;
         var target = _entityHandles[foundation];
@@ -121,7 +136,7 @@ public sealed partial class SimulationWorld
         if (type.Movable && !builder.Get<MotionState>().Moving && (state.OrderStarted == Tick || (Tick + order.Target.Value) % 8 == 0))
         {
             var footprint = _types[target].Footprint!;
-            foreach (var point in SiteExits(footprint, site, position, type.Body).OrderBy(p => DistanceSquared(position, p)))
+            foreach (var point in ConstructionGeometry.Exits(footprint, site, position, type.Body, Width, Depth).OrderBy(p => DistanceSquared(position, p)))
                 if (StopAllowed(builder.Get<EntityIdentity>().Type, point) && SetTarget(index, point) && builder.Get<MotionState>().Moving) break;
         }
         state.OrderPhase = builder.Get<MotionState>().Moving ? OrderPhase.Approaching : OrderPhase.Waiting;
@@ -226,7 +241,8 @@ public sealed partial class SimulationWorld
         }
         var typeDefinition = _types[project.UnitType];
         int health = Math.Max(1, (int)((long)typeDefinition.MaxHealth * project.Recipe.InitialHealthPercent / 100));
-        Spawn(project.UnitType, project.Position, project.Owner, siteId: project.Id, construction: new(project.Recipe.Ticks * 2, health, Tick));
+        Spawn(project.UnitType, project.Position, project.Owner, id: project.Id, initialHealth: health,
+            initialize: entity => entity.Add(new ConstructionState(project.Recipe.Ticks * 2, health, Tick)));
         foundation = _indices[project.Id];
         RemoveProject(project, cancelled: false);
         if (grid is not null) CommitGrid(grid);
@@ -249,7 +265,7 @@ public sealed partial class SimulationWorld
         lock (StorageGate)
         {
             actor.Remove<ConstructionState>();
-            if (type.Economy is { Income: > 0 } economy) actor.Add(new IncomeState(checked(Tick + economy.Interval)));
+            ActivateEconomy(actor, type);
         }
         _powerDirty = true;
         var identity = actor.Get<EntityIdentity>();
@@ -258,7 +274,7 @@ public sealed partial class SimulationWorld
 
     private void RemoveProject(ConstructionProject project, bool cancelled)
     {
-        Player(project.Owner).Projects.Remove(project.Id.Value);
+        _constructionProjects[project.Owner].Remove(project.Id.Value);
         if (project.ReservedAt > 0) _siteReservations.Remove(project);
         if (cancelled)
         {
@@ -275,33 +291,11 @@ public sealed partial class SimulationWorld
         return _baseGrid is { } grid ? footprint.AllowsConstruction(grid, position, type.Locomotor) : type.Locomotor.Rules[0].CanStop;
     }
 
-    private bool SitesOverlap(int typeA, WorldPosition a, int typeB, WorldPosition b)
-    {
-        var first = _types[typeA].Footprint!;
-        var second = _types[typeB].Footprint!;
-        if (Math.Abs(a.X - b.X) >= first.HalfWidth + second.HalfWidth ||
-            Math.Abs(a.Y - b.Y) >= first.HalfHeight + second.HalfHeight) return false;
-        foreach (var firstCell in first.Cells)
-        {
-            var left = first.Bounds(firstCell, a);
-            foreach (var secondCell in second.Cells)
-            {
-                var right = second.Bounds(secondCell, b);
-                if (left.MinX < right.MaxX && right.MinX < left.MaxX && left.MinY < right.MaxY && right.MinY < left.MaxY) return true;
-            }
-        }
-        return false;
-    }
+    private bool SitesOverlap(int typeA, WorldPosition a, int typeB, WorldPosition b) =>
+        ConstructionGeometry.Overlaps(_types[typeA].Footprint!, a, _types[typeB].Footprint!, b);
 
-    private bool SiteTouches(int type, WorldPosition site, WorldPosition from, WorldPosition to, BodyShape body)
-    {
-        var footprint = _types[type].Footprint!;
-        var bounds = new WorldBox(site.X - footprint.HalfWidth, site.Y - footprint.HalfHeight, site.X + footprint.HalfWidth, site.Y + footprint.HalfHeight);
-        if (!BodyGeometry.SweptBox(from, to, bounds, body)) return false;
-        foreach (var cell in footprint.Cells)
-            if (BodyGeometry.SweptBox(from, to, footprint.Bounds(cell, site), body)) return true;
-        return false;
-    }
+    private bool SiteTouches(int type, WorldPosition site, WorldPosition from, WorldPosition to, BodyShape body) =>
+        ConstructionGeometry.Touches(_types[type].Footprint!, site, from, to, body);
 
     private bool SiteMovementClear(WorldPosition from, WorldPosition to, BodyShape body)
     {
@@ -318,18 +312,6 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private IEnumerable<WorldPosition> SiteExits(FootprintDefinition footprint, WorldPosition site, WorldPosition from, BodyShape body)
-    {
-        int left = site.X - footprint.HalfWidth - body.HalfWidth - 1;
-        int right = site.X + footprint.HalfWidth + body.HalfWidth + 1;
-        int top = site.Y - footprint.HalfHeight - body.HalfHeight - 1;
-        int bottom = site.Y + footprint.HalfHeight + body.HalfHeight + 1;
-        int x = Math.Clamp(from.X, left, right), y = Math.Clamp(from.Y, top, bottom);
-        WorldPosition[] candidates = [new(left, y), new(right, y), new(x, top), new(x, bottom)];
-        return candidates.Where(p => p.X >= body.HalfWidth && p.Y >= body.HalfHeight &&
-            p.X <= Width - body.HalfWidth && p.Y <= Depth - body.HalfHeight);
-    }
-
     private void Evacuate(int index, ConstructionProject project)
     {
         var actor = _entityHandles[index];
@@ -337,7 +319,7 @@ public sealed partial class SimulationWorld
         var type = _types[identity.Type];
         var position = actor.Get<SpatialState>().Position;
         var footprint = _types[project.UnitType].Footprint!;
-        foreach (var point in SiteExits(footprint, project.Position, position, type.Body).OrderBy(p => DistanceSquared(position, p)))
+        foreach (var point in ConstructionGeometry.Exits(footprint, project.Position, position, type.Body, Width, Depth).OrderBy(p => DistanceSquared(position, p)))
         {
             if (!StopAllowed(identity.Type, point) ||
                 !(_motion ?? _combatIndex)!.ClearPlacement(point, out _, type.Body) ||
@@ -357,7 +339,27 @@ public sealed partial class SimulationWorld
         }
     }
 
-    public int ConstructionProjectCount => _players.Values.Sum(p => p.Projects.Count);
+    private ConstructionProgress ProjectConstruction(Frent.Entity entity, UnitDefinition type, ref uint visualStates)
+    {
+        if (!IsUnderConstruction(entity)) return default;
+        ref var site = ref entity.Get<ConstructionState>();
+        if (type.States.Contains("constructing")) visualStates |= type.StateMask("constructing");
+        return new(site.Work, site.Required);
+    }
+
+    private void WriteConstruction(BinaryWriter writer, Frent.Entity entity)
+    {
+        bool constructing = IsUnderConstruction(entity);
+        writer.Write(constructing);
+        if (!constructing) return;
+        ref var site = ref entity.Get<ConstructionState>();
+        writer.Write(site.Work);
+        writer.Write(site.Required);
+        writer.Write(site.StartingHealth);
+        writer.Write(site.StartedAt);
+    }
+
+    public int ConstructionProjectCount => _constructionProjects.Values.Sum(projects => projects.Count);
 
     public void CopyConstructionProjects(Span<ConstructionProjectPose> destination)
     {
@@ -365,16 +367,16 @@ public sealed partial class SimulationWorld
         if (_failed) throw new InvalidOperationException("An interrupted world cannot publish a frame.");
         if (destination.Length < ConstructionProjectCount) throw new ArgumentException("Destination is too small.", nameof(destination));
         int at = 0;
-        foreach (var player in _players.Values)
-            foreach (var project in player.Projects.Values)
+        foreach (var projects in _constructionProjects.Values)
+            foreach (var project in projects.Values)
                 destination[at++] = new(project.Id, project.Owner, project.UnitType, project.Position, project.ReservedAt > 0);
     }
 
     private void WriteConstructionProjects(BinaryWriter writer)
     {
         writer.Write(ConstructionProjectCount);
-        foreach (var player in _players.Values)
-            foreach (var project in player.Projects.Values)
+        foreach (var projects in _constructionProjects.Values)
+            foreach (var project in projects.Values)
             {
                 writer.Write(project.Id.Value);
                 writer.Write(project.Owner);

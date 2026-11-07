@@ -21,7 +21,7 @@ internal static class ConstructionChecks
 
     private static SimulationWorld World(int workers = 1) =>
         new(Types(), 24 * 1024, 16 * 1024, speedPerTick: 256, navigationGrid: new(24, 16),
-            navigationWorkers: workers, players: [new(1, "Blue", 500), new(2, "Red", 500)]);
+            navigationWorkers: workers, reverseNavigationJobs: workers > 1, players: [new(1, "Blue", 500), new(2, "Red", 500)]);
 
     private static EntityPose Pose(SimulationWorld world, EntityId id)
     {
@@ -46,6 +46,53 @@ internal static class ConstructionChecks
 
     public static void Run(Action<string, Action> test)
     {
+        test("Construction: readiness controls weapons, production and boarding independently of visual states", () =>
+        {
+            var factory = new UnitDefinition("factory", 100, ["idle", "fire"], ["constructing", "lowpower"], movable: false,
+                footprint: Stamp, weapon: new(3072, 3072, 1, 1000, 0), economy: new(100, 5, 2),
+                taskQueues: [new("train")], products: [new("train", "worker", "train")],
+                transport: new(["worker"], 1), build: new(2, kind: ProductionKind.PlaceBuilding));
+            using var world = new SimulationWorld([
+                new("yard", 100, movable: false, constructionRange: 8192, products: [new("build", "factory", "", OnSite: true)]),
+                factory, new("worker", 100, passenger: new("worker"), constructionRange: 1536, build: new(50)), new("enemy", 100)],
+                24 * 1024, 16 * 1024, navigationGrid: new(24, 16), players: [new(1, "Blue", 500)]);
+            var yard = world.AddInitialUnit(0, new(4096, 8192), 1);
+            var worker = world.AddInitialUnit(2, new(6656, 8192), 1);
+            var enemy = world.AddInitialUnit(3, new(11264, 8192), 2);
+            world.Step([new(1, 0, 1, CommandKind.PlanConstruction, yard, Site, Action: "build")]);
+            var site = new EntityId(4);
+            var frames = new FrameExchange();
+            frames.TryPublish(world);
+            using var pinned = frames.AcquireLatest()!;
+            NavigationChecks.Check(world.TryGetConditions(site, out var conditions) && conditions == GameplayConditions.Constructing,
+                "The foundation did not expose its readiness condition");
+
+            world.Step([
+                new(2, 0, 1, CommandKind.SetVisualStates, site, States: 0),
+                new(2, 0, 2, CommandKind.EnqueueTask, site, Action: "train"),
+                new(2, 0, 3, CommandKind.Enter, worker, TargetEntity: site),
+                new(2, 0, 4, CommandKind.Destroy, yard)]);
+            NavigationChecks.Check(Pose(world, site).Construction.Work == 0 && Pose(world, worker).Carrier.Value == 0 &&
+                Pose(world, enemy).Health == 100 && world.TaskCount == 0 && Player(world, 1).Energy == 0,
+                "An unfinished foundation became active or continued without its builder");
+            NavigationChecks.Check(world.TryGetConditions(site, out conditions) && conditions.HasFlag(GameplayConditions.Constructing),
+                "A visual command cleared a gameplay condition");
+            world.Step([new(3, 0, 1, CommandKind.BuildSite, worker, TargetEntity: site)]);
+            NavigationChecks.Check(Pose(world, site).Construction.Work == 2, "A replacement builder could not resume after packed removal");
+            world.Step([new(4, 0, 1, CommandKind.SetVisualStates, site, States: factory.StateMask("constructing"))]);
+            NavigationChecks.Check(world.TryGetConditions(site, out conditions) && conditions == GameplayConditions.None &&
+                !Pose(world, site).Construction.Active && Pose(world, enemy).Health == 100 && Player(world, 1).Energy == 100,
+                "Completion did not update readiness and power after the weapon phase");
+            world.Step([new(5, 0, 1, CommandKind.Enter, worker, TargetEntity: site),
+                new(5, 0, 2, CommandKind.EnqueueTask, site, Action: "train"),
+                new(5, 0, 3, CommandKind.AttackTarget, site, TargetEntity: enemy)]);
+            NavigationChecks.Check(Pose(world, worker).Carrier == site && world.TaskCount == 1 && Pose(world, enemy).Health < 100 &&
+                world.TryGetConditions(site, out conditions) && conditions == GameplayConditions.None,
+                "The completed factory did not enable consumers independently of its visual state");
+            NavigationChecks.Check(pinned.Poses.ToArray().Single(p => p.Id == site).Construction.Active,
+                "Completion changed the pinned foundation frame");
+        });
+
         test("Construction: project overlap and cancellation are owner-scoped and leave navigation untouched", () =>
         {
             using var world = World();
@@ -124,6 +171,7 @@ internal static class ConstructionChecks
             {
                 sequential.Step(tick == 1 ? journal : []);
                 parallel.Step(tick == 1 ? journal : []);
+                NavigationChecks.Check(sequential.Events.SequenceEqual(parallel.Events), "Construction event order differs by worker scheduling");
                 foreach (var e in sequential.Events) if (e.Kind == WorldEventKind.ConstructionCompleted) completed.Add(e.Entity.Value);
             }
             NavigationChecks.Check(completed.SequenceEqual(new uint[] { 3, 4, 5 }) && Projects(sequential).Length == 0,

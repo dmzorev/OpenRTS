@@ -32,7 +32,8 @@ public sealed partial class SimulationWorld
             lock (StorageGate)
             {
                 foreach (var (definition, ownership, identity) in ExistingStorage.Query<EntityDefinition, OwnershipState, EntityIdentity>())
-                    if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_entityHandles[_indices[identity.Value.Id]]))
+                    if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy &&
+                        (ReadLocalConditions(_entityHandles[_indices[identity.Value.Id]]) & GameplayConditions.Constructing) == 0)
                     {
                         var p = Player(ownership.Value.Owner);
                         if (economy.Energy >= 0) p.Produced += economy.Energy; else p.Consumed -= economy.Energy;
@@ -48,15 +49,15 @@ public sealed partial class SimulationWorld
         return player.Produced < player.Consumed ? GameplayConditions.LowPower : GameplayConditions.None;
     }
 
-    /// <summary>Read the current facts for a live entity on the simulation owner thread.</summary>
-    public bool TryGetConditions(EntityId id, out GameplayConditions conditions)
+    private void InitializeEconomy(Entity entity, UnitDefinition type, uint owner)
     {
-        ThrowIfDisposed();
-        if (_failed) throw new InvalidOperationException("Incomplete world.");
-        conditions = GameplayConditions.None;
-        if (!TryGetEntity(id, out var entity)) return false;
-        if (!IsUnderConstruction(entity)) conditions = ReadConditions(TypeOf(entity), entity.Get<OwnershipState>().Owner);
-        return true;
+        Player(owner);
+        if ((ReadLocalConditions(entity) & GameplayConditions.Constructing) == 0) ActivateEconomy(entity, type);
+    }
+
+    private void ActivateEconomy(Entity entity, UnitDefinition type)
+    {
+        if (type.Economy is { Income: > 0 } economy) entity.Add(new IncomeState(checked(Tick + economy.Interval)));
     }
     public void CopyPlayers(Span<PlayerPose> destination)
     {

@@ -15,10 +15,3 @@ internal sealed class ConstructionProject(EntityId id, uint owner, int unitType,
     public BuildDefinition Recipe { get; } = recipe;
     public long ReservedAt, LastAttempt;
 }
-
-internal struct ConstructionState(int required, int startingHealth, long startedAt)
-{
-    public readonly int Required = required, StartingHealth = startingHealth;
-    public readonly long StartedAt = startedAt;
-    public int Work;
-}

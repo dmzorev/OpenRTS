@@ -35,8 +35,8 @@ public sealed partial class SimulationWorld
             if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
         }
         var carrier = _entityHandles[index];
-        if (!repair && TypeOf(carrier).Transport is { FireFromInside: true } && HasPassengers(carrier))
-            foreach (var id in carrier.Get<TransportState>().Occupants)
+        if (!repair)
+            foreach (var id in FiringPassengers(carrier))
                 foreach (var mount in TypeOf(_entityHandles[_indices[id]]).Weapons)
                 {
                     if (!mount.FireFromTransport || mount.Weapon.Effect != WeaponEffect.Damage) continue;
@@ -85,13 +85,13 @@ public sealed partial class SimulationWorld
             int i = _movementOrder[orderIndex]; ref var entity = ref _entityHandles[i];
             var entityIdentity = entity.Get<EntityIdentity>();
             var type = _types[entityIdentity.Type];
-            if (type.Weapons.Count == 0 || IsUnderConstruction(entity)) continue;
-            var carrierId = _storedCount != 0 ? CarrierOf(entity) : default;
+            if (type.Weapons.Count == 0 || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
+            var carrierId = HasStoredActors ? CarrierOf(entity) : default;
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
             var carrier = _entityHandles[origin];
             bool stored = origin != i;
             var sourceType = stored ? TypeOf(carrier) : type;
-            if (stored && sourceType.Transport is not { FireFromInside: true }) continue;
+            if (stored && !AllowsPassengerFire(sourceType)) continue;
             ref var entitySpatial = ref carrier.Get<SpatialState>();
             ref var entityCombat = ref entity.Get<CombatState>();
             ref var entityPresentation = ref entity.Get<PresentationState>();
@@ -220,9 +220,9 @@ public sealed partial class SimulationWorld
                 effects.TryGetValue(id, out long previous);
                 effects[id] = previous + value;
             }
-            if (weapon.PassengerDamage == 0 || !HasPassengers(entity)) return;
+            if (weapon.PassengerDamage == 0) return;
             int remaining = weapon.PassengerDamage;
-            foreach (var occupant in entity.Get<TransportState>().Occupants)
+            foreach (var occupant in Passengers(entity))
             {
                 _damage.TryGetValue(occupant, out long pending);
                 int health = _entityHandles[_indices[occupant]].Get<HealthState>().Current;

@@ -11,7 +11,6 @@ internal sealed class PlayerState(PlayerDefinition definition)
     public readonly uint Id = definition.Id;
     public readonly string Name = definition.Name;
     public long Credits = definition.Credits, Produced, Consumed;
-    public readonly SortedDictionary<uint, ConstructionProject> Projects = new();
 }
 public sealed record EconomyDefinition
 {

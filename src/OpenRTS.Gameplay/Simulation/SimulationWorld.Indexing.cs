@@ -5,9 +5,16 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
+    private bool _motionIndexDirty;
+
+    private void EnsureMotionIndex()
+    {
+        if (_motionIndexDirty) RebuildMotionIndex();
+    }
+
     private void RebuildMotionIndex()
     {
-        _transportIndexDirty = false;
+        _motionIndexDirty = false;
         var motion = _motion ?? _combatIndex; if (motion is null) return;
         motion.Clear(Count);
         if (ExistingStorage is null) return;
@@ -15,7 +22,7 @@ public sealed partial class SimulationWorld
         {
             foreach (var (identity, spatial, definition) in ExistingStorage.Query<EntityIdentity, SpatialState, EntityDefinition>())
             {
-                if (_storedCount != 0 && IsStored(_entityHandles[_indices[identity.Value.Id]])) continue;
+                if (HasStoredActors && IsStored(_entityHandles[_indices[identity.Value.Id]])) continue;
                 var type = definition.Value.Spatial!;
                 motion.Add(identity.Value.Id, spatial.Value.Position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
             }
