@@ -6,6 +6,7 @@
 
 - [План работы и распределение решений](docs/plan.md)
 - [Архитектурные договорённости](docs/architecture.md)
+- [Граница ядра и встроенных механик](docs/decisions/023-core-and-gameplay.md)
 - [ECS: выбор Frent, архитектура и план миграции](docs/research/ecs-selection/README.md)
 - [Первый ECS-перенос: lifecycle, производство и проверки](docs/verification/015-ecs-production.md)
 - [Составные definitions и независимые UI Actions](docs/decisions/015-composed-definitions-and-actions.md)
@@ -55,7 +56,7 @@ OpenRTS создаётся независимо от OpenRA. Совместим�
 
 Из Hyperfleets перенесена самостоятельная MIT библиотека DeclarativeContent с тестами и уведомлением о лицензии. [Происхождение и SHA-256](docs/vendor/declarative-content.json) фиксируют точную версию импорта. Проект не требует наличия Hyperfleets для сборки.
 
-Core использует закреплённый MIT пакет Frent0.9.1-beta: identity/lifecycle, производство, текущие/предыдущие координаты и HP уже в ECS; остальные горячие данные переносятся постепенно. EntityDefinition объединяет необязательные immutable capabilities, UnitDefinition сохраняет прежний пространственный API. YAML Actions.Definitions объявляет механику отдельно от ActionPanel.Buttons. Frent.World рассматривается как хранилище; разные домены игры могут использовать разные stores или обычные структуры. Прямой потребитель создаёт SimulationWorld через `using`; SimulationSession освобождает принадлежащий ей мир сама. [Лицензия зависимости](docs/vendor/frent-license.txt).
+`OpenRTS.Core` собирается отдельно и содержит общие типы, RNG и порядок команд. Для встроенной симуляции подключается `OpenRTS.Gameplay`. В ней находятся `SimulationWorld`, механики и ECS на закреплённом MIT пакете Frent 0.9.1-beta. `OpenRTS.Content` компилирует YAML в определения Gameplay и отделяет `Actions.Definitions` от `ActionPanel.Buttons`. Игру с программными definitions можно собрать напрямую с Gameplay. Прямой потребитель создаёт `SimulationWorld` через `using`. `SimulationSession` освобождает принадлежащий ей мир сама. [Лицензия Frent](docs/vendor/frent-license.txt).
 
 Godot служит для ввода, сцены, интерфейса и звука. Headless и Godot используют одни определения и ту же симуляцию. Выделенный поток владеет миром; представление читает закреплённые кадры и интерполирует позиции. События передаются отдельно. Поля маршрутов строятся через ограниченный Parallel.For; результат пакета применяется после общего барьера.
 

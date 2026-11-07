@@ -1,13 +1,6 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0": {
-      "Frent": {
-        "type": "Direct",
-        "requested": "[0.9.1-beta, 0.9.1-beta]",
-        "resolved": "0.9.1-beta",
-        "contentHash": "VFqCigbLFeK4vsjKIAkUBF/AO27VLbM/rjplE45DwXu6vUW87FfuQRqQz0Khtt0dV2eKkOVsgadcgNFxft2hiA=="
-      }
-    }
+    "net10.0": {}
   }
 }

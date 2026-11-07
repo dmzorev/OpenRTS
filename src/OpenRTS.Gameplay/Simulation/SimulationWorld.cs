@@ -14,8 +14,8 @@ public sealed partial class SimulationWorld : IDisposable
     private Frent.Entity[] _unitHandles;
     private readonly Dictionary<EntityId, int> _indices;
     private readonly List<WorldEvent> _events = [];
-    private WorldCommand[] _commands = [];
-    private int _commandCount;
+    private readonly CommandBatch<WorldCommand> _commands = new();
+    private readonly Action<WorldCommand> _validateCommand;
     private uint _nextId = 1;
     private DeterministicRandom _random;
     private readonly GridNavigator? _navigation;
@@ -41,7 +41,7 @@ public sealed partial class SimulationWorld : IDisposable
     public double NavigationBuildMilliseconds => _weighted?.Milliseconds ?? _navigation?.LastBuildMilliseconds ?? 0;
     public int MovingCount => CountMoving();
     public ReadOnlySpan<WorldEvent> Events => CollectionsMarshal.AsSpan(_events);
-    public ReadOnlySpan<WorldCommand> AppliedCommands => _commands.AsSpan(0, _commandCount);
+    public ReadOnlySpan<WorldCommand> AppliedCommands => _commands.Applied;
 
     public SimulationWorld(IEnumerable<UnitDefinition> unitTypes, int width, int depth, ulong seed = 1,
         int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
@@ -65,6 +65,7 @@ public sealed partial class SimulationWorld : IDisposable
         _unitHandles = new Frent.Entity[initialCapacity];
         _indices = new(initialCapacity);
         _random = new(seed);
+        _validateCommand = ValidateCommand;
         _idOrder = Comparer<int>.Create((a, b) => _unitHandles[a].Get<UnitIdentity>().Id.Value.CompareTo(_unitHandles[b].Get<UnitIdentity>().Id.Value));
         if (navigationGrid is not null)
         {
@@ -109,34 +110,10 @@ public sealed partial class SimulationWorld : IDisposable
         if (_failed) throw new InvalidOperationException("An interrupted world cannot be advanced.");
         cancellationToken.ThrowIfCancellationRequested();
         long nextTick = checked(Tick + 1);
-        if (_commands.Length < commands.Length) Array.Resize(ref _commands, commands.Length);
-        commands.CopyTo(_commands);
-        Array.Sort(_commands, 0, commands.Length, CommandOrder.Instance);
-        for (int i = 0; i < commands.Length; i++)
-        {
-            var command = _commands[i];
-            if (command.Tick != nextTick || command.Sequence <= 0 || !Enum.IsDefined(command.Kind))
-                throw new ArgumentException("Commands must belong to the next tick and have a positive sequence and a known kind.", nameof(commands));
-            if (i > 0 && CommandOrder.Instance.Compare(_commands[i - 1], command) == 0)
-                throw new ArgumentException("Duplicate issuer/sequence in command batch.", nameof(commands));
-            if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
-                ValidatePosition(command.Position);
-            if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.PlanConstruction)
-                if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
-                    throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", nameof(commands));
-            if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
-                throw new ArgumentException("Scatter area must have positive extents.", nameof(commands));
-            if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
-            if (command.Kind == CommandKind.PlayAnimation && (command.Animation < 0 || command.DurationTicks < 1 ||
-                command.DurationTicks > 1000000 || !Enum.IsDefined(command.Track)))
-                throw new ArgumentException("Animation commands require a valid track, nonnegative ID and duration in 1..1000000 ticks.", nameof(commands));
-            if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.MoveGroup) && _navigation is null)
-                throw new ArgumentException("This world has no navigation layer.", nameof(commands));
-        }
+        _commands.Replace(commands, nextTick, _validateCommand);
 
         _events.Clear();
         RebuildMotionIndex();
-        _commandCount = commands.Length;
         Tick = nextTick;
         _stepCancellation = cancellationToken;
         try { foreach (var command in AppliedCommands) Apply(command); }
@@ -157,6 +134,26 @@ public sealed partial class SimulationWorld : IDisposable
             UpdatePresentation();
         }
         catch { _failed = true; throw; }
+    }
+
+    private void ValidateCommand(WorldCommand command)
+    {
+        const string batchArgument = "commands";
+        if (!Enum.IsDefined(command.Kind))
+            throw new ArgumentException("Commands must have a known kind.", batchArgument);
+        if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
+            ValidatePosition(command.Position);
+        if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.PlanConstruction)
+            if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
+                throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", batchArgument);
+        if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
+            throw new ArgumentException("Scatter area must have positive extents.", batchArgument);
+        if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
+        if (command.Kind == CommandKind.PlayAnimation && (command.Animation < 0 || command.DurationTicks < 1 ||
+            command.DurationTicks > 1000000 || !Enum.IsDefined(command.Track)))
+            throw new ArgumentException("Animation commands require a valid track, nonnegative ID and duration in 1..1000000 ticks.", batchArgument);
+        if ((command.Kind is CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.MoveGroup) && _navigation is null)
+            throw new ArgumentException("This world has no navigation layer.", batchArgument);
     }
 
     public void CopyPoses(Span<EntityPose> destination)
@@ -481,15 +478,5 @@ public sealed partial class SimulationWorld : IDisposable
             bit >>= 2;
         }
         return result;
-    }
-
-    private sealed class CommandOrder : IComparer<WorldCommand>
-    {
-        public static readonly CommandOrder Instance = new();
-        public int Compare(WorldCommand a, WorldCommand b)
-        {
-            int issuer = a.Issuer.CompareTo(b.Issuer);
-            return issuer != 0 ? issuer : a.Sequence.CompareTo(b.Sequence);
-        }
     }
 }

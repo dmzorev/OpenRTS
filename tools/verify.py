@@ -37,7 +37,7 @@ def main():
     frent = json.loads((ROOT / "docs/vendor/frent.json").read_text())
     if hashlib.sha256((ROOT / frent["license_file"]).read_bytes()).hexdigest() != frent["license_file_sha256"]:
         raise RuntimeError("Frent license differs from the verified package notice")
-    dependency = json.loads((ROOT / "src/OpenRTS.Core/packages.lock.json").read_text())["dependencies"]["net10.0"]["Frent"]
+    dependency = json.loads((ROOT / "src/OpenRTS.Gameplay/packages.lock.json").read_text())["dependencies"]["net10.0"]["Frent"]
     if dependency["resolved"] != frent["version"] or dependency["contentHash"] != frent["content_hash_sha512_base64"]:
         raise RuntimeError("Frent dependency differs from the verified package provenance")
     print("PASS pinned Frent MIT license notice matches the verified package", flush=True)

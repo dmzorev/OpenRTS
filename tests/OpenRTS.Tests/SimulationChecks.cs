@@ -92,6 +92,18 @@ internal static class SimulationChecks
             Reject<ArgumentException>(() => world.Step([new(1, 0, 1, (CommandKind)999)]));
             Check(before == world.Report(), "Rejected batch mutated world");
         });
+        test("Rejected command batches preserve the last applied batch", () =>
+        {
+            using var world = World();
+            var applied = new WorldCommand(1, 0, 1, CommandKind.MoveAll, Position: new(1024, 0));
+            world.Step([applied]);
+            Reject<ArgumentOutOfRangeException>(() => world.Step([
+                new(2, 0, 1, CommandKind.MoveAll), new(2, 0, 2, CommandKind.MoveAll, Position: new(-1, 0))]));
+            Check(world.AppliedCommands.SequenceEqual([applied]), "Rejected commands replaced the last applied batch");
+            world.Step([new(2, 0, 1, CommandKind.MoveAll)]);
+            world.Step();
+            Check(world.AppliedCommands.IsEmpty, "An empty tick retained commands from the previous tick");
+        });
         test("Packed removal preserves stable IDs and self-contained events", () =>
         {
             using var world = World(2);
