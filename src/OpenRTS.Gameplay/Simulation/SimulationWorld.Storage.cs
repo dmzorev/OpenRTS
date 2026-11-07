@@ -10,6 +10,8 @@ public sealed partial class SimulationWorld
     private bool _producersDirty;
     private EntityId[] _producerOrder = [];
 
+    private UnitDefinition TypeOf(Frent.Entity actor) => _types[actor.Get<EntityIdentity>().Type];
+
     private bool TryGetProducer(int index, [NotNullWhen(true)] out ProducerState? producer)
     {
         producer = null;

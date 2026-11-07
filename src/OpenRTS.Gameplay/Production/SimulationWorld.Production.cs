@@ -5,6 +5,7 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
+    private readonly ProductionRateRule? _productionRate;
     private int[][] _productTypes = []; private BuildDefinition[][] _builds = [];
     private long _nextTaskId = 1;
     private bool _hasBuilders;
@@ -128,10 +129,13 @@ public sealed partial class SimulationWorld
                 var task = tasks[0]; var build = _builds[actorIdentity.Type][task.Product];
                 if (!task.Ready)
                 {
+                    bool lowPower = ReadConditions(type, owner).HasFlag(GameplayConditions.LowPower);
+                    var rate = _productionRate?.Rate(lowPower) ?? (lowPower ? ProductionRate.Half : ProductionRate.Normal);
+                    if (rate == ProductionRate.Paused) continue;
                     var policy = type.TaskQueues[q].Payment;
                     if (policy == PaymentPolicy.Upfront && task.Paid < build.Cost)
                     { if (!Spend(owner, build.Cost - task.Paid)) continue; task.Paid = build.Cost; }
-                    int work = task.Remainder + (type.Economy is not null && LowPower(owner) ? 1 : 2);
+                    int work = task.Remainder + (int)rate;
                     int progress = Math.Min(build.Ticks, task.Progress + work / 2);
                     int due = policy == PaymentPolicy.Progressive ? (int)(((long)build.Cost * progress + build.Ticks - 1) / build.Ticks) : policy == PaymentPolicy.OnCompletion && progress == build.Ticks ? build.Cost : task.Paid;
                     if (!Spend(owner, due - task.Paid)) continue;
@@ -143,7 +147,7 @@ public sealed partial class SimulationWorld
                 if (!rebuilt) { RebuildMotionIndex(); rebuilt = true; }
                 int target = _productTypes[actorIdentity.Type][task.Product]; var settings = type.TaskQueues[q];
                 var exit = new WorldPosition(Math.Clamp(actor.Get<SpatialState>().Position.X + settings.Exit.X, 0, Width), Math.Clamp(actor.Get<SpatialState>().Position.Y + settings.Exit.Y, 0, Depth));
-                if (!FindProductionExit(target, exit, settings.ExitSearchRadius, out var position))
+                if (!TryFindExitPlacement(target, exit, settings.ExitSearchRadius, out var position))
                 { if (!task.Blocked) _events.Add(new(Tick, WorldEventKind.ProductionBlocked, id)); task.Blocked = true; continue; }
                 var spawned = Spawn(target, position, actor.Get<OwnershipState>().Owner); completed++;
                 if (settings.ExitAnimation is { } animation) ApplyPresentation(_indices[id], new(Tick, 0, 1, CommandKind.PlayAnimation, id,
@@ -152,21 +156,6 @@ public sealed partial class SimulationWorld
                 FinishTask(id, q, task, spawned);
             }
         }
-    }
-    private bool FindProductionExit(int type, WorldPosition exit, int radius, out WorldPosition point, int carrier = -1)
-    {
-        point = default; long best = long.MaxValue; bool found = false;
-        // shortcut: bounded256 lattice for exits; add authored lanes when dense factories need exact packing.
-        for (int y = -(radius / 256) * 256; y <= radius; y += 256) for (int x = -(radius / 256) * 256; x <= radius; x += 256)
-        {
-            long distance = (long)x * x + (long)y * y; if (distance > (long)radius * radius || distance >= best) continue;
-            var candidate = new WorldPosition(exit.X + x, exit.Y + y, exit.Elevation);
-            if (candidate.X < 0 || candidate.X > Width || candidate.Y < 0 || candidate.Y > Depth || !StopAllowed(type, candidate) || candidate.X < _types[type].Body.HalfWidth || candidate.Y < _types[type].Body.HalfHeight || candidate.X + _types[type].Body.HalfWidth > Width || candidate.Y + _types[type].Body.HalfHeight > Depth) continue;
-            if (carrier >= 0 && ObjectGeometry.DistanceSquared(_types[type], candidate, TypeOf(_entityHandles[carrier]), exit, out _, out _) == 0) continue;
-            if ((_motion ?? _combatIndex) is { } index && !index.ClearPlacement(candidate, out _, _types[type].Body)) continue;
-            best = distance; point = GroundPosition(candidate, exit.Elevation); found = true;
-        }
-        return found;
     }
     public int TaskCount
     {

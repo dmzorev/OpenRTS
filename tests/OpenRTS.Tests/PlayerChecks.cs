@@ -1,4 +1,5 @@
 using OpenRTS.Core;
+using OpenRTS.Core.Production;
 using OpenRTS.Content;
 using DeclarativeContent;
 using static NavigationChecks;
@@ -54,6 +55,67 @@ internal static class PlayerChecks
             w.Step(); w.Step(); NavigationChecks.Check(w.Count == 3, "Half-speed production did not finish on fourth tick");
             w.Step([new(5, 0, 1, CommandKind.Spawn, Position: new(10000, 10000), UnitType: 2, Owner: 1)]);
             NavigationChecks.Check(!Player(w, 1).LowPower && Poses(w).Single(p => p.Id.Value == 2).Health < 100, "Power recovery did not restore weapons");
+        });
+        foreach (var policy in Enum.GetValues<PaymentPolicy>())
+        test($"Players: registered production rate pauses {policy} work and resumes without charging twice", () =>
+        {
+            int rateSelections = 0;
+            var rule = new ProductionRateRule("test.pause-lowpower", 1, lowPower =>
+            {
+                rateSelections++;
+                return lowPower ? ProductionRate.Paused : ProductionRate.Normal;
+            });
+            UnitDefinition[] types = [new("unit", 100, build: new(4, 20)), new("factory", 100, ["idle"], ["lowpower"], movable: false,
+                taskQueues: [new("q", payment: policy, exit: new(0, 2048))], products: [new("make", "unit", "q")], economy: new(-10)), Building("plant", 20)];
+            using var a = World(1, rule);
+            using var b = World(4, rule);
+            using var builtIn = World(1, null);
+            var halfSpeed = new ProductionRateRule(rule.Id, rule.Version, lowPower => lowPower ? ProductionRate.Half : ProductionRate.Normal);
+            using var differentRule = World(1, halfSpeed);
+            NavigationChecks.Check(a.Report() != builtIn.Report() && a.Report() != differentRule.Report(), "Report omits rule configuration");
+
+            int remaining = policy switch { PaymentPolicy.Upfront => 20, PaymentPolicy.Progressive => 35, _ => 40 };
+            uint visual = types[1].StateMask("lowpower");
+            Advance([new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "make")]);
+            NavigationChecks.Check(Task(a).Progress == 1 && Player(a, 1).Credits == remaining, "Wrong progress before power loss");
+            Advance([new(2, 0, 1, CommandKind.Destroy, new(2))]);
+            Advance([new(3, 0, 1, CommandKind.SetVisualStates, new(1))]);
+            Advance();
+            NavigationChecks.Check(Task(a).Progress == 1 && Player(a, 1).Credits == remaining, "Power loss changed paid progress");
+            NavigationChecks.Check(a.TryGetConditions(new(1), out var facts) && facts == GameplayConditions.LowPower &&
+                !a.TryGetConditions(new(2), out _) && Poses(a).Single().Presentation.States == visual, "Low power fact or projection is stale");
+
+            Advance([new(5, 0, 1, CommandKind.Spawn, Position: new(8192, 8192), UnitType: 2, Owner: 1),
+                new(5, 0, 2, CommandKind.SetVisualStates, new(1), States: visual)]);
+            NavigationChecks.Check(Task(a).Progress == 2 && a.TryGetConditions(new(1), out facts) && facts == GameplayConditions.None,
+                "Visual state affected production or power recovery was deferred");
+            Advance();
+            NavigationChecks.Check(Task(a).Progress == 3, "Production resumed at the wrong rate");
+            Advance();
+            NavigationChecks.Check(a.TaskCount == 0 && a.Count == 3 && Player(a, 1).Credits == 20 &&
+                a.Events.ToArray().Count(e => e.Kind == WorldEventKind.Produced) == 1, "Queue did not pay and release exactly once");
+            NavigationChecks.Check(rateSelections == 2, "Production executed the registration callback during a tick");
+
+            SimulationWorld World(int workers, ProductionRateRule? rate)
+            {
+                var world = new SimulationWorld(rate, types, 16384, 16384, navigationGrid: new(16, 16), navigationWorkers: workers,
+                    players: [new(1, "blue", 40)]);
+                world.AddInitialUnit(1, new(4096, 4096), 1);
+                world.AddInitialUnit(2, new(8192, 8192), 1);
+                return world;
+            }
+            void Advance(WorldCommand[]? commands = null)
+            {
+                a.Step(commands);
+                b.Step(commands);
+                NavigationChecks.Check(a.Report() == b.Report() && a.Events.SequenceEqual(b.Events), "Custom rule differs by worker count");
+            }
+            static TaskPose Task(SimulationWorld world)
+            {
+                var tasks = new TaskPose[world.TaskCount];
+                world.CopyTaskPoses(tasks);
+                return tasks.Single();
+            }
         });
         test("Players: default capture time, neutralization, recapture and income timers", () =>
         {

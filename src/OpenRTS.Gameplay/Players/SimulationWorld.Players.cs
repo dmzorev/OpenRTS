@@ -37,7 +37,24 @@ public sealed partial class SimulationWorld
                 }
         _powerDirty = false;
     }
-    private bool LowPower(uint owner) { UpdatePower(); return owner != 0 && Player(owner).Produced < Player(owner).Consumed; }
+    private GameplayConditions ReadConditions(UnitDefinition source, uint owner)
+    {
+        if (source.Economy is null || owner == 0) return GameplayConditions.None;
+        UpdatePower();
+        var player = _players[owner];
+        return player.Produced < player.Consumed ? GameplayConditions.LowPower : GameplayConditions.None;
+    }
+
+    /// <summary>Read the current facts for a live entity on the simulation owner thread.</summary>
+    public bool TryGetConditions(EntityId id, out GameplayConditions conditions)
+    {
+        ThrowIfDisposed();
+        if (_failed) throw new InvalidOperationException("Incomplete world.");
+        conditions = GameplayConditions.None;
+        if (!TryGetEntity(id, out var entity)) return false;
+        if (!IsUnderConstruction(entity)) conditions = ReadConditions(TypeOf(entity), entity.Get<OwnershipState>().Owner);
+        return true;
+    }
     public void CopyPlayers(Span<PlayerPose> destination)
     {
         ThrowIfDisposed(); if (_failed) throw new InvalidOperationException("Incomplete world.");

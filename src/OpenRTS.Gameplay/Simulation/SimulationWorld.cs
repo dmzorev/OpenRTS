@@ -30,6 +30,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
         NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
         int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
+        : this(null, unitTypes, width, depth, seed, initialCapacity, tickRate, speedPerTick,
+            navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs, players) { }
+
+    public SimulationWorld(ProductionRateRule? productionRate, IEnumerable<UnitDefinition> unitTypes, int width, int depth,
+        ulong seed = 1, int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
+        NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
+        int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
         : base(width, depth, seed, initialCapacity, tickRate)
     {
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
@@ -37,6 +44,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
         InitializePlayers(players);
+        _productionRate = productionRate;
         InitializeProduction();
         SpeedPerTick = speedPerTick;
         _idOrder = Comparer<int>.Create((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
@@ -141,7 +149,9 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             var carrier = CarrierOf(entity);
             if (carrier.Value != 0) spatial = ref _entityHandles[_indices[carrier]].Get<SpatialState>();
             bool constructing = IsUnderConstruction(entity);
-            if (!constructing && _types[entityIdentity.Type].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.Type].StateMask(power.LowPowerState);
+            var type = _types[entityIdentity.Type];
+            if (!constructing && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
+                states |= type.LowPowerVisualMask;
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
                 if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.Type].TaskQueues[q].WorkingState is { } state)
                     states |= _types[entityIdentity.Type].StateMask(state);
@@ -170,7 +180,10 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(_navigation is null ? 10 : 14);
+            int format = _navigation is null ? 10 : 14;
+            if (_productionRate is not null) format = _navigation is null ? 15 : 16;
+            writer.Write(format);
+            _productionRate?.WriteState(writer);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(NextEntityId); writer.Write(_random.State);
             writer.Write(_types.Length);

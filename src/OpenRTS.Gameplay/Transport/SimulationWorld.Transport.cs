@@ -19,7 +19,6 @@ public sealed partial class SimulationWorld
     private static EntityId CarrierOf(Frent.Entity actor) => actor.Has<PassengerState>() ? actor.Get<PassengerState>().Carrier : default;
     private static bool IsStored(Frent.Entity actor) => CarrierOf(actor).Value != 0;
     private static bool HasPassengers(Frent.Entity actor) => actor.Has<TransportState>() && actor.Get<TransportState>().Occupants.Count != 0;
-    private UnitDefinition TypeOf(Frent.Entity actor) => _types[actor.Get<EntityIdentity>().Type];
 
     private bool CanEnter(int index, EntityId id, out int target)
     {
@@ -131,7 +130,7 @@ public sealed partial class SimulationWorld
             int actorIndex = _indices[id];
             var actor = _entityHandles[actorIndex];
             int unitType = actor.Get<EntityIdentity>().Type;
-            if (!FindProductionExit(unitType, position, radius, out var exit, index))
+            if (!TryFindExitPlacement(unitType, position, radius, out var exit, index))
             {
                 _events.Add(new(Tick, WorldEventKind.UnloadBlocked, id, position, unitType, TargetEntity: carrier.Get<EntityIdentity>().Id));
                 i++;

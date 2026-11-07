@@ -29,6 +29,8 @@ public sealed record UnitDefinition
     public PassengerDefinition? Passenger => Definition.Passenger;
     public TransportDefinition? Transport => Definition.Transport;
     public DestructionPolicy Destruction => Definition.Health!.Destruction;
+    internal bool DisableWeaponsOnLowPower { get; }
+    internal uint LowPowerVisualMask { get; }
 
     public UnitDefinition(EntityDefinition definition)
     {
@@ -36,6 +38,11 @@ public sealed record UnitDefinition
         if (definition.Health is null || definition.Spatial is null || definition.Presentation is null)
             throw new ArgumentException("The current unit simulation requires health, spatial and semantic presentation capabilities.", nameof(definition));
         Definition = definition;
+        if (definition.Economy is { } economy)
+        {
+            DisableWeaponsOnLowPower = economy.DisableWeapons;
+            LowPowerVisualMask = definition.Presentation.StateMask(economy.LowPowerState);
+        }
         IdleAnimation = definition.Presentation.IdleAnimation;
         MoveAnimation = definition.Presentation.MoveAnimation;
         if (!Movable && MoveAnimation < 0) MoveAnimation = IdleAnimation;

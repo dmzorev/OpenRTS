@@ -149,7 +149,7 @@ public sealed partial class SimulationWorld
             var position = project?.Position ?? _entityHandles[foundation].Get<SpatialState>().Position;
             if (!BuildInRange(actor, target, position)) continue;
             // Low power slows fixed builders, just like the legacy production queues.
-            int work = TypeOf(actor).Economy is not null && LowPower(actor.Get<OwnershipState>().Owner) ? 1 : 2;
+            int work = ReadConditions(TypeOf(actor), actor.Get<OwnershipState>().Owner).HasFlag(GameplayConditions.LowPower) ? 1 : 2;
             if (project is not null)
             {
                 if (project.LastAttempt == Tick) continue;
