@@ -1,36 +1,23 @@
-using System.Runtime.InteropServices;
+using Frent;
 using OpenRTS.Core.Simulation;
+using OpenRTS.Core.Transport;
 
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private struct PassengerState { public EntityId Carrier; }
-
-    private sealed class TransportState
-    {
-        public readonly List<EntityId> Occupants = [];
-        public int UsedSlots;
-        public bool ClaimedNeutral;
-    }
-
-    private const int BoardingRange = 512;
+    private readonly ITransportMechanic? _transport;
     private int _storedCount;
     private bool HasStoredActors => _storedCount != 0;
-    private static EntityId CarrierOf(Frent.Entity actor) => actor.Has<PassengerState>() ? actor.Get<PassengerState>().Carrier : default;
-    private static bool IsStored(Frent.Entity actor) => CarrierOf(actor).Value != 0;
-    private static bool HasPassengers(Frent.Entity actor) => actor.Has<TransportState>() && actor.Get<TransportState>().Occupants.Count != 0;
-    // The caller consumes the view before any boarding or removal.
-    private static ReadOnlySpan<EntityId> Passengers(Frent.Entity actor) => actor.Has<TransportState>()
-        ? CollectionsMarshal.AsSpan(actor.Get<TransportState>().Occupants) : [];
+    private EntityId CarrierOf(Entity actor) => HasStoredActors ? _transport!.CarrierOf(actor) : default;
+    private bool IsStored(Entity actor) => CarrierOf(actor).Value != 0;
+    private bool HasPassengers(Entity actor) => !Passengers(actor).IsEmpty;
+    private ReadOnlySpan<EntityId> Passengers(Entity actor) => HasStoredActors ? _transport!.Passengers(actor) : [];
     private static bool AllowsPassengerFire(UnitDefinition type) => type.Transport is { FireFromInside: true };
-    private ReadOnlySpan<EntityId> FiringPassengers(Frent.Entity carrier) => AllowsPassengerFire(TypeOf(carrier)) ? Passengers(carrier) : [];
+    private ReadOnlySpan<EntityId> FiringPassengers(Entity carrier) => HasStoredActors && AllowsPassengerFire(TypeOf(carrier)) ? Passengers(carrier) : [];
 
-    private static void InitializeTransport(Frent.Entity entity, UnitDefinition type)
-    {
-        if (type.Passenger is not null) entity.Add(new PassengerState());
-        if (type.Transport is not null) entity.Add(new TransportState());
-    }
+    private TransportParticipant TransportParticipantOf(Entity entity)
+        => new(entity, entity.Get<EntityIdentity>().Id, TypeOf(entity), entity.Get<OwnershipState>().Owner);
 
     private void ApplyTransport(WorldCommand command)
     {
@@ -64,13 +51,14 @@ public sealed partial class SimulationWorld
     {
         target = -1;
         var actor = _entityHandles[index];
-        if (TypeOf(actor).Passenger is not { } passenger || HasPassengers(actor) ||
+        if (_transport is null || TypeOf(actor).Passenger is null || HasPassengers(actor) ||
             !_indices.TryGetValue(id, out target) || index == target) return false;
         var carrier = _entityHandles[target];
-        if (IsStored(carrier) || (ReadLocalConditions(carrier) & GameplayConditions.Constructing) != 0 || TypeOf(carrier).Transport is not { } transport ||
-            !transport.Accepts.Contains(passenger.Type) || passenger.Slots > transport.Slots) return false;
-        uint owner = actor.Get<OwnershipState>().Owner, host = carrier.Get<OwnershipState>().Owner;
-        return owner != 0 && (owner == host || host == 0 && !TypeOf(carrier).Movable);
+        if (IsStored(carrier) || (ReadLocalConditions(carrier) & GameplayConditions.Constructing) != 0 || TypeOf(carrier).Transport is null) return false;
+        var passenger = TransportParticipantOf(actor);
+        var host = TransportParticipantOf(carrier);
+        return passenger.Owner != 0 && (passenger.Owner == host.Owner || host.Owner == 0 && !host.Type.Movable) &&
+            _transport.Accepts(passenger, host);
     }
 
     private void UpdateEnter(int index, UnitOrder order)
@@ -87,15 +75,19 @@ public sealed partial class SimulationWorld
         var carrier = _entityHandles[target];
         var carrierPosition = carrier.Get<SpatialState>().Position;
         var position = actor.Get<SpatialState>().Position;
+        var passenger = TransportParticipantOf(actor);
+        var host = TransportParticipantOf(carrier);
+        int range = _transport!.BoardingRange(passenger, host);
+        if (range < 0) throw new InvalidOperationException("Transport boarding range cannot be negative.");
         ref var orders = ref actor.Get<OrderState>();
-        if (ObjectGeometry.DistanceSquared(TypeOf(actor), position, TypeOf(carrier), carrierPosition, out _, out _) > (long)BoardingRange * BoardingRange)
+        if (ObjectGeometry.DistanceSquared(passenger.Type, position, host.Type, carrierPosition, out _, out _) > (long)range * range)
         {
             bool newGoal = orders.OrderPhase != OrderPhase.Approaching ||
                 orders.ActiveOrder.Position != carrierPosition && (!actor.Get<MotionState>().Moving || (Tick + identity.Id.Value) % 8 == 0);
             if (newGoal)
             {
                 // Aim at the nearest face; terrain resolution chooses a legal stop beside a footprint.
-                var approach = ObjectGeometry.ClosestPoint(TypeOf(carrier), carrierPosition, position);
+                var approach = ObjectGeometry.ClosestPoint(host.Type, carrierPosition, position);
                 orders.ActiveOrder = order with { Position = carrierPosition };
                 if (!SetTarget(index, approach)) { FinishTransportOrder(index); return; }
                 orders.OrderPhase = OrderPhase.Approaching;
@@ -105,28 +97,20 @@ public sealed partial class SimulationWorld
         }
 
         FinishTransportOrder(index);
-        var cargo = carrier.Get<TransportState>();
-        int slots = TypeOf(actor).Passenger!.Slots;
-        if (cargo.UsedSlots + slots > TypeOf(carrier).Transport!.Slots)
+        if (!_transport.HasRoom(passenger, host))
         {
             _events.Add(new(Tick, WorldEventKind.TransportFull, identity.Id, TargetEntity: order.Target));
             return;
         }
 
-        uint owner = actor.Get<OwnershipState>().Owner;
-        if (carrier.Get<OwnershipState>().Owner == 0)
-        {
-            ChangeOwner(target, owner);
-            cargo.ClaimedNeutral = true;
-        }
+        bool claimedNeutral = host.Owner == 0;
+        if (claimedNeutral) ChangeOwner(target, passenger.Owner);
         orders.PendingOrders?.Clear();
-        actor.Get<PassengerState>().Carrier = order.Target;
-        cargo.Occupants.Add(identity.Id);
+        _transport.Board(passenger, host, claimedNeutral);
         _storedCount++;
-        cargo.UsedSlots += slots;
         CancelWindups(index);
         _motionIndexDirty = true;
-        _events.Add(new(Tick, WorldEventKind.EnteredTransport, identity.Id, carrierPosition, identity.Type, TargetEntity: order.Target, Owner: owner));
+        _events.Add(new(Tick, WorldEventKind.EnteredTransport, identity.Id, carrierPosition, identity.Type, TargetEntity: order.Target, Owner: passenger.Owner));
     }
 
     private void FinishTransportOrder(int index)
@@ -159,13 +143,14 @@ public sealed partial class SimulationWorld
         var carrier = _entityHandles[index];
         if (IsStored(carrier) || !HasPassengers(carrier)) return;
         EnsureMotionIndex();
-        var cargo = carrier.Get<TransportState>();
         var position = carrier.Get<SpatialState>().Position;
         var type = TypeOf(carrier);
         int radius = Math.Max(type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight) + 3072;
-        for (int i = 0; i < cargo.Occupants.Count;)
+        for (int i = 0; ;)
         {
-            var id = cargo.Occupants[i];
+            var occupants = Passengers(carrier);
+            if (i >= occupants.Length) break;
+            var id = occupants[i];
             if (passenger.Value != 0 && id != passenger) { i++; continue; }
             int actorIndex = _indices[id];
             var actor = _entityHandles[actorIndex];
@@ -187,29 +172,26 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private void DetachPassenger(Frent.Entity actor)
+    private void DetachPassenger(Entity actor)
     {
         var id = CarrierOf(actor);
         if (id.Value == 0) return;
-        actor.Get<PassengerState>().Carrier = default;
-        _storedCount--;
         int index = _indices[id];
-        var cargo = _entityHandles[index].Get<TransportState>();
-        cargo.Occupants.Remove(actor.Get<EntityIdentity>().Id);
-        cargo.UsedSlots -= TypeOf(actor).Passenger!.Slots;
-        if (cargo.Occupants.Count == 0 && cargo.ClaimedNeutral)
-        {
-            cargo.ClaimedNeutral = false;
-            ChangeOwner(index, 0);
-        }
+        bool returnNeutral = _transport!.Detach(TransportParticipantOf(actor), TransportParticipantOf(_entityHandles[index]));
+        _storedCount--;
+        if (returnNeutral) ChangeOwner(index, 0);
     }
 
-    private void RemovePassengers(Frent.Entity carrier)
+    private void RemovePassengers(Entity carrier)
     {
         if (!HasPassengers(carrier)) return;
-        var cargo = carrier.Get<TransportState>();
-        cargo.ClaimedNeutral = false;
-        while (cargo.Occupants.Count > 0) DestroyIndex(_indices[cargo.Occupants[^1]], wreck: false);
+        _transport!.SuppressNeutralReturn(carrier);
+        var occupants = Passengers(carrier);
+        while (!occupants.IsEmpty)
+        {
+            DestroyIndex(_indices[occupants[^1]], wreck: false);
+            occupants = Passengers(carrier);
+        }
     }
 
     private bool RemoveFromTransport(Frent.Entity entity, bool wreck)
@@ -232,13 +214,9 @@ public sealed partial class SimulationWorld
         return carrier;
     }
 
-    private static void WriteTransport(BinaryWriter writer, Frent.Entity actor)
+    private void WriteTransport(BinaryWriter writer, Entity actor)
     {
         writer.Write(CarrierOf(actor).Value);
-        if (!actor.Has<TransportState>()) return;
-        var cargo = actor.Get<TransportState>();
-        writer.Write(cargo.ClaimedNeutral);
-        writer.Write(cargo.Occupants.Count);
-        foreach (var id in cargo.Occupants) writer.Write(id.Value);
+        _transport?.WriteEntityState(writer, actor);
     }
 }

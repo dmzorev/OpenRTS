@@ -1,5 +1,7 @@
 using OpenRTS.Core.Capture;
+using OpenRTS.Core.Construction;
 using OpenRTS.Core.Production;
+using OpenRTS.Core.Transport;
 
 namespace OpenRTS.Core;
 
@@ -32,7 +34,11 @@ public sealed class GameplayRegistration<T> where T : class
 public sealed class GameplayMechanics
 {
     public static GameplayRegistration<ICaptureMechanic> BuiltInCapture { get; } = new("openrts.capture", 1, static () => new TimedCapture());
+    public static GameplayRegistration<ITransportMechanic> BuiltInTransport { get; } = new("openrts.transport", 1, static () => new StandardTransport());
+    public static GameplayRegistration<IConstructionMechanic> BuiltInConstruction { get; } = new("openrts.construction", 1, static () => new StandardConstruction());
     public GameplayRegistration<ICaptureMechanic>? Capture { get; init; } = BuiltInCapture;
+    public GameplayRegistration<ITransportMechanic>? Transport { get; init; } = BuiltInTransport;
+    public GameplayRegistration<IConstructionMechanic>? Construction { get; init; } = BuiltInConstruction;
     public GameplayRegistration<IEndOfTickRule>? EndOfTick { get; init; }
     public ProductionRateRule? ProductionRate { get; init; }
 }
@@ -57,9 +63,12 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
-        bool custom = !ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture) || _endOfTick is not null;
+        bool customTransportOrConstruction = !ReferenceEquals(_mechanics.Transport, GameplayMechanics.BuiltInTransport) ||
+            !ReferenceEquals(_mechanics.Construction, GameplayMechanics.BuiltInConstruction);
+        bool custom = customTransportOrConstruction || !ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture) || _endOfTick is not null;
         int format = _navigation is null ? 10 : 14;
-        if (custom) format = _navigation is null ? 17 : 18;
+        if (customTransportOrConstruction) format = _navigation is null ? 19 : 20;
+        else if (custom) format = _navigation is null ? 17 : 18;
         else if (_productionRate is not null) format = _navigation is null ? 15 : 16;
         writer.Write(format);
         if (custom) writer.Write(_productionRate is not null);
@@ -72,5 +81,13 @@ public sealed partial class SimulationWorld
         writer.Write(_endOfTick is not null);
         _mechanics.EndOfTick?.WriteIdentity(writer);
         _endOfTick?.WriteState(writer);
+        if (!customTransportOrConstruction) return;
+
+        writer.Write(_mechanics.Transport is not null);
+        _mechanics.Transport?.WriteIdentity(writer);
+        _transport?.WriteState(writer);
+        writer.Write(_mechanics.Construction is not null);
+        _mechanics.Construction?.WriteIdentity(writer);
+        _construction?.WriteState(writer);
     }
 }

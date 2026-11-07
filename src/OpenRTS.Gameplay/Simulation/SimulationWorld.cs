@@ -63,10 +63,15 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         bool usesCapture = _types.Any(type => type.Capturable is not null || type.Abilities.Any(a => a.Kind == AbilityKind.Capture));
         if (usesCapture && mechanics.Capture is null)
             throw new ArgumentException("Unit definitions require a capture mechanic.", nameof(mechanics));
+        bool usesTransport = _types.Any(type => type.Transport is not null || type.Passenger is not null);
+        if (usesTransport && mechanics.Transport is null)
+            throw new ArgumentException("Unit definitions require a transport mechanic.", nameof(mechanics));
+        bool usesConstruction = _types.Any(type => type.ConstructionRange > 0);
+        if (usesConstruction && mechanics.Construction is null)
+            throw new ArgumentException("Unit definitions require a construction mechanic.", nameof(mechanics));
         InitializePlayers(players);
         _productionRate = mechanics.ProductionRate;
         InitializeProduction();
-        _hasBuilders = _types.Any(t => t.ConstructionRange > 0);
         SpeedPerTick = speedPerTick;
         _idOrder = Comparer<int>.Create((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
         if (navigationGrid is not null)
@@ -82,6 +87,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
         if (usesCapture || !ReferenceEquals(mechanics.Capture, GameplayMechanics.BuiltInCapture)) _capture = mechanics.Capture?.Create();
+        if (usesTransport || !ReferenceEquals(mechanics.Transport, GameplayMechanics.BuiltInTransport)) _transport = mechanics.Transport?.Create();
+        if (usesConstruction || !ReferenceEquals(mechanics.Construction, GameplayMechanics.BuiltInConstruction)) _construction = mechanics.Construction?.Create();
         _endOfTick = mechanics.EndOfTick?.Create();
     }
 
@@ -378,7 +385,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             state = type.TaskQueues.Count == 0
                 ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
                 : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
-            InitializeTransport(state, type);
+            _transport?.Initialize(state, type);
             initialize?.Invoke(state);
             InitializeEconomy(state, type, owner);
             _capture?.Initialize(state, type);

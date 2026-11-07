@@ -21,4 +21,4 @@
 
 Своя игра может использовать Core с собственными правилами или взять готовый `SimulationWorld`. Внутри готового мира часть систем ещё связана общим координатором. Первый контракт подмены и факт `lowpower` описаны в [решении 024](024-production-rate-and-lowpower.md). Сменный Capture и добавочное правило конца тика описаны в [решении 025](025-capture-mechanic.md).
 
-Владение состоянием Transport и Construction и вычисляемая готовность сущности описаны в [решении 026](026-transport-construction-boundaries.md).
+Границы Transport и Construction, вычисляемая готовность и сменные исполнители описаны в решениях 026 и 027. [Границы](026-transport-construction-boundaries.md) · [Регистрация](027-registered-transport-and-construction.md)

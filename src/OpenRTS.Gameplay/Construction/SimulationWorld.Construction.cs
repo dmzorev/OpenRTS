@@ -6,16 +6,9 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private struct ConstructionState(int required, int startingHealth, long startedAt)
-    {
-        public readonly int Required = required, StartingHealth = startingHealth;
-        public readonly long StartedAt = startedAt;
-        public int Work;
-    }
-
     private const int MaximumPlayerProjects = 256;
     private const int ClearanceTimeout = 250;
-    private readonly bool _hasBuilders;
+    private readonly IConstructionMechanic? _construction;
     private readonly SortedDictionary<uint, SortedDictionary<uint, ConstructionProject>> _constructionProjects = new();
     private readonly List<ConstructionProject> _siteReservations = [];
     private readonly List<int> _siteOccupants = [];
@@ -23,7 +16,7 @@ public sealed partial class SimulationWorld
     private readonly List<EntityId> _siteCandidates = [];
     private readonly List<(WorldPosition Position, BodyShape Body)> _evacuationGoals = [];
 
-    private bool IsUnderConstruction(Frent.Entity actor) => _hasBuilders && actor.Has<ConstructionState>();
+    private bool IsUnderConstruction(Frent.Entity actor) => _construction?.IsFoundation(actor) == true;
     private bool HasSiteReservations => _siteReservations.Count != 0;
     private void BeginConstructionOrders() => _activeBuilders.Clear();
 
@@ -163,15 +156,14 @@ public sealed partial class SimulationWorld
             int target = project?.UnitType ?? _entityHandles[foundation].Get<EntityIdentity>().Type;
             var position = project?.Position ?? _entityHandles[foundation].Get<SpatialState>().Position;
             if (!BuildInRange(actor, target, position)) continue;
-            // Low power slows fixed builders, just like the legacy production queues.
-            int work = ReadConditions(TypeOf(actor), actor.Get<OwnershipState>().Owner).HasFlag(GameplayConditions.LowPower) ? 1 : 2;
+            var conditions = ReadConditions(TypeOf(actor), actor.Get<OwnershipState>().Owner);
             if (project is not null)
             {
                 if (project.LastAttempt == Tick) continue;
                 project.LastAttempt = Tick;
                 if (!TryStartConstruction(project, out foundation)) continue;
             }
-            if (_entityHandles[foundation].Get<ConstructionState>().StartedAt < Tick) AdvanceConstruction(foundation, work);
+            AdvanceConstruction(foundation, conditions);
         }
     }
 
@@ -240,9 +232,15 @@ public sealed partial class SimulationWorld
             return false;
         }
         var typeDefinition = _types[project.UnitType];
-        int health = Math.Max(1, (int)((long)typeDefinition.MaxHealth * project.Recipe.InitialHealthPercent / 100));
-        Spawn(project.UnitType, project.Position, project.Owner, id: project.Id, initialHealth: health,
-            initialize: entity => entity.Add(new ConstructionState(project.Recipe.Ticks * 2, health, Tick)));
+        var start = _construction!.PlanFoundation(typeDefinition, project.Recipe);
+        if (start.Health < 1 || start.Health > typeDefinition.MaxHealth || start.RequiredWork < 1)
+            throw new InvalidOperationException("Construction returned invalid foundation health or work.");
+        Spawn(project.UnitType, project.Position, project.Owner, id: project.Id, initialHealth: start.Health,
+            initialize: entity =>
+            {
+                _construction.Initialize(entity, start, Tick);
+                if (!_construction.IsFoundation(entity)) throw new InvalidOperationException("Construction did not initialize the foundation.");
+            });
         foundation = _indices[project.Id];
         RemoveProject(project, cancelled: false);
         if (grid is not null) CommitGrid(grid);
@@ -250,21 +248,20 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private void AdvanceConstruction(int index, int work)
+    private void AdvanceConstruction(int index, GameplayConditions conditions)
     {
         var actor = _entityHandles[index];
         var type = TypeOf(actor);
-        ref var site = ref actor.Get<ConstructionState>();
-        int before = site.Work;
-        site.Work = Math.Min(site.Required, before + work);
-        long healing = type.MaxHealth - site.StartingHealth;
-        int increment = (int)(healing * site.Work / site.Required - healing * before / site.Required);
         ref var health = ref actor.Get<HealthState>().Current;
-        health = (int)Math.Min(type.MaxHealth, (long)health + increment);
-        if (site.Work < site.Required) return;
+        var step = _construction!.Advance(new(actor, type, health, conditions, Tick));
+        if (step.Health < 1 || step.Health > type.MaxHealth)
+            throw new InvalidOperationException("Construction returned invalid health.");
+        health = step.Health;
+        if (!step.Complete) return;
         lock (StorageGate)
         {
-            actor.Remove<ConstructionState>();
+            _construction.Complete(actor);
+            if (_construction.IsFoundation(actor)) throw new InvalidOperationException("Construction did not clear the completed foundation.");
             ActivateEconomy(actor, type);
         }
         _powerDirty = true;
@@ -342,21 +339,15 @@ public sealed partial class SimulationWorld
     private ConstructionProgress ProjectConstruction(Frent.Entity entity, UnitDefinition type, ref uint visualStates)
     {
         if (!IsUnderConstruction(entity)) return default;
-        ref var site = ref entity.Get<ConstructionState>();
         if (type.States.Contains("constructing")) visualStates |= type.StateMask("constructing");
-        return new(site.Work, site.Required);
+        return _construction!.GetProgress(entity);
     }
 
     private void WriteConstruction(BinaryWriter writer, Frent.Entity entity)
     {
         bool constructing = IsUnderConstruction(entity);
         writer.Write(constructing);
-        if (!constructing) return;
-        ref var site = ref entity.Get<ConstructionState>();
-        writer.Write(site.Work);
-        writer.Write(site.Required);
-        writer.Write(site.StartingHealth);
-        writer.Write(site.StartedAt);
+        if (constructing) _construction!.WriteFoundationState(writer, entity);
     }
 
     public int ConstructionProjectCount => _constructionProjects.Values.Sum(projects => projects.Count);

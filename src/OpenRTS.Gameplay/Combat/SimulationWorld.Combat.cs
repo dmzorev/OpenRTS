@@ -86,7 +86,7 @@ public sealed partial class SimulationWorld
             var entityIdentity = entity.Get<EntityIdentity>();
             var type = _types[entityIdentity.Type];
             if (type.Weapons.Count == 0 || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
-            var carrierId = HasStoredActors ? CarrierOf(entity) : default;
+            var carrierId = CarrierOf(entity);
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
             var carrier = _entityHandles[origin];
             bool stored = origin != i;
