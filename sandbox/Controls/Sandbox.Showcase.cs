@@ -62,15 +62,27 @@ public partial class Sandbox
         panel.AddChild(margin); var column = new VBoxContainer(); margin.AddChild(column);
         AddCommandPanel(column);
         var row = new HBoxContainer(); column.AddChild(row);
-        foreach (var action in new[] { (UnitActionKind.Move, "M · Идти"), (UnitActionKind.AttackMove, "A · Атаковать / идти"),
-            (UnitActionKind.Enter, "Enter · Войти"), (UnitActionKind.Stop, "S · Стоп"), (UnitActionKind.HoldPosition, "H · Удерживать") })
-        {
-            var button = new Button { Text = action.Item2, FocusMode = Control.FocusModeEnum.None };
-            var kind = action.Item1; button.Pressed += () => ActivateAction(kind, Input.IsPhysicalKeyPressed(Key.Shift));
-            _actionButtons.Add(kind, button); row.AddChild(button);
-        }
+        AddOrderButtons(row);
         if (_buildings) AddBuildingTools(column);
         var label = new Label { Text = "Tab / Shift+Tab — тип · Q–Y — действия · ПКМ по способности — авто · Shift — 5 заказов · ПКМ по заказу — повтор · очередь: ЛКМ −1 / Shift −5 / ПКМ всё" };
         label.AddThemeFontSizeOverride("font_size", 12); column.AddChild(label);
+    }
+
+    private void AddOrderButtons(Container row)
+    {
+        Add(UnitActionKind.Move, "M · Идти", "M → указать место");
+        Add(UnitActionKind.AttackMove, _terminal is null ? "A · Атаковать / идти" : "A · В бой", "A → атаковать цель или двигаться с боем");
+        if (_terminal is not null) Add(UnitActionKind.Attack, "Цель", "Атаковать указанный объект");
+        Add(UnitActionKind.Enter, "Enter · Войти", "Enter → войти в транспорт или здание");
+        Add(UnitActionKind.Stop, "S · Стоп", "S → остановить и очистить очередь");
+        Add(UnitActionKind.HoldPosition, _terminal is null ? "H · Удерживать" : "H · Держать", "H → удерживать позицию");
+
+        void Add(UnitActionKind kind, string text, string tooltip)
+        {
+            var button = TerminalButton(text, tooltip, () => ActivateAction(kind, Input.IsPhysicalKeyPressed(Key.Shift)));
+            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            _actionButtons.Add(kind, button);
+            row.AddChild(button);
+        }
     }
 }

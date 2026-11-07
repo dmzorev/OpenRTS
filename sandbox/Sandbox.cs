@@ -121,7 +121,7 @@ public partial class Sandbox : Node3D
         catch (Exception error)
         {
             GD.PushError(error.ToString());
-            if (verify || _verifySimulation || _verifyControls) GetTree().Quit(1);
+            if (verify || _verifySimulation || _verifyControls || _verifySkirmish || _verifyActions) GetTree().Quit(1);
             else AddOverlay("Ошибка загрузки контента\n" + error.Message);
         }
     }
@@ -133,6 +133,7 @@ public partial class Sandbox : Node3D
         _leftGoal = false;
         if (_showcase) { _selection.Reset(); _selected = new(1); _armedAction = null; _armedCustom = null; _productionPlacement = null; _placing = false; _panelRevision = -1; _panelTick = -1; _panelDirty = true; _pointerDown = false; }
         _notice = "";
+        _focusStartingBase = _terminal is not null;
         _sitePlacement = null; _selectedProject = default; _visibleProjects = []; _visibleProjectsTick = -1; _constructionViewer = 1;
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
@@ -199,11 +200,12 @@ public partial class Sandbox : Node3D
             }
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
+            UpdateTerminal(frame, alpha);
             if (_verifySkirmish) { VerifySkirmish(frame); return; }
             if (_verifyActions) { VerifyActions(frame); return; }
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
-            if (_showcase && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + ConstructionStatus() + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? "\nSkirmish · управление синим и красным игроками · захват: W или ПКМ инженером" : "");
-            else if (_label is not null)
+            if (_showcase && DiagnosticsVisible && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + ConstructionStatus() + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? $"\n{Engine.GetFramesPerSecond()} FPS · P пауза · N шаг · +/− темп · R сброс · F12 скрыть" : "");
+            else if (!_showcase && _label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."
                         : "Отдельный поток · целые координаты · MultiMesh\n\nПКМ — приказ всем · Пробел — случайные цели\nR — перезапуск · Esc — выход\n\nПрямое движение без навигации и столкновений.") + "\nКолесо — масштаб · WASD/стрелки/СКМ — камера\n+/− — темп · P — пауза · N — один тик" + (_notice.Length == 0 ? "" : "\nПоследний отказ: " + _notice);
@@ -268,8 +270,12 @@ public partial class Sandbox : Node3D
             GD.PushError(error.ToString());
             _session.Dispose();
             _session = null;
-            if (_verifySimulation || _verifyControls) GetTree().Quit(1);
-            else if (_label is not null) _label.Text = "Ошибка симуляции\n" + error.Message;
+            if (_verifySimulation || _verifyControls || _verifySkirmish || _verifyActions) GetTree().Quit(1);
+            else if (_label is not null)
+            {
+                if (_diagnostics is not null) _diagnostics.Show();
+                _label.Text = "Ошибка симуляции\n" + error.Message;
+            }
         }
     }
 
@@ -281,7 +287,12 @@ public partial class Sandbox : Node3D
             if (input is InputEventKey { Pressed: true, Echo: false } key)
             {
                 Key code = key.PhysicalKeycode == Key.None ? key.Keycode : key.PhysicalKeycode;
-                if (_showcase && HandleRtsKey(key, code)) { }
+                if (_terminal is not null && code == Key.F10) ToggleTerminalLayout();
+                else if (_matchMenu?.Visible == true) { if (code == Key.Escape) ToggleMatchMenu(); }
+                else if (_diagnostics is not null && code == Key.F12) _diagnostics.Visible = !_diagnostics.Visible;
+                else if (_terminal is not null && code == Key.Escape && !HasTargetingMode()) ToggleMatchMenu();
+                else if (_showcase && HandleRtsKey(key, code)) { }
+                else if (_terminal is not null && !DiagnosticsVisible) return;
                 else if (code == Key.Escape) GetTree().Quit();
                 else if (code == Key.R) StartSession();
                 else if (code == Key.P) { _paused = !_paused; _session.SetPlayback(_playbackSpeed, _paused); }
@@ -313,6 +324,7 @@ public partial class Sandbox : Node3D
                     _session.Submit(_displayGrid.IsBlocked(cell) ? CommandKind.UnblockCell : CommandKind.BlockCell, target);
                 }
             }
+            else if (_matchMenu?.Visible == true || _terminal is not null && OverRtsPanel(_pointer)) return;
             else if (input is InputEventMouseButton { Pressed: true } wheel && wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
             {
                 ZoomCamera(wheel.Position, wheel.ButtonIndex == MouseButton.WheelUp ? 0.8f : 1.25f);
@@ -363,18 +375,31 @@ public partial class Sandbox : Node3D
 
     private void PanCamera(double delta)
     {
-        if (_camera is null) return;
+        if (_camera is null || _matchMenu?.Visible == true || _terminal is not null && !GetWindow().HasFocus()) return;
         int x = (!_showcase && Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0)
             - (!_showcase && Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         int z = (!_showcase && Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0)
             - (!_showcase && Input.IsPhysicalKeyPressed(Key.W) || Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
+        float speed = 0.7f;
+        if (_terminal is not null && _edgeScroll && x == 0 && z == 0 && !_pointerDown && !Input.IsMouseButtonPressed(MouseButton.Middle))
+        {
+            var mouse = GetViewport().GetMousePosition();
+            var field = Playfield();
+            const float edge = 12;
+            if (field.HasPoint(mouse) && !OverRtsPanel(mouse))
+            {
+                x = mouse.X < field.Position.X + edge ? -1 : mouse.X >= field.End.X - edge ? 1 : 0;
+                z = mouse.Y < field.Position.Y + edge ? -1 : mouse.Y >= field.End.Y - edge ? 1 : 0;
+                speed = _edgeSpeed;
+            }
+        }
         var direction = new Vector3(x, 0, z);
-        if (direction != Vector3.Zero) MoveCamera(direction.Normalized() * _camera.Size * (float)delta * 0.7f);
+        if (direction != Vector3.Zero) MoveCamera(direction.Normalized() * _camera.Size * (float)delta * speed);
     }
 
     private void MoveCamera(Vector3 offset)
     {
-        if (_camera is null || GroundPoint(GetViewport().GetVisibleRect().Size / 2) is not { } center) return;
+        if (_camera is null || GroundPoint(Playfield().GetCenter()) is not { } center) return;
         offset.Y = 0;
         offset.X = Math.Clamp(center.X + offset.X, 0, _mapWidth) - center.X;
         offset.Z = Math.Clamp(center.Z + offset.Z, 0, _mapDepth) - center.Z;
@@ -416,7 +441,7 @@ public partial class Sandbox : Node3D
         var camera = new Camera3D
         {
             Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = _buildings ? 64 : _showcase ? 28 : side * 1.18f,
+            Size = _skirmish ? 24 : _buildings ? 64 : _showcase ? 28 : side * 1.18f,
             Position = center + new Vector3(0, side, 0),
             Far = side * 4,
             Current = true
@@ -427,16 +452,18 @@ public partial class Sandbox : Node3D
         _baseCameraSize = camera.Size;
         _mapWidth = groundSize.X; _mapDepth = groundSize.Y;
         _label = AddOverlay("OpenRTS · запуск симуляции…");
-        if (_showcase) AddShowcaseFooter();
+        if (_skirmish) AddTerminalHud();
+        else if (_showcase) AddShowcaseFooter();
     }
 
     private Label AddOverlay(string text)
     {
-        var layer = new CanvasLayer();
+        var layer = new CanvasLayer { Layer = _skirmish ? 3 : 1 };
         AddChild(layer);
         var panel = new PanelContainer { Position = new Vector2(24, 24) };
         layer.AddChild(panel);
         if (_showcase) _rtsPanels.Add(panel);
+        if (_skirmish && _diagnostics is null) { _diagnostics = panel; panel.Hide(); }
         var margin = new MarginContainer();
         foreach (string side in new[] { "left", "top", "right", "bottom" })
             margin.AddThemeConstantOverride("margin_" + side, 18);

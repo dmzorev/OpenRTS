@@ -8,7 +8,8 @@ using OpenRTS.Content;
 public partial class Sandbox
 {
     private ModelCatalog? _modelCatalog;
-    private HBoxContainer? _typeRow, _customRow, _tasksRow;
+    private HBoxContainer? _typeRow, _tasksRow;
+    private Container? _customRow;
     private ScrollContainer? _taskScroll;
     private readonly Dictionary<string, Button> _customButtons = new();
     private readonly Dictionary<string, (Button Button, ProgressBar Progress)> _taskButtons = new();
@@ -29,18 +30,39 @@ public partial class Sandbox
         if (_icons.TryGetValue(type, out var icon)) return icon;
         var model = _catalog!.Presentations[type].Model;
         if (model is not null && _modelCatalog!.Models.TryGetValue(model, out var definition))
-        { var frames = GD.Load<SpriteFrames>(definition.Parts.First(p => p.Parent < 0).Resource); icon = frames?.GetFrameTexture("stand", 0); }
+        {
+            var frames = GD.Load<SpriteFrames>(definition.Parts.First(p => p.Parent < 0).Resource);
+            icon = frames?.GetFrameTexture("stand", 0);
+            if (_terminal is not null && icon is not null && DisplayServer.GetName() != "headless")
+                icon = TerminalIcon(icon);
+        }
         _icons[type] = icon; return icon;
     }
     private void AddCommandPanel(VBoxContainer column)
     {
         var row = new HBoxContainer(); column.AddChild(row);
-        var types = new ScrollContainer { CustomMinimumSize = new(300, 52), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Disabled }; row.AddChild(types); _typeRow = new(); types.AddChild(_typeRow);
+        AddTypeStrip(row, 300);
         var actions = new ScrollContainer { CustomMinimumSize = new(700, 52), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             VerticalScrollMode = ScrollContainer.ScrollMode.Disabled }; row.AddChild(actions); _customRow = new(); actions.AddChild(_customRow);
+        AddTaskStrip(column);
+        AddSelectionExtras(column);
+    }
+
+    private void AddTypeStrip(Container parent, int width = 0)
+    {
+        var types = new ScrollContainer { CustomMinimumSize = new(width, 52), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        parent.AddChild(types); _typeRow = new(); types.AddChild(_typeRow);
+    }
+
+    private void AddTaskStrip(VBoxContainer column)
+    {
         _taskScroll = new() { CustomMinimumSize = new(0, 44), HorizontalScrollMode = ScrollContainer.ScrollMode.Auto, VerticalScrollMode = ScrollContainer.ScrollMode.Disabled };
         column.AddChild(_taskScroll); _tasksRow = new(); _taskScroll.AddChild(_tasksRow); _taskScroll.Visible = false;
+    }
+
+    private void AddSelectionExtras(VBoxContainer column)
+    {
         AddStoredPanel(column);
         _cancelProject = new Button { Text = "Отменить проект · Delete", FocusMode = Control.FocusModeEnum.None, Visible = false };
         _cancelProject.Pressed += CancelProject;
@@ -50,6 +72,7 @@ public partial class Sandbox
     private Button IconButton(string text, Texture2D? icon, int width = 84)
     {
         var button = new Button { Text = text, Icon = icon, ExpandIcon = true, CustomMinimumSize = new(width, 42), FocusMode = Control.FocusModeEnum.None };
+        if (_terminal is not null) button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         button.AddThemeConstantOverride("icon_max_width", 30); button.AddThemeFontSizeOverride("font_size", 12); return button;
     }
     private void RefreshCommandSelection()
@@ -74,7 +97,7 @@ public partial class Sandbox
             int count = _selection.Ids.ToArray().Count(id => _selectionPoses.TryGetValue(id, out var p) && p.UnitType == type);
             var button = IconButton(count.ToString(), UnitIcon(type), 58);
             button.TooltipText = _catalog!.Presentations[type].Name + " · Tab / Shift+Tab";
-            button.Modulate = type == _activeType ? new(0.45f, 0.85f, 1) : Colors.White;
+            button.Modulate = type == _activeType ? ActiveButtonColor : Colors.White;
             button.Pressed += () => { _activeType = type; _armedCustom = null; RebuildCommandPanel(); }; _typeRow.AddChild(button);
         }
         if (_activeType < 0) return;
@@ -82,7 +105,16 @@ public partial class Sandbox
         {
             var type = _catalog.Units[_activeType]; var product = type.Products.FirstOrDefault(p => p.Id == action.Id);
             int target = product is null ? _activeType : _catalog.Units.ToList().FindIndex(u => u.Id == product.Unit);
-            var button = IconButton(action.Label, action.Icon is null ? UnitIcon(target) : GD.Load<Texture2D>(action.Icon), 120);
+            var icon = action.Icon is null ? UnitIcon(target) : GD.Load<Texture2D>(action.Icon);
+            var button = IconButton(action.Label, icon, _terminal is null ? 120 : 64);
+            if (_terminal is not null)
+            {
+                button.IconAlignment = HorizontalAlignment.Center;
+                button.VerticalIconAlignment = VerticalAlignment.Top;
+                button.CustomMinimumSize = new(64, 60);
+                button.AddThemeConstantOverride("icon_max_width", 38);
+                button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            }
             var progress = new ProgressBar { ShowPercentage = false, MouseFilter = Control.MouseFilterEnum.Ignore, AnchorTop = 1, AnchorBottom = 1, AnchorRight = 1, OffsetTop = -4 };
             button.AddChild(progress); _cooldowns.Add(action.Id, progress);
             button.GuiInput += input => { if (input is InputEventMouseButton { Pressed: true } click && click.ButtonIndex is MouseButton.Left or MouseButton.Right)
@@ -221,10 +253,11 @@ public partial class Sandbox
                 {
                     var casts = ids.Select(id => _selectionPoses[id].Order).Where(o => o.Kind == UnitActionKind.Capture && o.CaptureDuration > 0).ToArray();
                     progress = casts.Length == 0 ? 0 : casts.Max(o => 100.0 * o.CaptureProgress / o.CaptureDuration);
-                    button.Text = $"{action.Hotkey} · {action.Label} {(casts.Length == 0 ? "" : $"{progress:0}%")}";
-                    button.TooltipText = "Захват: ЛКМ/хоткей → чужой или нейтральный объект. Сохраняет HP.";
+                    button.Text = _terminal is null ? $"{action.Hotkey} · {action.Label} {progress:0}%"
+                        : $"{action.Hotkey} · {progress:0}%";
+                    button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ/хоткей → чужой или нейтральный объект. Сохраняет HP.";
                     button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); _cooldowns[action.Id].Value = progress;
-                    button.Modulate = (_armedCustom == action.Id || _sitePlacement?.Action == action.Id) ? new(0.5f, 0.85f, 1) : Colors.White;
+                    button.Modulate = _armedCustom == action.Id ? ActiveButtonColor : Colors.White;
                     continue;
                 }
                 var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
@@ -233,18 +266,22 @@ public partial class Sandbox
                 progress = 100.0 * remaining / weapon.CooldownTicks;
                 status = remaining > 0 ? $" {remaining / (double)frame.TickRate:0.0}s" : "";
                 if (states.Any(p => p.AutoCast) && !auto) status += " ±авто";
-                button.TooltipText = "ЛКМ/хоткей — выбрать цель. ПКМ — автоприменение. Один доступный исполнитель на приказ.";
+                button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ/хоткей — выбрать цель. ПКМ — автоприменение. Один исполнитель на приказ.";
             }
             else
             {
                 var product = type.Products.First(p => p.Id == action.Id); var target = _catalog.Units.First(u => u.Id == product.Unit); var build = product.Override ?? target.Build!;
-                status = !product.OnSite && ReadyProduct(action.Id) is not null ? " ГОТОВО" : $" {build.Ticks / (double)frame.TickRate:0.#}s";
+                bool ready = !product.OnSite && ReadyProduct(action.Id) is not null;
+                status = _terminal is not null && product.OnSite ? " · Проект"
+                    : ready ? (_terminal is null ? " ГОТОВО" : " ✓") : $" · {build.Ticks / (double)frame.TickRate:0.#} с";
                 button.TooltipText = product.OnSite
-                    ? $"Цена {build.Cost} · {build.Ticks} тиков\nЛКМ → разместить проект. Shift — добавить в очередь и продолжить размещение."
-                    : $"Цена {build.Cost} · {build.Ticks} тиков\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
+                    ? $"{action.Label} [{action.Hotkey}] · {build.Cost:N0} кр. · {build.Ticks / (double)frame.TickRate:0.#} с\nЛКМ → разместить проект. Shift — добавить в очередь и продолжить размещение."
+                    : $"{action.Label} [{action.Hotkey}] · {build.Cost:N0} кр. · {build.Ticks / (double)frame.TickRate:0.#} с\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
             }
-            button.Text = $"{action.Hotkey} · {action.Label}{status}{(auto ? " ↻" : "")}";
-            button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); button.Modulate = auto ? new(0.35f, 1, 0.65f) : (_armedCustom == action.Id || _sitePlacement?.Action == action.Id) ? new(0.5f, 0.85f, 1) : Colors.White;
+            button.Text = (_terminal is null ? $"{action.Hotkey} · {action.Label}" : action.Hotkey) + status + (auto ? " ↻" : "");
+            bool armed = _armedCustom == action.Id || _sitePlacement?.Action == action.Id ||
+                _productionPlacement is { } placementTask && ids.Contains(placementTask.Producer) && type.Products[placementTask.Product].Id == action.Id;
+            button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); button.Modulate = armed ? ActiveButtonColor : auto ? new(0.55f, 1, 0.65f) : Colors.White;
             _cooldowns[action.Id].Value = Math.Clamp(progress, 0, 100);
         }
         var selected = ids.ToHashSet();
@@ -254,6 +291,8 @@ public partial class Sandbox
         if (signature != _taskSignature)
         {
             _taskSignature = signature; ClearChildren(_tasksRow); _taskButtons.Clear();
+            if (_terminal is not null && tasks.Length > 0)
+                _tasksRow.AddChild(new Label { Text = "Очередь" });
             foreach (var group in tasks.GroupBy(t => t.Queue + ":" + t.Action + ":" + t.Task.Repeat))
             {
                 var first = group.First(); string action = first.Action, queue = first.Queue; bool repeat = first.Task.Repeat;

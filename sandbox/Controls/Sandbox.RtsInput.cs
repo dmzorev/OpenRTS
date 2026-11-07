@@ -44,7 +44,7 @@ public partial class Sandbox
         _availabilityRevision = -1;
         RefreshCommandSelection();
         foreach (var (kind, button) in _actionButtons)
-        { button.Disabled = !CanIssue(kind); button.Modulate = _armedAction == kind ? new Color(0.5f, 0.9f, 1) : Colors.White; }
+        { button.Disabled = !CanIssue(kind); button.Modulate = _armedAction == kind ? ActiveButtonColor : Colors.White; }
     }
     private EntityPose? Selected() => _selectionPoses.TryGetValue(_activeRecipients.Length > 0 ? _activeRecipients[0] : _selection.Primary, out var pose) ? pose : null;
     private EntityPose? Pick(WorldPosition point)
@@ -67,7 +67,7 @@ public partial class Sandbox
         return selected;
     }
     private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f));
-    private bool OnScreen(EntityPose pose) => GetViewport().GetVisibleRect().HasPoint(Screen(pose));
+    private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
     private bool Controls(uint owner) => owner == 1 || _skirmish && owner == 2;
     private uint CommandOwner => Selected()?.Presentation.Owner ?? 1;
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
@@ -155,13 +155,14 @@ public partial class Sandbox
     }
     private WorldPosition? CommandPoint(Vector2 pixel)
     {
+        if (_terminal is not null && (!Playfield().HasPoint(pixel) || OverRtsPanel(pixel))) return null;
         if (GroundPoint(pixel) is not { } ground || ground.X < 0 || ground.Z < 0 || ground.X > _mapWidth || ground.Z > _mapDepth) return null;
         return MousePoint(pixel);
     }
     private void HandleShowcaseClick(InputEventMouseButton click)
     {
         _pointer = click.Position;
-        if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(click.Position))) return;
+        if (OverRtsPanel(click.Position)) return;
         if (!click.Pressed)
         { if (click.ButtonIndex == MouseButton.Left && _pointerDown) FinishSelection(click.Position); return; }
         if (_sitePlacement is not null && click.ButtonIndex == MouseButton.Right) { _sitePlacement = null; _panelDirty = true; return; }
@@ -241,10 +242,13 @@ public partial class Sandbox
         }
         RefreshSelection(); UpdateSelection(1); UpdateRtsCursor();
     }
+    private bool HasTargetingMode() => _sitePlacement is not null || _placing || _armedAction is not null || _armedCustom is not null || _pointerDown;
+
     private bool HandleRtsKey(InputEventKey key, Key code)
     {
         if (code is Key.Delete or Key.Backspace && _selectedProject.Value != 0) { CancelProject(); return true; }
         if (code == Key.Escape && _sitePlacement is not null) { _sitePlacement = null; _panelDirty = true; return true; }
+        if (code == Key.Escape && _placing) { _placing = false; _productionPlacement = null; _panelDirty = true; return true; }
         if (code == Key.Escape && _selectedProject.Value != 0) { _selectedProject = default; RefreshProjectButton(); return true; }
         if (HandleCustomKey(key, code)) return true;
         if (code == Key.Tab) return CycleCommandType(key.ShiftPressed);
@@ -264,8 +268,8 @@ public partial class Sandbox
         if (code == Key.Space)
         {
             var poses = _selection.Snapshot().Where(_selectionPoses.ContainsKey).Select(id => _selectionPoses[id]).ToArray();
-            if (poses.Length > 0 && GroundPoint(GetViewport().GetVisibleRect().Size / 2) is { } center)
-                MoveCamera(new((float)poses.Average(p => p.Current.X) / 1024 - center.X, 0, (float)poses.Average(p => p.Current.Y) / 1024 - center.Z));
+            if (poses.Length > 0)
+                CenterCamera(new((float)poses.Average(p => p.Current.X) / 1024, (float)poses.Average(p => p.Current.Y) / 1024));
             return true;
         }
         var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.Enter => UnitActionKind.Enter, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
@@ -343,7 +347,7 @@ public partial class Sandbox
                 _rtsOverlay.CustomCursor = "build";
         }
         _rtsOverlay.Rally = ActiveRecipients().FirstOrDefault(id => _selectionPoses[id].HasRally) is var rally && rally.Value != 0 ? Screen(_selectionPoses[rally] with { Current = _selectionPoses[rally].Rally }) : null;
-        if (_rtsPanels.Any(panel => panel.GetGlobalRect().HasPoint(_pointer)))
+        if (OverRtsPanel(_pointer))
         { _rtsOverlay.CustomCursor = null; cursor = _actionButtons.Values.Any(button => button.Disabled && button.GetGlobalRect().HasPoint(_pointer)) ? RtsCursor.Unavailable : RtsCursor.Default; }
         _rtsOverlay.Cursor = cursor;
     }

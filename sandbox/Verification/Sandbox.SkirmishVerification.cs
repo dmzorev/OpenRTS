@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using Godot;
 using OpenRTS.Core;
 using OpenRTS.Core.Orders;
@@ -11,15 +12,37 @@ public partial class Sandbox
     private int _skirmishCheck;
     private void VerifySkirmish(FrameExchange.FrameLease frame)
     {
+        if (_skirmishCheck == 4) return;
         if (_skirmishCheck == 0)
         {
             CheckSkirmish(frame.Poses.Length == 12 && frame.Players.Length == 3, "Skirmish players/objects not initialized");
             CheckSkirmish(frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 5000), "Initial funds wrong");
+            CheckSkirmish(_rtsOverlay!.HealthBars.Count == 1, "Selected base has no world health bar");
+            var radarCenter = _minimap!.GetGlobalRect().GetCenter();
+            foreach (bool pressed in new[] { true, false })
+                GetViewport().PushInput(new InputEventMouseButton { Position = radarCenter, ButtonIndex = MouseButton.Left, Pressed = pressed }, inLocalCoords: true);
+            var mapCenter = GroundPoint(Playfield().GetCenter())!.Value;
+            CheckSkirmish(Mathf.IsEqualApprox(mapCenter.X, _mapWidth / 2) && Mathf.IsEqualApprox(mapCenter.Z, _mapDepth / 2),
+                $"Minimap click at {radarCenter} in {_minimap.GetGlobalRect()} moved the camera to {mapCenter}");
+            ToggleMatchMenu();
+            CheckSkirmish(_matchMenu!.Visible && _session!.IsPaused, "Match menu did not pause input and playback");
+            ToggleMatchMenu();
+            CheckSkirmish(!_matchMenu.Visible && _session!.IsPaused, "Closing menu lost the previous pause state");
             _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection(); ActivateCustom("power", false, false);
             _selection.Change([new(4)], SelectionChange.Replace); RefreshSelection();
             CheckSkirmish(Controlled().Single().Value == 4 && CanIssue(UnitActionKind.Move), "Red player cannot be controlled");
             ActivateCustom("capture", false, false);
             var target = frame.Poses.ToArray().Single(p => p.Id.Value == 5);
+            CenterCamera(new Vector2(target.Current.X, target.Current.Y) / WorldPosition.UnitsPerCell);
+            var before = GroundPoint(Playfield().GetCenter())!.Value;
+            var panel = _customButtons["capture"];
+            ToggleTerminalLayout();
+            CheckSkirmish(!_rightHud && _armedCustom == "capture" && Controlled().Single().Value == 4 &&
+                ReferenceEquals(panel, _customButtons["capture"]), "Layout switch reset selection, targeting or actions");
+            CheckSkirmish(GroundPoint(Playfield().GetCenter())!.Value.DistanceTo(before) < 0.001f, "Layout switch moved the world focus");
+            CheckSkirmish(CommandPoint(Playfield().End + new Vector2(-10, 10)) is null, "HUD accepts world targeting");
+            ToggleTerminalLayout();
+            CheckSkirmish(_rightHud && !DiagnosticsVisible, "Sidebar or hidden diagnostics did not restore");
             _pointer = Screen(target); UpdateRtsCursor();
             CheckSkirmish(_rtsOverlay!.CustomCursor == "capture", "Capture cursor unavailable");
             HandleCustomTarget(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, target.Current, target);
@@ -40,6 +63,10 @@ public partial class Sandbox
                 RefreshSelection();
                 UpdateConstructionView(frame);
                 CheckSkirmish(HandleRtsKey(new InputEventKey(), key) && _sitePlacement is not null, "Construction hotkey did not arm placement");
+                var placement = _sitePlacement;
+                ToggleTerminalLayout();
+                CheckSkirmish(_sitePlacement == placement, "Layout switch reset construction placement");
+                ToggleTerminalLayout();
                 foreach (var site in sites)
                 {
                     HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, ShiftPressed = true }, site, null);
@@ -73,7 +100,39 @@ public partial class Sandbox
         }
         if (frame.Tick < 3) return;
         CheckSkirmish(frame.ConstructionProjects.Length == 2 && _visibleProjects.Length == 1, "Cancel action did not remove the selected project");
-        GD.Print("OPENRTS_SKIRMISH:players, capture, dual-player control, construction ghosts, Shift queue, cancel and yard radius passed");
-        _verificationDone = true; GetTree().Quit();
+        GD.Print("OPENRTS_SKIRMISH:players, capture, construction, layout parity and camera focus passed");
+        _verificationDone = true;
+        if (_capturePath is null || DisplayServer.GetName() == "headless") GetTree().Quit();
+        else CaptureTerminal();
+    }
+
+    private async void CaptureTerminal()
+    {
+        try
+        {
+            _selection.Change([new(1)], SelectionChange.Replace);
+            RefreshSelection();
+            var yard = Selected()!.Value.Current;
+            CenterCamera(new Vector2(yard.X, yard.Y) / WorldPosition.UnitsPerCell);
+            var directory = Path.GetFullPath(_capturePath!);
+            Directory.CreateDirectory(directory);
+            _verificationDone = false;
+            _skirmishCheck = 4;
+            foreach (var name in new[] { "terminal-right.png", "terminal-bottom.png" })
+            {
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                using var image = GetViewport().GetTexture().GetImage();
+                if (image.SavePng(Path.Combine(directory, name)) != Error.Ok)
+                    throw new IOException("Failed to capture terminal HUD.");
+                if (_rightHud) ToggleTerminalLayout();
+            }
+            GetTree().Quit();
+        }
+        catch (Exception error)
+        {
+            GD.PushError(error.ToString());
+            GetTree().Quit(1);
+        }
     }
 }
