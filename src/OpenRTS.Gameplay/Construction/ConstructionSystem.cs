@@ -168,7 +168,7 @@ internal sealed class ConstructionSystem
         {
             if (!_world.TryGetEntity(id, out var actor)) continue;
             var orders = actor.Get<OrderState>();
-            if (!orders.HasOrder || orders.ActiveOrder.Kind != UnitActionKind.Build || _world.IsStored(actor) ||
+            if (!orders.HasOrder || orders.ActiveOrder.Kind != UnitActionKind.Build || !_world.IsOnMap(actor) ||
                 !TryBuildTarget(actor, orders.ActiveOrder.Target, out var project, out var foundation)) continue;
 
             int target = project?.UnitType ?? foundation.Get<EntityIdentity>().Type;
@@ -202,7 +202,7 @@ internal sealed class ConstructionSystem
             new(center.X + footprint.HalfWidth, center.Y + footprint.HalfHeight), _siteCandidates);
         foreach (var id in _siteCandidates)
         {
-            if (!_world.TryGetEntity(id, out var actor) || _world.IsStored(actor)) continue;
+            if (!_world.TryGetEntity(id, out var actor) || !_world.IsOnMap(actor)) continue;
             int typeIndex = actor.Get<EntityIdentity>().Type;
             var type = _world.TypeOf(typeIndex);
             var position = actor.Get<SpatialState>().Position;

@@ -89,7 +89,7 @@ internal static class SimulationChecks
             Reject<ArgumentException>(() => world.Step([new(2, 0, 1, CommandKind.MoveAll)]));
             Reject<ArgumentException>(() => world.Step([new(1, 0, 1, CommandKind.MoveAll), new(1, 0, 1, CommandKind.MoveAll)]));
             Reject<ArgumentOutOfRangeException>(() => world.Step([new(1, 0, 1, CommandKind.MoveAll, Position: new(-1, 0))]));
-            Reject<ArgumentException>(() => world.Step([new(1, 0, 1, (CommandKind)999)]));
+            Reject<ArgumentException>(() => world.Step([new(1, 0, 1, (CommandKind)999, new(1))]));
             Check(before == world.Report(), "Rejected batch mutated world");
         });
         test("Rejected command batches preserve the last applied batch", () =>

@@ -39,7 +39,7 @@ public sealed partial class SimulationWorld
     }
     private bool AbilityInRange(int index, UnitOrder order, WeaponDefinition weapon)
     {
-        if (order.Target.Value != 0) return _indices.TryGetValue(order.Target, out int target) && !IsStored(_entityHandles[target]) && InWeaponRange(index, target, weapon.Range);
+        if (order.Target.Value != 0) return _indices.TryGetValue(order.Target, out int target) && IsOnMap(_entityHandles[target]) && InWeaponRange(index, target, weapon.Range);
         var e = _entityHandles[index];
         var eIdentity = e.Get<EntityIdentity>(); var closest = ObjectGeometry.ClosestPoint(_types[eIdentity.Type], e.Get<SpatialState>().Position, order.Position);
         return DistanceSquared(closest, order.Position) <= (long)weapon.Range * weapon.Range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, closest, order.Position, 0));

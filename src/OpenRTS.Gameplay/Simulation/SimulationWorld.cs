@@ -5,16 +5,18 @@ using OpenRTS.Core.Capture;
 using OpenRTS.Core.Construction;
 using OpenRTS.Core.Production;
 using OpenRTS.Core.Simulation;
+using OpenRTS.Core.Transport;
 
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld, IConstructionWorld
+public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld, IConstructionWorld, ITransportWorld
 {
     private readonly UnitDefinition[] _types;
     private readonly GameplayMechanics _mechanics;
     private readonly CaptureSystem? _capture;
     private readonly ConstructionSystem? _construction;
+    private readonly TransportSystem? _transport;
     private readonly IEndOfTickRule? _endOfTick;
     private readonly IGridPathfinder? _navigation;
     private readonly MotionIndex? _motion;
@@ -93,7 +95,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
         if (mechanics.Capture is { } capture && (usesCapture || !ReferenceEquals(capture, GameplayMechanics.BuiltInCapture)))
             _capture = new(this, capture.Create());
-        if (usesTransport || !ReferenceEquals(mechanics.Transport, GameplayMechanics.BuiltInTransport)) _transport = mechanics.Transport?.Create();
+        if (mechanics.Transport is { } transport && (usesTransport || !ReferenceEquals(transport, GameplayMechanics.BuiltInTransport)))
+            _transport = new(this, transport.Create());
         if (mechanics.Construction is { } construction && (usesConstruction || !ReferenceEquals(construction, GameplayMechanics.BuiltInConstruction)))
             _construction = new(this, construction.Create());
         _endOfTick = mechanics.EndOfTick?.Create();
@@ -186,7 +189,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             TryGetProducer(i, out var producer);
             var type = _types[entityIdentity.Type];
             uint states = entityPresentation.VisualStates;
-            var carrier = ProjectTransport(entity, type, ref states, out var spatial);
+            var carrier = TransportSystem.Project(_transport, entity, type, ref states, out var spatial);
             var construction = _construction?.Project(entity, type, ref states) ?? default;
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
                 states |= type.LowPowerVisualMask;
@@ -237,7 +240,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 writer.Write(entityMotion.Target.X); writer.Write(entityMotion.Target.Y); writer.Write(entityMotion.Target.Elevation);
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
                 writer.Write(entityMotion.MovementRemainder);
-                WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity); WriteTransport(writer, entity);
+                WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity);
+                TransportSystem.WriteEntityState(_transport, writer, entity);
                 ConstructionSystem.WriteFoundation(_construction, writer, entity);
                 if (_navigation is not null)
                 {
@@ -278,7 +282,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         if (command.Kind is CommandKind.Enter or CommandKind.Unload or CommandKind.UnloadAt)
         {
-            ApplyTransport(command);
+            TransportSystem.Apply(_transport, this, command);
             return;
         }
         if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.Stop or CommandKind.HoldPosition)
@@ -340,14 +344,20 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         if (command.Kind is CommandKind.PlayAnimation or CommandKind.SetVisualStates or CommandKind.ToggleVisualState or CommandKind.Aim or CommandKind.ClearAim)
         { ApplyPresentation(index, command); return; }
-        DestroyIndex(index, command.Kind != CommandKind.Remove); RebuildMotionIndex();
+        if (command.Kind is CommandKind.Destroy or CommandKind.Remove)
+        {
+            DestroyIndex(index, wreck: command.Kind == CommandKind.Destroy);
+            RebuildMotionIndex();
+            return;
+        }
+        RejectAction(command.Entity);
     }
 
     private void DestroyIndex(int index, bool wreck = true)
     {
         var actor = _entityHandles[index];
         var id = actor.Get<EntityIdentity>().Id;
-        wreck = RemoveFromTransport(actor, wreck);
+        wreck = _transport?.BeforeRemove(actor, wreck) ?? wreck;
         index = _indices[id];
         if (_entityHandles[index].Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
@@ -391,7 +401,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     bool ICaptureWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
     UnitDefinition ICaptureWorld.TypeOf(Entity entity) => TypeOf(entity);
-    bool ICaptureWorld.HasPassengers(Entity entity) => HasPassengers(entity);
+    bool ICaptureWorld.HasPassengers(Entity entity) => _transport?.HasPassengers(entity) == true;
     void ICaptureWorld.IssueOrder(EntityId actor, UnitOrder order, bool queued) => IssueOrder(_indices[actor], order, queued);
     void ICaptureWorld.SetMovementTarget(EntityId actor, WorldPosition position) => SetTarget(_indices[actor], position);
     void ICaptureWorld.Halt(EntityId actor) => Halt(_indices[actor]);

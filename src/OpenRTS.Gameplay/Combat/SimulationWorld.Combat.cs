@@ -1,4 +1,5 @@
 using OpenRTS.Core.Simulation;
+using OpenRTS.Core.Transport;
 
 namespace OpenRTS.Core;
 
@@ -10,14 +11,15 @@ public sealed partial class SimulationWorld
     private bool ValidTarget(int index, EntityId id, WeaponDefinition weapon, out int target)
     {
         target = -1;
-        if (!_indices.TryGetValue(id, out target) || index == target || IsStored(_entityHandles[target])) return false;
+        if (!_indices.TryGetValue(id, out target) || index == target || !IsOnMap(_entityHandles[target])) return false;
         uint owner = _entityHandles[index].Get<OwnershipState>().Owner;
         if (owner == 0) return false;
         ref var other = ref _entityHandles[target];
         var otherIdentity = other.Get<EntityIdentity>();
         ref var otherOwnership = ref other.Get<OwnershipState>();
         if (_types[otherIdentity.Type].Destruction == DestructionPolicy.Invulnerable) return false;
-        if ((weapon.Damage == 0 || weapon.Modifier(_types[otherIdentity.Type].Armor) == 0) && (weapon.PassengerDamage == 0 || !HasPassengers(other))) return false;
+        if ((weapon.Damage == 0 || weapon.Modifier(_types[otherIdentity.Type].Armor) == 0) &&
+            (weapon.PassengerDamage == 0 || _transport?.HasPassengers(other) != true)) return false;
         return weapon.Effect == WeaponEffect.Repair
             ? otherOwnership.Owner == owner && other.Get<HealthState>().Current < _types[otherIdentity.Type].MaxHealth
             : otherOwnership.Owner != 0 && otherOwnership.Owner != owner;
@@ -35,8 +37,8 @@ public sealed partial class SimulationWorld
             if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
         }
         var carrier = _entityHandles[index];
-        if (!repair)
-            foreach (var id in FiringPassengers(carrier))
+        if (!repair && _transport is { } transport)
+            foreach (var id in transport.FiringPassengers(carrier))
                 foreach (var mount in TypeOf(_entityHandles[_indices[id]]).Weapons)
                 {
                     if (!mount.FireFromTransport || mount.Weapon.Effect != WeaponEffect.Damage) continue;
@@ -86,12 +88,12 @@ public sealed partial class SimulationWorld
             var entityIdentity = entity.Get<EntityIdentity>();
             var type = _types[entityIdentity.Type];
             if (type.Weapons.Count == 0 || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
-            var carrierId = CarrierOf(entity);
+            var carrierId = _transport?.CarrierOf(entity) ?? default;
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
             var carrier = _entityHandles[origin];
             bool stored = origin != i;
             var sourceType = stored ? TypeOf(carrier) : type;
-            if (stored && !AllowsPassengerFire(sourceType)) continue;
+            if (stored && !TransportSystem.AllowsPassengerFire(sourceType)) continue;
             ref var entitySpatial = ref carrier.Get<SpatialState>();
             ref var entityCombat = ref entity.Get<CombatState>();
             ref var entityPresentation = ref entity.Get<PresentationState>();
@@ -175,7 +177,7 @@ public sealed partial class SimulationWorld
         {
             if (!_indices.TryGetValue(id, out int i)) continue;
             ref var entity = ref _entityHandles[i];
-            var carrierId = CarrierOf(entity);
+            var carrierId = _transport?.CarrierOf(entity) ?? default;
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
             var carrier = _entityHandles[origin];
             ref var entitySpatial = ref carrier.Get<SpatialState>();
@@ -185,7 +187,7 @@ public sealed partial class SimulationWorld
             if (health.Current == 0)
             {
                 if (_types[entityIdentity.Type].Destruction == DestructionPolicy.Neutralize) { health.Current = 1;
-                    if (HasPassengers(entity)) _disabledTransports.Add(id);
+                    if (_transport?.HasPassengers(entity) == true) _disabledTransports.Add(id);
                     ChangeOwner(i, 0); }
                 else _dead.Add(id);
                 continue;
@@ -194,7 +196,7 @@ public sealed partial class SimulationWorld
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Repaired, id, entitySpatial.Position, entityIdentity.Type, Amount: health.Current - before));
         }
         foreach (var id in _dead) if (_indices.TryGetValue(id, out int index)) DestroyIndex(index);
-        foreach (var id in _disabledTransports) RemovePassengers(_entityHandles[_indices[id]]);
+        foreach (var id in _disabledTransports) _transport!.RemovePassengers(_entityHandles[_indices[id]]);
         if (_dead.Count > 0 || _disabledTransports.Count > 0) RebuildMotionIndex();
     }
     private void Impact(WeaponDefinition weapon, uint owner, EntityId target, WorldPosition position, EntityId source, int unitType, int mount)
@@ -220,9 +222,9 @@ public sealed partial class SimulationWorld
                 effects.TryGetValue(id, out long previous);
                 effects[id] = previous + value;
             }
-            if (weapon.PassengerDamage == 0) return;
+            if (weapon.PassengerDamage == 0 || _transport is null) return;
             int remaining = weapon.PassengerDamage;
-            foreach (var occupant in Passengers(entity))
+            foreach (var occupant in _transport.Passengers(entity))
             {
                 _damage.TryGetValue(occupant, out long pending);
                 int health = _entityHandles[_indices[occupant]].Get<HealthState>().Current;

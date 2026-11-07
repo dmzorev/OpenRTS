@@ -15,7 +15,7 @@ internal interface IConstructionWorld
     bool TryGetEntity(EntityId id, out Entity entity);
     UnitDefinition TypeOf(int type);
     bool TryGetRecipe(int builderType, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe);
-    bool IsStored(Entity entity);
+    bool IsOnMap(Entity entity);
     GameplayConditions ReadConditions(Entity actor);
 
     void IssueOrder(EntityId actor, UnitOrder order, bool queued);

@@ -40,7 +40,7 @@ public sealed partial class SimulationWorld
             if (weapon.Projectile == ProjectileKind.Missile)
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
-                if (!_indices.TryGetValue(shot.Target, out int target) || IsStored(_entityHandles[target])) { Expire(shot); continue; }
+                if (!_indices.TryGetValue(shot.Target, out int target) || !IsOnMap(_entityHandles[target])) { Expire(shot); continue; }
                 shot.Destination = ObjectGeometry.ClosestPoint(_types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, shot.Position);
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
