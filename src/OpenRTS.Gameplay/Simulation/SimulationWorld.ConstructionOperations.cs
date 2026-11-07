@@ -14,11 +14,12 @@ public sealed partial class SimulationWorld
 
     bool IConstructionWorld.TryGetRecipe(int builderType, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe)
     {
-        int product = ProductIndex(builderType, action);
+        int product = _buildRecipes.FindProduct(builderType, action);
         if (product >= 0 && _types[builderType].Products[product].OnSite)
         {
-            target = _productTypes[builderType][product];
-            recipe = _builds[builderType][product];
+            var resolved = _buildRecipes[builderType, product];
+            target = resolved.UnitType;
+            recipe = resolved.Build;
             return true;
         }
         target = -1;

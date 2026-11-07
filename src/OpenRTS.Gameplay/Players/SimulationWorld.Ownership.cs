@@ -24,7 +24,7 @@ public sealed partial class SimulationWorld
         if (previous == owner) return;
 
         _economy.EnsurePlayer(owner);
-        CancelProductionForOwnerChange(index, identity.Type);
+        _production.CancelForOwnerChange(entity);
 
         ref var orders = ref entity.Get<OrderState>();
         orders.HasOrder = false;

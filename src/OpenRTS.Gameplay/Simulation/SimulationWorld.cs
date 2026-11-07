@@ -11,11 +11,13 @@ using OpenRTS.Core.Transport;
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld, IConstructionWorld, ITransportWorld
+public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>, ICaptureWorld, IConstructionWorld, IProductionWorld, ITransportWorld
 {
     private readonly UnitDefinition[] _types;
     private readonly GameplayMechanics _mechanics;
     private readonly EconomySystem _economy;
+    private readonly BuildRecipes _buildRecipes;
+    private readonly ProductionSystem _production;
     private readonly CaptureSystem? _capture;
     private readonly ConstructionSystem? _construction;
     private readonly TransportSystem? _transport;
@@ -79,8 +81,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (usesConstruction && mechanics.Construction is null)
             throw new ArgumentException("Unit definitions require a construction mechanic.", nameof(mechanics));
         _economy = new(players, StorageGate, IsConstructing);
-        _productionRate = mechanics.ProductionRate;
-        InitializeProduction();
+        _buildRecipes = new(_types);
+        _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);
         SpeedPerTick = speedPerTick;
         _idOrder = Comparer<int>.Create((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
         if (navigationGrid is not null)
@@ -139,7 +141,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         UpdateWeapons();
         _construction?.Advance();
         _economy.AdvanceIncome(ExistingStorage, Tick);
-        UpdateProduction();
+        _production.Advance(ExistingStorage, StepCancellation);
         UpdatePresentation();
         _endOfTick?.Advance(new(this));
     }
@@ -188,19 +190,18 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             ref var entityMotion = ref entity.Get<MotionState>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             int health = entity.Get<HealthState>().Current;
-            TryGetProducer(i, out var producer);
             var type = _types[entityIdentity.Type];
             uint states = entityPresentation.VisualStates;
             var carrier = TransportSystem.Project(_transport, entity, type, ref states, out var spatial);
             var construction = _construction?.Project(entity, type, ref states) ?? default;
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
                 states |= type.LowPowerVisualMask;
-            states |= ProductionVisualStates(type, producer);
+            var rally = ProductionSystem.Project(entity, type, ref states);
             var capture = _capture?.GetProgress(entity, entityOrders) ?? default;
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -257,7 +258,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                     { writer.Write(point.X); writer.Write(point.Y); }
                 }
             }
-            WriteProjectiles(writer); WriteProduction(writer);
+            WriteProjectiles(writer);
+            _production.WriteState(writer, ExistingStorage);
             WritePlayers(writer);
             ConstructionSystem.WriteProjects(_construction, writer);
             writer.Write(_baseGrid is not null); _baseGrid?.WriteState(writer);
@@ -276,7 +278,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     protected override void ApplyCommand(WorldCommand command)
     {
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
-        if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
+        if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally)
+        {
+            var recipients = Array.ConvertAll(Recipients(command), index => _entityHandles[index]);
+            _production.Apply(command, recipients);
+            return;
+        }
         if (command.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite or CommandKind.CancelConstruction)
         {
             ConstructionSystem.Apply(_construction, this, command);
@@ -291,8 +298,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
-            { foreach (int i in members) if (!_types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
-                members = members.Where(i => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable || !TryGetProducer(i, out _)).ToArray(); }
+                members = Array.FindAll(members, index => !_production.TryHandleMoveAsRally(_entityHandles[index], command.Position));
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair, CommandKind.CaptureTarget => UnitActionKind.Capture,
                 CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
@@ -355,13 +361,15 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         RejectAction(command.Entity);
     }
 
+    private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
+
     private void DestroyIndex(int index, bool wreck = true)
     {
         var actor = _entityHandles[index];
         var id = actor.Get<EntityIdentity>().Id;
         wreck = _transport?.BeforeRemove(actor, wreck) ?? wreck;
         index = _indices[id];
-        if (_entityHandles[index].Has<ProducerState>()) _producersDirty = true;
+        _production.BeforeRemove(_entityHandles[index]);
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _economy.InvalidatePower();
@@ -416,12 +424,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         Frent.Entity state;
         var type = _types[unitType];
         var health = new HealthState(initialHealth ?? type.MaxHealth);
+        var producer = ProductionSystem.CreateProducer(type);
         lock (StorageGate)
         {
             var storage = Storage;
-            state = type.TaskQueues.Count == 0
+            state = producer is null
                 ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-                : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+                : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), producer);
             _transport?.Initialize(state, type);
             initialize?.Invoke(state);
             _economy.Initialize(state, type.Economy, owner, Tick);
@@ -431,7 +440,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         TrackEntity(state);
-        if (type.TaskQueues.Count > 0) _producersDirty = true;
+        if (producer is not null) _production.InvalidateProducerOrder();
         for (int a = 0; a < type.Abilities.Count; a++) if (type.Abilities[a].Kind == AbilityKind.Weapon) _entityHandles[_indices[id]].Get<CombatState>().Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;

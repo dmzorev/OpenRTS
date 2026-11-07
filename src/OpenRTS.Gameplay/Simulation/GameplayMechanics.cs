@@ -69,10 +69,10 @@ public sealed partial class SimulationWorld
         int format = _navigation is null ? 10 : 14;
         if (customTransportOrConstruction) format = _navigation is null ? 19 : 20;
         else if (custom) format = _navigation is null ? 17 : 18;
-        else if (_productionRate is not null) format = _navigation is null ? 15 : 16;
+        else if (_mechanics.ProductionRate is not null) format = _navigation is null ? 15 : 16;
         writer.Write(format);
-        if (custom) writer.Write(_productionRate is not null);
-        _productionRate?.WriteState(writer);
+        if (custom) writer.Write(_mechanics.ProductionRate is not null);
+        _mechanics.ProductionRate?.WriteState(writer);
         if (!custom) return;
 
         writer.Write(_mechanics.Capture is not null);

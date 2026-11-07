@@ -1,42 +1,11 @@
-using System.Diagnostics.CodeAnalysis;
 using Frent;
-using OpenRTS.Core.Production;
 using OpenRTS.Core.Simulation;
 
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private bool _producersDirty;
-    private EntityId[] _producerOrder = [];
-
     private UnitDefinition TypeOf(Frent.Entity actor) => _types[actor.Get<EntityIdentity>().Type];
-
-    private bool TryGetProducer(int index, [NotNullWhen(true)] out ProducerState? producer)
-    {
-        producer = null;
-        var entity = _entityHandles[index];
-        if (!entity.Has<ProducerState>()) return false;
-        producer = entity.Get<ProducerState>();
-        return true;
-    }
-
-    private ProducerState Producer(EntityId id) => _entityHandles[_indices[id]].Get<ProducerState>();
-
-    private EntityId[] ProducerOrder()
-    {
-        if (!_producersDirty) return _producerOrder;
-        var ids = new List<EntityId>();
-        if (ExistingStorage is not null)
-            lock (StorageGate)
-            {
-                foreach (var (identity, _) in ExistingStorage.Query<EntityIdentity, ProducerState>()) ids.Add(identity.Value.Id);
-            }
-        ids.Sort(static (a, b) => a.Value.CompareTo(b.Value));
-        _producerOrder = ids.ToArray();
-        _producersDirty = false;
-        return _producerOrder;
-    }
 
     private void CapturePreviousFacings()
     {
