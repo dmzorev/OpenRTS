@@ -28,9 +28,9 @@ public sealed partial class SimulationWorld
     {
         if (!_powerDirty) return;
         foreach (var p in _players.Values) p.Produced = p.Consumed = 0;
-        if (_unitStorage is not null)
-            foreach (var (definition, ownership, identity) in _unitStorage.Query<EntityDefinition, OwnershipState, UnitIdentity>())
-                if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_unitHandles[_indices[identity.Value.Id]]))
+        if (ExistingStorage is not null)
+            foreach (var (definition, ownership, identity) in ExistingStorage.Query<EntityDefinition, OwnershipState, EntityIdentity>())
+                if (ownership.Value.Owner != 0 && definition.Value.Economy is { } economy && !IsUnderConstruction(_entityHandles[_indices[identity.Value.Id]]))
                 {
                     var p = Player(ownership.Value.Owner);
                     if (economy.Energy >= 0) p.Produced += economy.Energy; else p.Consumed -= economy.Energy;
@@ -56,8 +56,8 @@ public sealed partial class SimulationWorld
     }
     private void UpdateIncome()
     {
-        if (_unitStorage is null) return;
-        foreach (var (income, owner, definition) in _unitStorage.Query<IncomeState, OwnershipState, EntityDefinition>())
+        if (ExistingStorage is null) return;
+        foreach (var (income, owner, definition) in ExistingStorage.Query<IncomeState, OwnershipState, EntityDefinition>())
         {
             var settings = definition.Value.Economy!;
             if (Tick < income.Value.NextTick) continue;
@@ -69,14 +69,14 @@ public sealed partial class SimulationWorld
         => Credit(task.Payer, Math.Max(0, task.Paid - (long)build.Cost * Math.Min(task.Progress, build.Ticks) / build.Ticks));
     private void ChangeOwner(int index, uint owner)
     {
-        var entity = _unitHandles[index]; var identity = entity.Get<UnitIdentity>();
+        var entity = _entityHandles[index]; var identity = entity.Get<EntityIdentity>();
         uint previous = entity.Get<OwnershipState>().Owner; if (previous == owner) return;
         Player(owner);
         if (TryGetProducer(index, out var producer))
         {
             for (int q = 0; q < producer.Queues.Length; q++)
             {
-                foreach (var task in producer.Queues[q]) Refund(task, _builds[identity.UnitType][task.Product]);
+                foreach (var task in producer.Queues[q]) Refund(task, _builds[identity.Type][task.Product]);
                 producer.Queues[q].Clear();
             }
             producer.HasRally = false;
@@ -86,16 +86,16 @@ public sealed partial class SimulationWorld
         ref var visual = ref entity.Get<PresentationState>(); visual.HasAim = false; visual.AimEntity = default;
         if (entity.Has<CaptureState>()) entity.Get<CaptureState>().Progress = 0;
         entity.Get<OwnershipState>().Owner = owner;
-        if (entity.Has<IncomeState>()) entity.Get<IncomeState>().NextTick = checked(Tick + _types[identity.UnitType].Economy!.Interval);
+        if (entity.Has<IncomeState>()) entity.Get<IncomeState>().NextTick = checked(Tick + _types[identity.Type].Economy!.Interval);
         if (entity.Has<CapturableState>()) entity.Get<CapturableState>().ChangedTick = Tick;
         _powerDirty = true;
-        _events.Add(new(Tick, WorldEventKind.OwnerChanged, identity.Id, entity.Get<SpatialState>().Position, identity.UnitType, Owner: owner, PreviousOwner: previous));
+        _events.Add(new(Tick, WorldEventKind.OwnerChanged, identity.Id, entity.Get<SpatialState>().Position, identity.Type, Owner: owner, PreviousOwner: previous));
     }
     private void WritePlayers(BinaryWriter writer)
     {
         UpdatePower(); writer.Write(_players.Count);
         foreach (var p in _players.Values) { writer.Write(p.Id); writer.Write(p.Name); writer.Write(p.Credits); writer.Write(p.Produced); writer.Write(p.Consumed); }
-        foreach (var entity in _unitHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<UnitIdentity>().Id.Value))
+        foreach (var entity in _entityHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<EntityIdentity>().Id.Value))
         {
             writer.Write(entity.Has<IncomeState>()); if (entity.Has<IncomeState>()) writer.Write(entity.Get<IncomeState>().NextTick);
             writer.Write(entity.Has<CapturableState>()); if (entity.Has<CapturableState>()) writer.Write(entity.Get<CapturableState>().ChangedTick);

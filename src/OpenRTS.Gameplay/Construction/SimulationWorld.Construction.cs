@@ -35,17 +35,17 @@ public sealed partial class SimulationWorld
         ConstructionProject? plan = null;
         foreach (int index in recipients)
         {
-            var actor = _unitHandles[index];
-            var identity = actor.Get<UnitIdentity>();
-            var type = _types[identity.UnitType];
+            var actor = _entityHandles[index];
+            var identity = actor.Get<EntityIdentity>();
+            var type = _types[identity.Type];
             uint owner = actor.Get<OwnershipState>().Owner;
             if (owner == 0 || IsUnderConstruction(actor)) continue;
-            int product = ProductIndex(identity.UnitType, command.Action);
+            int product = ProductIndex(identity.Type, command.Action);
             if (product < 0 || !type.Products[product].OnSite) continue;
             if (plan is null)
             {
-                int target = _productTypes[identity.UnitType][product];
-                var recipe = _builds[identity.UnitType][product];
+                int target = _productTypes[identity.Type][product];
+                var recipe = _builds[identity.Type][product];
                 var position = GroundPosition(command.Position, command.Position.Elevation);
                 if (!SiteTerrainAllows(target, position) ||
                     !type.Movable && DistanceSquared(actor.Get<SpatialState>().Position, position) > (long)type.ConstructionRange * type.ConstructionRange)
@@ -59,7 +59,7 @@ public sealed partial class SimulationWorld
                 plan = new(id, owner, target, position, recipe);
                 projects.Add(id.Value, plan);
             }
-            if (owner == plan.Owner && _productTypes[identity.UnitType][product] == plan.UnitType)
+            if (owner == plan.Owner && _productTypes[identity.Type][product] == plan.UnitType)
                 IssueOrder(index, new(UnitActionKind.Build, default, plan.Id), command.Queued);
         }
         if (plan is null) RejectAction();
@@ -67,7 +67,7 @@ public sealed partial class SimulationWorld
 
     private bool TryBuildTarget(int index, EntityId id, out ConstructionProject? project, out int foundation)
     {
-        var actor = _unitHandles[index];
+        var actor = _entityHandles[index];
         uint owner = actor.Get<OwnershipState>().Owner;
         foundation = -1;
         project = null;
@@ -76,9 +76,9 @@ public sealed partial class SimulationWorld
         if (Player(owner).Projects.TryGetValue(id.Value, out project))
             return type.Movable || BuildInRange(actor, project.UnitType, project.Position);
         if (!_indices.TryGetValue(id, out foundation)) return false;
-        var target = _unitHandles[foundation];
+        var target = _entityHandles[foundation];
         return IsUnderConstruction(target) && target.Get<OwnershipState>().Owner == owner &&
-            (type.Movable || BuildInRange(actor, target.Get<UnitIdentity>().UnitType, target.Get<SpatialState>().Position));
+            (type.Movable || BuildInRange(actor, target.Get<EntityIdentity>().Type, target.Get<SpatialState>().Position));
     }
 
     private bool BuildInRange(Frent.Entity builder, int target, WorldPosition site)
@@ -93,7 +93,7 @@ public sealed partial class SimulationWorld
 
     private void UpdateBuildOrder(int index, UnitOrder order)
     {
-        var builder = _unitHandles[index];
+        var builder = _entityHandles[index];
         ref var state = ref builder.Get<OrderState>();
         if (!TryBuildTarget(index, order.Target, out var project, out int foundation))
         {
@@ -102,9 +102,9 @@ public sealed partial class SimulationWorld
             Halt(index);
             return;
         }
-        _activeBuilders.Add(builder.Get<UnitIdentity>().Id);
-        int target = project?.UnitType ?? _unitHandles[foundation].Get<UnitIdentity>().UnitType;
-        var site = project?.Position ?? _unitHandles[foundation].Get<SpatialState>().Position;
+        _activeBuilders.Add(builder.Get<EntityIdentity>().Id);
+        int target = project?.UnitType ?? _entityHandles[foundation].Get<EntityIdentity>().Type;
+        var site = project?.Position ?? _entityHandles[foundation].Get<SpatialState>().Position;
         var position = builder.Get<SpatialState>().Position;
         var type = TypeOf(builder);
         if (project is { ReservedAt: > 0 } && SiteTouches(target, site, position, position, type.Body))
@@ -122,7 +122,7 @@ public sealed partial class SimulationWorld
         {
             var footprint = _types[target].Footprint!;
             foreach (var point in SiteExits(footprint, site, position, type.Body).OrderBy(p => DistanceSquared(position, p)))
-                if (StopAllowed(builder.Get<UnitIdentity>().UnitType, point) && SetTarget(index, point) && builder.Get<MotionState>().Moving) break;
+                if (StopAllowed(builder.Get<EntityIdentity>().Type, point) && SetTarget(index, point) && builder.Get<MotionState>().Moving) break;
         }
         state.OrderPhase = builder.Get<MotionState>().Moving ? OrderPhase.Approaching : OrderPhase.Waiting;
     }
@@ -140,13 +140,13 @@ public sealed partial class SimulationWorld
         foreach (var id in _activeBuilders)
         {
             if (!_indices.TryGetValue(id, out int index)) continue;
-            var actor = _unitHandles[index];
+            var actor = _entityHandles[index];
             var orders = actor.Get<OrderState>();
             if (!orders.HasOrder || orders.ActiveOrder.Kind != UnitActionKind.Build || IsStored(actor) ||
                 !TryBuildTarget(index, orders.ActiveOrder.Target, out var project, out int foundation)) continue;
 
-            int target = project?.UnitType ?? _unitHandles[foundation].Get<UnitIdentity>().UnitType;
-            var position = project?.Position ?? _unitHandles[foundation].Get<SpatialState>().Position;
+            int target = project?.UnitType ?? _entityHandles[foundation].Get<EntityIdentity>().Type;
+            var position = project?.Position ?? _entityHandles[foundation].Get<SpatialState>().Position;
             if (!BuildInRange(actor, target, position)) continue;
             // Low power slows fixed builders, just like the legacy production queues.
             int work = TypeOf(actor).Economy is not null && LowPower(actor.Get<OwnershipState>().Owner) ? 1 : 2;
@@ -156,7 +156,7 @@ public sealed partial class SimulationWorld
                 project.LastAttempt = Tick;
                 if (!TryStartConstruction(project, out foundation)) continue;
             }
-            if (_unitHandles[foundation].Get<ConstructionState>().StartedAt < Tick) AdvanceConstruction(foundation, work);
+            if (_entityHandles[foundation].Get<ConstructionState>().StartedAt < Tick) AdvanceConstruction(foundation, work);
         }
     }
 
@@ -178,9 +178,9 @@ public sealed partial class SimulationWorld
         foreach (var id in _siteCandidates)
         {
             int i = _indices[id];
-            var actor = _unitHandles[i];
+            var actor = _entityHandles[i];
             if (IsStored(actor)) continue;
-            int typeIndex = actor.Get<UnitIdentity>().UnitType;
+            int typeIndex = actor.Get<EntityIdentity>().Type;
             var type = _types[typeIndex];
             var position = actor.Get<SpatialState>().Position;
             bool intersects = type.Footprint is not null
@@ -203,7 +203,7 @@ public sealed partial class SimulationWorld
                 if (Player(project.Owner).Credits < project.Recipe.Cost) return false;
                 project.ReservedAt = Tick;
                 _siteReservations.Add(project);
-                _siteOccupants.Sort((a, b) => _unitHandles[a].Get<UnitIdentity>().Id.Value.CompareTo(_unitHandles[b].Get<UnitIdentity>().Id.Value));
+                _siteOccupants.Sort((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
                 _evacuationGoals.Clear();
                 foreach (int index in _siteOccupants) Evacuate(index, project);
             }
@@ -236,7 +236,7 @@ public sealed partial class SimulationWorld
 
     private void AdvanceConstruction(int index, int work)
     {
-        var actor = _unitHandles[index];
+        var actor = _entityHandles[index];
         var type = TypeOf(actor);
         ref var site = ref actor.Get<ConstructionState>();
         int before = site.Work;
@@ -249,15 +249,19 @@ public sealed partial class SimulationWorld
         actor.Remove<ConstructionState>();
         if (type.Economy is { Income: > 0 } economy) actor.Add(new IncomeState(checked(Tick + economy.Interval)));
         _powerDirty = true;
-        var identity = actor.Get<UnitIdentity>();
-        _events.Add(new(Tick, WorldEventKind.ConstructionCompleted, identity.Id, actor.Get<SpatialState>().Position, identity.UnitType, Owner: actor.Get<OwnershipState>().Owner));
+        var identity = actor.Get<EntityIdentity>();
+        _events.Add(new(Tick, WorldEventKind.ConstructionCompleted, identity.Id, actor.Get<SpatialState>().Position, identity.Type, Owner: actor.Get<OwnershipState>().Owner));
     }
 
     private void RemoveProject(ConstructionProject project, bool cancelled)
     {
         Player(project.Owner).Projects.Remove(project.Id.Value);
         if (project.ReservedAt > 0) _siteReservations.Remove(project);
-        if (cancelled) _events.Add(new(Tick, WorldEventKind.ConstructionCancelled, project.Id, project.Position, project.UnitType, Owner: project.Owner));
+        if (cancelled)
+        {
+            ReleaseEntityId(project.Id);
+            _events.Add(new(Tick, WorldEventKind.ConstructionCancelled, project.Id, project.Position, project.UnitType, Owner: project.Owner));
+        }
     }
 
     private bool SiteTerrainAllows(int typeIndex, WorldPosition position)
@@ -325,14 +329,14 @@ public sealed partial class SimulationWorld
 
     private void Evacuate(int index, ConstructionProject project)
     {
-        var actor = _unitHandles[index];
-        var identity = actor.Get<UnitIdentity>();
-        var type = _types[identity.UnitType];
+        var actor = _entityHandles[index];
+        var identity = actor.Get<EntityIdentity>();
+        var type = _types[identity.Type];
         var position = actor.Get<SpatialState>().Position;
         var footprint = _types[project.UnitType].Footprint!;
         foreach (var point in SiteExits(footprint, project.Position, position, type.Body).OrderBy(p => DistanceSquared(position, p)))
         {
-            if (!StopAllowed(identity.UnitType, point) ||
+            if (!StopAllowed(identity.Type, point) ||
                 !(_motion ?? _combatIndex)!.ClearPlacement(point, out _, type.Body) ||
                 _evacuationGoals.Any(goal => BodyGeometry.Overlap(point, point, type.Body, goal.Position, goal.Position, goal.Body)) ||
                 _navigation is not null && !TerrainGeometry.Clear(_navigation.Grid, position, point, type.Body, type.Locomotor) ||

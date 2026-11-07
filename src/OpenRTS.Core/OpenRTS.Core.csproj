@@ -4,8 +4,13 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
     <Version>0.1.0</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
-  <Target Name="RequireStandaloneCore" BeforeTargets="CollectPackageReferences;ResolveProjectReferences">
-    <Error Condition="'@(ProjectReference)' != '' Or '@(PackageReference)' != '' Or '@(Reference)' != ''" Text="OpenRTS.Core must build without external dependencies." />
+  <ItemGroup>
+    <PackageReference Include="Frent" Version="[0.9.1-beta]" />
+    <None Include="../../docs/vendor/frent-license.txt" Link="licenses/Frent.txt" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="licenses/Frent.txt" />
+  </ItemGroup>
+  <Target Name="RequireCoreBoundary" BeforeTargets="CollectPackageReferences;ResolveProjectReferences">
+    <Error Condition="'@(ProjectReference)' != '' Or '@(Reference)' != '' Or '@(PackageReference)' != 'Frent'" Text="OpenRTS.Core may depend only on the .NET runtime and Frent." />
   </Target>
 </Project>

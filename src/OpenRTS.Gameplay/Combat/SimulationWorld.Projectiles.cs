@@ -17,15 +17,15 @@ public sealed partial class SimulationWorld
     public int ProjectileCount => _projectiles.Count;
     private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null, int weaponUnitType = -1)
     {
-        ref var actor = ref _unitHandles[source];
+        ref var actor = ref _entityHandles[source];
         ref var actorSpatial = ref actor.Get<SpatialState>();
-        var actorIdentity = actor.Get<UnitIdentity>();
+        var actorIdentity = actor.Get<EntityIdentity>();
         ref var actorOwnership = ref actor.Get<OwnershipState>();
         WorldPosition muzzle, destination;
-        if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actorIdentity.UnitType], actorSpatial.Position, p); }
-        else ObjectGeometry.DistanceSquared(_types[actorIdentity.UnitType], actorSpatial.Position, _types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
-        _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actorIdentity.Id, Target = target < 0 ? default : _unitHandles[target].Get<UnitIdentity>().Id,
-            Owner = actorOwnership.Owner, UnitType = weaponUnitType < 0 ? actorIdentity.UnitType : weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
+        if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actorIdentity.Type], actorSpatial.Position, p); }
+        else ObjectGeometry.DistanceSquared(_types[actorIdentity.Type], actorSpatial.Position, _types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
+        _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actorIdentity.Id, Target = target < 0 ? default : _entityHandles[target].Get<EntityIdentity>().Id,
+            Owner = actorOwnership.Owner, UnitType = weaponUnitType < 0 ? actorIdentity.Type : weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
             InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
@@ -34,14 +34,14 @@ public sealed partial class SimulationWorld
         int write = 0;
         for (int read = 0; read < _projectiles.Count; read++)
         {
-            _stepCancellation.ThrowIfCancellationRequested();
+            StepCancellation.ThrowIfCancellationRequested();
             var shot = _projectiles[read]; var weapon = shot.Weapon; shot.Previous = shot.Position;
             if (shot.BornTick == Tick) { _projectiles[write++] = shot; continue; }
             if (weapon.Projectile == ProjectileKind.Missile)
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
-                if (!_indices.TryGetValue(shot.Target, out int target) || IsStored(_unitHandles[target])) { Expire(shot); continue; }
-                shot.Destination = ObjectGeometry.ClosestPoint(_types[_unitHandles[target].Get<UnitIdentity>().UnitType], _unitHandles[target].Get<SpatialState>().Position, shot.Position);
+                if (!_indices.TryGetValue(shot.Target, out int target) || IsStored(_entityHandles[target])) { Expire(shot); continue; }
+                shot.Destination = ObjectGeometry.ClosestPoint(_types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, shot.Position);
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
             var next = StepTowards(shot.Position, shot.Destination, budget);
@@ -59,13 +59,13 @@ public sealed partial class SimulationWorld
                 foreach (var candidateId in _combatCandidates)
                 {
                     if (!_indices.TryGetValue(candidateId, out int i)) continue;
-                    ref var body = ref _unitHandles[i];
+                    ref var body = ref _entityHandles[i];
                     ref var bodySpatial = ref body.Get<SpatialState>();
-                    var bodyIdentity = body.Get<UnitIdentity>();
+                    var bodyIdentity = body.Get<EntityIdentity>();
                     ref var bodyOwnership = ref body.Get<OwnershipState>();
                     if (bodyIdentity.Id == shot.Source || !weapon.FriendlyFire && bodyOwnership.Owner == shot.Owner) continue;
                     int t;
-                    var type = _types[bodyIdentity.UnitType];
+                    var type = _types[bodyIdentity.Type];
                     if (type.Footprint is { } footprint)
                     {
                         t = 65537;

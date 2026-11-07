@@ -1,5 +1,6 @@
 namespace OpenRTS.Core.Navigation;
 
+public readonly record struct CellOverride(bool? Traverse = null, bool? CanStop = null, byte? Terrain = null);
 public readonly record struct GridCell(int X, int Y);
 public readonly record struct SurfaceSample(int Elevation = 0, int Slope = 0, int Depth = 0);
 
@@ -81,7 +82,8 @@ public sealed class NavigationGrid
         _blocked = blocked; _terrain = terrain; _noStop = noStop; MaximumTerrain = terrain?.Max() ?? 0;
         _surface = basis._surface; _obstacles = basis._obstacles; _obstacleCells = basis._obstacleCells;
     }
-    internal NavigationGrid Compose(IReadOnlyDictionary<int, CellOverride> patches, NavigationGrid current)
+    /// <summary>Overlays valid cell indices on this base grid and compares against the current revision of the same grid.</summary>
+    public NavigationGrid Compose(IReadOnlyDictionary<int, CellOverride> patches, NavigationGrid current)
     {
         var blocked = (uint[])_blocked.Clone(); var stop = _noStop is null ? new uint[blocked.Length] : (uint[])_noStop.Clone();
         byte[]? terrain = _terrain is null ? null : (byte[])_terrain.Clone();
@@ -100,8 +102,8 @@ public sealed class NavigationGrid
     }
     public bool CanStop(int cell) => !IsBlocked(cell) && (_noStop is null || (_noStop[cell >> 5] & (1u << (cell & 31))) == 0);
     public SurfaceSample SurfaceAt(int cell) => _surface?[cell] ?? default;
-    internal ReadOnlySpan<int> ObstaclesAt(int cell) => _obstacleCells.TryGetValue(cell, out var values) ? values : [];
-    internal WorldBox Obstacle(int index) => _obstacles[index];
+    public ReadOnlySpan<int> ObstaclesAt(int cell) => _obstacleCells.TryGetValue(cell, out var values) ? values : [];
+    public WorldBox Obstacle(int index) => _obstacles[index];
 
     public int Index(GridCell cell)
     {
@@ -140,7 +142,7 @@ public sealed class NavigationGrid
         return new(this, index, blocked);
     }
 
-    internal bool IsRectangleClear(int a, int b)
+    public bool IsRectangleClear(int a, int b)
     {
         int minX = Math.Min(a % Width, b % Width), maxX = Math.Max(a % Width, b % Width);
         int minY = Math.Min(a / Width, b / Width), maxY = Math.Max(a / Width, b / Width);
@@ -159,7 +161,7 @@ public sealed class NavigationGrid
         return true;
     }
 
-    internal void WriteState(BinaryWriter writer)
+    public void WriteState(BinaryWriter writer)
     {
         writer.Write(Width); writer.Write(Height); writer.Write(CellSize); writer.Write(Revision);
         foreach (uint bits in _blocked) writer.Write(bits);

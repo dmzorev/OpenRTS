@@ -6,17 +6,17 @@ public sealed partial class SimulationWorld
 {
     private const int LocalSearchBudget = 64;
     private readonly LocalMotionSearch _localSearch = new();
-    private Span<WorldPosition> Path(int index) => _unitHandles[index].Get<NavigationAgentState>().LocalPath.AsSpan();
+    private Span<WorldPosition> Path(int index) => _entityHandles[index].Get<NavigationAgentState>().LocalPath.AsSpan();
     public int NavigationLocalSearches { get; private set; }
     public int NavigationYields { get; private set; }
 
     private void UpdateNavigation(CancellationToken token)
     {
         var grid = _navigation!.Grid;
-        if (_navigationGoals.Length < Count) Array.Resize(ref _navigationGoals, _unitHandles.Length);
+        if (_navigationGoals.Length < Count) Array.Resize(ref _navigationGoals, _entityHandles.Length);
         EnsureMovementOrder();
-        if (_handled.Length < _unitHandles.Length)
-        { Array.Resize(ref _handled, _unitHandles.Length); Array.Resize(ref _cohort, _unitHandles.Length); Array.Resize(ref _cohortIds, _unitHandles.Length); }
+        if (_handled.Length < _entityHandles.Length)
+        { Array.Resize(ref _handled, _entityHandles.Length); Array.Resize(ref _cohort, _entityHandles.Length); Array.Resize(ref _cohortIds, _entityHandles.Length); }
         Array.Clear(_handled, 0, Count);
         NavigationWaitingCount = NavigationLocalSearches = NavigationYields = NavigationGoalExchanges = NavigationQueueWaitingCount = 0;
         GroupRouteBuilds = GroupRouteVisitedCells = 0; GroupRouteBuildMilliseconds = 0; GroupTranslating = false;
@@ -27,13 +27,13 @@ public sealed partial class SimulationWorld
         {
             token.ThrowIfCancellationRequested();
             int index = _movementOrder[(order + (int)(Tick % Count)) % Count];
-            ref var entity = ref _unitHandles[index];
+            ref var entity = ref _entityHandles[index];
             ref var entitySpatial = ref entity.Get<SpatialState>();
             ref var entityMotion = ref entity.Get<MotionState>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             if (!entityMotion.Moving || _handled[index]) continue;
-            var entityIdentity = entity.Get<UnitIdentity>();
-            var type = _types[entityIdentity.UnitType];
+            var entityIdentity = entity.Get<EntityIdentity>();
+            var type = _types[entityIdentity.Type];
             WorldPosition waypoint;
             if (entityNavigation.YieldFor.Value != 0)
             {
@@ -44,8 +44,8 @@ public sealed partial class SimulationWorld
                     entityMotion.Moving = entitySpatial.Position != entityMotion.Target;
                     continue;
                 }
-                bool waiting = _indices.TryGetValue(entityNavigation.YieldFor, out int requester) && _unitHandles[requester].Get<MotionState>().Moving &&
-                    DistanceSquared(entitySpatial.Position, _unitHandles[requester].Get<SpatialState>().Position) < 1536L * 1536 && Tick < entityNavigation.YieldDeadline;
+                bool waiting = _indices.TryGetValue(entityNavigation.YieldFor, out int requester) && _entityHandles[requester].Get<MotionState>().Moving &&
+                    DistanceSquared(entitySpatial.Position, _entityHandles[requester].Get<SpatialState>().Position) < 1536L * 1536 && Tick < entityNavigation.YieldDeadline;
                 if (entitySpatial.Position == entityNavigation.LocalTarget)
                 {
                     if (waiting) { NavigationWaitingCount++; continue; }
@@ -119,7 +119,7 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             token.ThrowIfCancellationRequested();
-            ref var entity = ref _unitHandles[i];
+            ref var entity = ref _entityHandles[i];
             ref var entityMotion = ref entity.Get<MotionState>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             if (!entityMotion.Moving || entityNavigation.GroupMember || entityNavigation.YieldFor.Value != 0 ||
@@ -133,7 +133,7 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < Count; i++)
         {
             token.ThrowIfCancellationRequested();
-            ref var entity = ref _unitHandles[i];
+            ref var entity = ref _entityHandles[i];
             ref var entityMotion = ref entity.Get<MotionState>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             if (!entityMotion.Moving || entityNavigation.GroupMember || entityNavigation.YieldFor.Value != 0 ||
@@ -165,7 +165,7 @@ public sealed partial class SimulationWorld
 
     private bool TryWaypoint(int index, out WorldPosition waypoint)
     {
-        ref var entity = ref _unitHandles[index];
+        ref var entity = ref _entityHandles[index];
         ref var entitySpatial = ref entity.Get<SpatialState>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>(); var grid = _navigation!.Grid;
         waypoint = default;
@@ -201,10 +201,10 @@ public sealed partial class SimulationWorld
 
     private bool IsFollowing(int requesterIndex, int blockerIndex)
     {
-        ref var a = ref _unitHandles[requesterIndex];
+        ref var a = ref _entityHandles[requesterIndex];
         ref var aSpatial = ref a.Get<SpatialState>();
         ref var aMotion = ref a.Get<MotionState>();
-        ref var b = ref _unitHandles[blockerIndex];
+        ref var b = ref _entityHandles[blockerIndex];
         ref var bSpatial = ref b.Get<SpatialState>();
         ref var bMotion = ref b.Get<MotionState>();
         ref var bNavigation = ref b.Get<NavigationAgentState>();
@@ -218,23 +218,23 @@ public sealed partial class SimulationWorld
 
     private void TryYield(int requesterIndex, int blockerIndex)
     {
-        ref var requester = ref _unitHandles[requesterIndex];
-        var requesterIdentity = requester.Get<UnitIdentity>();
+        ref var requester = ref _entityHandles[requesterIndex];
+        var requesterIdentity = requester.Get<EntityIdentity>();
         ref var requesterOwnership = ref requester.Get<OwnershipState>();
         ref var requesterNavigation = ref requester.Get<NavigationAgentState>();
         ref var requesterMotion = ref requester.Get<MotionState>();
-        ref var blocker = ref _unitHandles[blockerIndex];
+        ref var blocker = ref _entityHandles[blockerIndex];
         ref var blockerSpatial = ref blocker.Get<SpatialState>();
-        var blockerIdentity = blocker.Get<UnitIdentity>();
+        var blockerIdentity = blocker.Get<EntityIdentity>();
         ref var blockerOwnership = ref blocker.Get<OwnershipState>();
         ref var blockerNavigation = ref blocker.Get<NavigationAgentState>();
         ref var blockerMotion = ref blocker.Get<MotionState>();
-        if (!_types[blockerIdentity.UnitType].Movable || requesterOwnership.Owner != blockerOwnership.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
+        if (!_types[blockerIdentity.Type].Movable || requesterOwnership.Owner != blockerOwnership.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
             !requesterNavigation.GroupMember && requesterMotion.Target == blockerSpatial.Position) return;
         if (blockerMotion.Moving && blockerIdentity.Id.Value < requesterIdentity.Id.Value) return;
         NavigationLocalSearches++;
-        int length = _localSearch.Find(_navigation!.Grid, _motion!, blocker.Get<UnitIdentity>().Id, blockerSpatial.Position, blockerMotion.Target,
-            Path(blockerIndex), requester.Get<SpatialState>().Position, PhysicalProfile(blockerIndex), _types[requesterIdentity.UnitType].Body);
+        int length = _localSearch.Find(_navigation!.Grid, _motion!, blocker.Get<EntityIdentity>().Id, blockerSpatial.Position, blockerMotion.Target,
+            Path(blockerIndex), requester.Get<SpatialState>().Position, PhysicalProfile(blockerIndex), _types[requesterIdentity.Type].Body);
         if (length == 0) return;
         blockerNavigation.YieldFor = requesterIdentity.Id; blockerNavigation.YieldDeadline = Tick + 128;
         blockerNavigation.PathLength = length; blockerNavigation.PathCursor = 0; blockerNavigation.LocalTarget = Path(blockerIndex)[length - 1];
@@ -244,13 +244,13 @@ public sealed partial class SimulationWorld
 
     private void RejectRoute(ref Frent.Entity entity)
     {
-        var entityIdentity = entity.Get<UnitIdentity>();
+        var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityMotion = ref entity.Get<MotionState>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         entityMotion.Moving = false; entityNavigation.GroupMember = false; entity.Get<NavigationAgentState>().Route = null;
         entityNavigation.WaitTicks = entityNavigation.PathLength = entityNavigation.PathCursor = 0;
         entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0; entityNavigation.LocalTarget = default;
-        _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, entityMotion.Target, entityIdentity.UnitType));
+        _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, entityMotion.Target, entityIdentity.Type));
     }
 
     private static long DistanceSquared(WorldPosition a, WorldPosition b)

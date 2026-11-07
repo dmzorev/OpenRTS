@@ -19,9 +19,9 @@ public sealed partial class SimulationWorld
         _cellOverrides.Clear();
         foreach (var id in _footprints)
         {
-            ref var entity = ref _unitHandles[_indices[id]];
-            var entityIdentity = entity.Get<UnitIdentity>();
-            Stamp(_types[entityIdentity.UnitType].Footprint!, entity.Get<SpatialState>().Position);
+            ref var entity = ref _entityHandles[_indices[id]];
+            var entityIdentity = entity.Get<EntityIdentity>();
+            Stamp(_types[entityIdentity.Type].Footprint!, entity.Get<SpatialState>().Position);
         }
         if (extra is not null) Stamp(extra, position);
         return basis.Compose(_cellOverrides, _navigation!.Grid);
@@ -44,11 +44,11 @@ public sealed partial class SimulationWorld
         occupant = default;
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _unitHandles[i];
+            ref var entity = ref _entityHandles[i];
             ref var entitySpatial = ref entity.Get<SpatialState>();
-            var entityIdentity = entity.Get<UnitIdentity>();
+            var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityMotion = ref entity.Get<MotionState>();
-            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null || IsStored(entity)) continue;
+            var type = _types[entityIdentity.Type]; if (type.Footprint is not null || IsStored(entity)) continue;
             bool clear = TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             bool newNoStop = !TerrainGeometry.CanStop(candidate, entitySpatial.Position, type.Body, type.Locomotor) &&
                 TerrainGeometry.CanStop(_navigation!.Grid, entitySpatial.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
@@ -72,26 +72,26 @@ public sealed partial class SimulationWorld
         // Local paths and exact destinations are also invalidated, not only shared global fields.
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _unitHandles[i];
+            ref var entity = ref _entityHandles[i];
             ref var entitySpatial = ref entity.Get<SpatialState>();
-            var entityIdentity = entity.Get<UnitIdentity>();
+            var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             ref var entityMotion = ref entity.Get<MotionState>();
             ref var entityOrders = ref entity.Get<OrderState>();
             entityNavigation.PathLength = entityNavigation.PathCursor = 0;
             entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
-            var type = _types[entityIdentity.UnitType]; if (type.Footprint is not null || IsStored(entity)) continue;
+            var type = _types[entityIdentity.Type]; if (type.Footprint is not null || IsStored(entity)) continue;
             bool wasStranded = entityNavigation.TerrainStranded;
             entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             if (entityNavigation.TerrainStranded)
             {
                 entityMotion.Moving = false; entityOrders.OrderPhase = OrderPhase.Waiting;
-                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entityIdentity.Id, entitySpatial.Position, entityIdentity.UnitType));
+                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entityIdentity.Id, entitySpatial.Position, entityIdentity.Type));
             }
             else if ((wasStranded || entityMotion.Moving) && type.Movable)
             {
                 var goal = entityMotion.Target;
-                if (!StopAllowed(entityIdentity.UnitType, goal)) SetTarget(i, goal);
+                if (!StopAllowed(entityIdentity.Type, goal)) SetTarget(i, goal);
                 else entityMotion.Moving = entitySpatial.Position != goal;
             }
         }

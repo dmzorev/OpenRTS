@@ -29,8 +29,8 @@ public sealed partial class SimulationWorld
     private int QueueIndex(int type, string id) { for (int q = 0; q < _types[type].TaskQueues.Count; q++) if (_types[type].TaskQueues[q].Id == id) return q; return -1; }
     private void SetRally(int index, WorldPosition point)
     {
-        ref var actor = ref _unitHandles[index];
-        var actorIdentity = actor.Get<UnitIdentity>();
+        ref var actor = ref _entityHandles[index];
+        var actorIdentity = actor.Get<EntityIdentity>();
         if (IsUnderConstruction(actor) || !TryGetProducer(index, out var producer)) { RejectAction(actorIdentity.Id); return; }
         producer.HasRally = true; producer.Rally = point; _events.Add(new(Tick, WorldEventKind.RallyChanged, actorIdentity.Id, point));
     }
@@ -46,26 +46,26 @@ public sealed partial class SimulationWorld
                 int chosen = -1, product = -1, queue = -1, length = int.MaxValue;
                 foreach (int i in recipients)
                 {
-                    ref var e = ref _unitHandles[i];
-                    var eIdentity = e.Get<UnitIdentity>();
+                    ref var e = ref _entityHandles[i];
+                    var eIdentity = e.Get<EntityIdentity>();
                     ref var eOwnership = ref e.Get<OwnershipState>();
-                    int p = ProductIndex(eIdentity.UnitType, command.Action);
-                    if (p < 0 || _types[eIdentity.UnitType].Products[p].OnSite || eOwnership.Owner == 0 || IsUnderConstruction(e) || !TryGetProducer(i, out var state)) continue;
-                    int q = QueueIndex(eIdentity.UnitType, _types[eIdentity.UnitType].Products[p].Queue), size = state.Queues[q].Count;
-                    if (size >= _types[eIdentity.UnitType].TaskQueues[q].Capacity || size >= length) continue;
-                    var settings = _types[eIdentity.UnitType].TaskQueues[q];
-                    if (settings.Payment == PaymentPolicy.Upfront && Player(eOwnership.Owner).Credits < _builds[eIdentity.UnitType][p].Cost) continue;
+                    int p = ProductIndex(eIdentity.Type, command.Action);
+                    if (p < 0 || _types[eIdentity.Type].Products[p].OnSite || eOwnership.Owner == 0 || IsUnderConstruction(e) || !TryGetProducer(i, out var state)) continue;
+                    int q = QueueIndex(eIdentity.Type, _types[eIdentity.Type].Products[p].Queue), size = state.Queues[q].Count;
+                    if (size >= _types[eIdentity.Type].TaskQueues[q].Capacity || size >= length) continue;
+                    var settings = _types[eIdentity.Type].TaskQueues[q];
+                    if (settings.Payment == PaymentPolicy.Upfront && Player(eOwnership.Owner).Credits < _builds[eIdentity.Type][p].Cost) continue;
                     chosen = i; product = p; queue = q; length = size;
                 }
                 if (chosen < 0) { RejectAction(); break; }
-                var actor = _unitHandles[chosen];
-                var actorIdentity = actor.Get<UnitIdentity>();
+                var actor = _entityHandles[chosen];
+                var actorIdentity = actor.Get<EntityIdentity>();
                 uint owner = actor.Get<OwnershipState>().Owner;
-                int cost = _builds[actorIdentity.UnitType][product].Cost;
-                bool upfront = _types[actorIdentity.UnitType].TaskQueues[queue].Payment == PaymentPolicy.Upfront;
+                int cost = _builds[actorIdentity.Type][product].Cost;
+                bool upfront = _types[actorIdentity.Type].TaskQueues[queue].Payment == PaymentPolicy.Upfront;
                 if (upfront && !Spend(owner, cost)) { RejectAction(actorIdentity.Id); break; }
                 Producer(actorIdentity.Id).Queues[queue].Add(new(checked(_nextTaskId++), product, command.Repeat) { Payer = owner, Paid = upfront ? cost : 0 });
-                _events.Add(new(Tick, WorldEventKind.TaskAdded, actorIdentity.Id, UnitType: _productTypes[actorIdentity.UnitType][product]));
+                _events.Add(new(Tick, WorldEventKind.TaskAdded, actorIdentity.Id, UnitType: _productTypes[actorIdentity.Type][product]));
             }
             return;
         }
@@ -75,27 +75,27 @@ public sealed partial class SimulationWorld
             var matching = new List<(long Id, EntityId Producer, int Queue, ProductionTask Task)>();
             foreach (int i in recipients)
             {
-                var e = _unitHandles[i];
-                var eIdentity = e.Get<UnitIdentity>(); if (!TryGetProducer(i, out var state)) continue;
+                var e = _entityHandles[i];
+                var eIdentity = e.Get<EntityIdentity>(); if (!TryGetProducer(i, out var state)) continue;
                 for (int q = 0; q < state.Queues.Length; q++)
-                    if (command.Queue is null || _types[eIdentity.UnitType].TaskQueues[q].Id == command.Queue)
+                    if (command.Queue is null || _types[eIdentity.Type].TaskQueues[q].Id == command.Queue)
                         foreach (var task in state.Queues[q])
-                            if (_types[eIdentity.UnitType].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, eIdentity.Id, q, task));
+                            if (_types[eIdentity.Type].Products[task.Product].Id == command.Action && task.Repeat == command.Repeat && (command.TaskId == 0 || task.Id == command.TaskId)) matching.Add((task.Id, eIdentity.Id, q, task));
             }
             foreach (var item in matching.OrderByDescending(x => x.Id).Take(command.Amount))
-            { Refund(item.Task, _builds[_unitHandles[_indices[item.Producer]].Get<UnitIdentity>().UnitType][item.Task.Product]); Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
+            { Refund(item.Task, _builds[_entityHandles[_indices[item.Producer]].Get<EntityIdentity>().Type][item.Task.Product]); Producer(item.Producer).Queues[item.Queue].Remove(item.Task); _events.Add(new(Tick, WorldEventKind.TaskCancelled, item.Producer)); }
             return;
         }
         foreach (int i in recipients)
         {
-            var e = _unitHandles[i];
-            var eIdentity = e.Get<UnitIdentity>(); if (!TryGetProducer(i, out var state)) continue;
+            var e = _entityHandles[i];
+            var eIdentity = e.Get<EntityIdentity>(); if (!TryGetProducer(i, out var state)) continue;
             for (int q = 0; q < state.Queues.Length; q++)
             {
                 var tasks = state.Queues[q]; if (tasks.Count == 0) continue; var task = tasks[0];
-                if (!task.Ready || command.TaskId != task.Id || _types[eIdentity.UnitType].Products[task.Product].Id != command.Action) continue;
-                int target = _productTypes[eIdentity.UnitType][task.Product]; var build = _builds[eIdentity.UnitType][task.Product];
-                if (build.Kind != ProductionKind.PlaceBuilding || ObjectGeometry.DistanceSquared(_types[eIdentity.UnitType], e.Get<SpatialState>().Position, _types[target], command.Position, out _, out _) > (long)build.PlacementRadius * build.PlacementRadius ||
+                if (!task.Ready || command.TaskId != task.Id || _types[eIdentity.Type].Products[task.Product].Id != command.Action) continue;
+                int target = _productTypes[eIdentity.Type][task.Product]; var build = _builds[eIdentity.Type][task.Product];
+                if (build.Kind != ProductionKind.PlaceBuilding || ObjectGeometry.DistanceSquared(_types[eIdentity.Type], e.Get<SpatialState>().Position, _types[target], command.Position, out _, out _) > (long)build.PlacementRadius * build.PlacementRadius ||
                     !PrepareFootprint(target, command.Position, out var grid)) { RejectAction(eIdentity.Id); return; }
                 var id = Spawn(target, command.Position, e.Get<OwnershipState>().Owner); if (grid is not null) CommitGrid(grid);
                 FinishTask(eIdentity.Id, q, task, id); return;
@@ -106,7 +106,7 @@ public sealed partial class SimulationWorld
     private void FinishTask(EntityId producer, int queue, ProductionTask task, EntityId created)
     {
         var tasks = Producer(producer).Queues[queue]; tasks.RemoveAt(0);
-        if (task.Repeat) tasks.Add(new(checked(_nextTaskId++), task.Product, true) { Payer = _unitHandles[_indices[producer]].Get<OwnershipState>().Owner });
+        if (task.Repeat) tasks.Add(new(checked(_nextTaskId++), task.Product, true) { Payer = _entityHandles[_indices[producer]].Get<OwnershipState>().Owner });
         _events.Add(new(Tick, WorldEventKind.Produced, producer, TargetEntity: created));
     }
     private void UpdateProduction()
@@ -117,15 +117,15 @@ public sealed partial class SimulationWorld
         bool rebuilt = false; int completed = 0;
         foreach (var id in order)
         {
-            _stepCancellation.ThrowIfCancellationRequested();
-            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _unitHandles[i];
+            StepCancellation.ThrowIfCancellationRequested();
+            if (!_indices.TryGetValue(id, out int i)) continue; var actor = _entityHandles[i];
             if (IsUnderConstruction(actor)) continue;
-            var actorIdentity = actor.Get<UnitIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.UnitType];
+            var actorIdentity = actor.Get<EntityIdentity>(); var producer = actor.Get<ProducerState>(); var type = _types[actorIdentity.Type];
             uint owner = actor.Get<OwnershipState>().Owner; if (owner == 0) continue;
             for (int q = 0; q < producer.Queues.Length; q++)
             {
                 var tasks = producer.Queues[q]; if (tasks.Count == 0) continue;
-                var task = tasks[0]; var build = _builds[actorIdentity.UnitType][task.Product];
+                var task = tasks[0]; var build = _builds[actorIdentity.Type][task.Product];
                 if (!task.Ready)
                 {
                     var policy = type.TaskQueues[q].Payment;
@@ -141,7 +141,7 @@ public sealed partial class SimulationWorld
                 }
                 if (build.Kind == ProductionKind.PlaceBuilding || completed == 32) continue;
                 if (!rebuilt) { RebuildMotionIndex(); rebuilt = true; }
-                int target = _productTypes[actorIdentity.UnitType][task.Product]; var settings = type.TaskQueues[q];
+                int target = _productTypes[actorIdentity.Type][task.Product]; var settings = type.TaskQueues[q];
                 var exit = new WorldPosition(Math.Clamp(actor.Get<SpatialState>().Position.X + settings.Exit.X, 0, Width), Math.Clamp(actor.Get<SpatialState>().Position.Y + settings.Exit.Y, 0, Depth));
                 if (!FindProductionExit(target, exit, settings.ExitSearchRadius, out var position))
                 { if (!task.Blocked) _events.Add(new(Tick, WorldEventKind.ProductionBlocked, id)); task.Blocked = true; continue; }
@@ -162,7 +162,7 @@ public sealed partial class SimulationWorld
             long distance = (long)x * x + (long)y * y; if (distance > (long)radius * radius || distance >= best) continue;
             var candidate = new WorldPosition(exit.X + x, exit.Y + y, exit.Elevation);
             if (candidate.X < 0 || candidate.X > Width || candidate.Y < 0 || candidate.Y > Depth || !StopAllowed(type, candidate) || candidate.X < _types[type].Body.HalfWidth || candidate.Y < _types[type].Body.HalfHeight || candidate.X + _types[type].Body.HalfWidth > Width || candidate.Y + _types[type].Body.HalfHeight > Depth) continue;
-            if (carrier >= 0 && ObjectGeometry.DistanceSquared(_types[type], candidate, TypeOf(_unitHandles[carrier]), exit, out _, out _) == 0) continue;
+            if (carrier >= 0 && ObjectGeometry.DistanceSquared(_types[type], candidate, TypeOf(_entityHandles[carrier]), exit, out _, out _) == 0) continue;
             if ((_motion ?? _combatIndex) is { } index && !index.ClearPlacement(candidate, out _, _types[type].Body)) continue;
             best = distance; point = GroundPosition(candidate, exit.Elevation); found = true;
         }
@@ -186,7 +186,7 @@ public sealed partial class SimulationWorld
         foreach (var id in ProducerOrder())
         {
             var state = Producer(id);
-            int t = _unitHandles[_indices[id]].Get<UnitIdentity>().UnitType; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
+            int t = _entityHandles[_indices[id]].Get<EntityIdentity>().Type; for (int q = 0; q < state.Queues.Length; q++) foreach (var task in state.Queues[q])
             { var build = _builds[t][task.Product]; destination[at++] = new(id, q, task.Id, task.Product, _productTypes[t][task.Product], task.Progress, build.Ticks, build.Cost, task.Repeat, task.Ready); }
         }
     }

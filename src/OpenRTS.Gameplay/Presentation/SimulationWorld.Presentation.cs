@@ -7,10 +7,10 @@ public sealed partial class SimulationWorld
 {
     private void ApplyPresentation(int index, WorldCommand command)
     {
-        ref var entity = ref _unitHandles[index];
-        var entityIdentity = entity.Get<UnitIdentity>();
+        ref var entity = ref _entityHandles[index];
+        var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityPresentation = ref entity.Get<PresentationState>();
-        var type = _types[entityIdentity.UnitType];
+        var type = _types[entityIdentity.Type];
         if (command.Kind is CommandKind.SetVisualStates or CommandKind.ToggleVisualState)
         {
             if ((command.States & ~type.AllowedStateMask) != 0) { Reject(); return; }
@@ -22,7 +22,7 @@ public sealed partial class SimulationWorld
             var playback = new AnimationPlayback(command.Animation, Tick, command.DurationTicks);
             if (command.Track == AnimationTrack.Body) { entityPresentation.BodyAnimation = playback; entityPresentation.BodyAnimationOverride = true; }
             else entityPresentation.WeaponAnimation = playback;
-            _events.Add(new(Tick, WorldEventKind.AnimationPlayed, entityIdentity.Id, entity.Get<SpatialState>().Position, entityIdentity.UnitType,
+            _events.Add(new(Tick, WorldEventKind.AnimationPlayed, entityIdentity.Id, entity.Get<SpatialState>().Position, entityIdentity.Type,
                 command.Animation, command.DurationTicks, command.Track));
         }
         else if (command.Kind == CommandKind.Aim)
@@ -37,9 +37,9 @@ public sealed partial class SimulationWorld
 
     private void UpdatePresentation()
     {
-        if (_unitStorage is null) return;
+        if (ExistingStorage is null) return;
         foreach (var (presentation, combat, motion, position, definition) in
-            _unitStorage.Query<PresentationState, CombatState, MotionState, SpatialState, EntityDefinition>())
+            ExistingStorage.Query<PresentationState, CombatState, MotionState, SpatialState, EntityDefinition>())
         {
             ref var entityPresentation = ref presentation.Value;
             ref var entityCombat = ref combat.Value;
@@ -61,7 +61,7 @@ public sealed partial class SimulationWorld
             {
                 if (entityPresentation.AimEntity.Value != 0)
                 {
-                    if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _unitHandles[target].Get<SpatialState>().Position;
+                    if (_indices.TryGetValue(entityPresentation.AimEntity, out int target)) aim = _entityHandles[target].Get<SpatialState>().Position;
                     else { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; entityPresentation.AimPoint = default; }
                 }
                 else aim = entityPresentation.AimPoint;

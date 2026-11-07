@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 
 namespace OpenRTS.Core.Navigation;
 
-public readonly record struct CellOverride(bool? Traverse = null, bool? CanStop = null, byte? Terrain = null);
 public readonly record struct FootprintCell(int X, int Y, CellOverride Navigation, bool Targetable = true);
 
 /// <summary>World-aligned ground cells, centered on the entity. No render sizes or resources.</summary>

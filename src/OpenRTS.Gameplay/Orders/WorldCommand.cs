@@ -5,7 +5,10 @@ public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, Unb
 public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence, CommandKind Kind,
     EntityId Entity = default, WorldPosition Position = default, int UnitType = 0, uint Owner = 0,
     int Animation = 0, int DurationTicks = 1, AnimationTrack Track = AnimationTrack.Weapon, uint States = 0, EntityId TargetEntity = default,
-    EntitySet? Recipients = null, bool Queued = false, string? Action = null, string? Queue = null, int Amount = 1, bool Repeat = false, bool Enabled = false, long TaskId = 0) : ISimulationCommand;
+    EntitySet? Recipients = null, bool Queued = false, string? Action = null, string? Queue = null, int Amount = 1, bool Repeat = false, bool Enabled = false, long TaskId = 0) : ISessionCommand<WorldCommand>
+{
+    public WorldCommand WithStamp(long tick, uint issuer, long sequence) => this with { Tick = tick, Issuer = issuer, Sequence = sequence };
+}
 
 public enum WorldEventKind { Spawned, Destroyed, MissingEntity, NoRoute, CellOccupied, CellBlocked, InvalidPresentation, AnimationPlayed, DestinationAdjusted, InvalidOrder, QueueFull, WeaponFired, Damaged, Repaired, ProjectileImpact, ProjectileExpired, TerrainStranded, Removed, ActionUnavailable, TaskAdded, TaskCancelled, ProductionReady, Produced, ProductionBlocked, RallyChanged, OwnerChanged, EnteredTransport, Unloaded, TransportFull, UnloadBlocked, ConstructionStarted, ConstructionCompleted, ConstructionCancelled }
 public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityId Entity,

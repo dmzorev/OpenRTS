@@ -18,14 +18,6 @@ public readonly record struct BodyShape
     internal void WriteState(BinaryWriter writer) { writer.Write((int)Kind); writer.Write(HalfWidth); writer.Write(HalfHeight); }
 }
 
-public readonly record struct WorldBox(int MinX, int MinY, int MaxX, int MaxY)
-{
-    public WorldPosition Closest(WorldPosition point) => new(Math.Clamp(point.X, MinX, MaxX), Math.Clamp(point.Y, MinY, MaxY), point.Elevation);
-    public long DistanceSquared(WorldPosition point)
-    { var p = Closest(point); long x = (long)point.X - p.X, y = (long)point.Y - p.Y; return x * x + y * y; }
-    public WorldBox Translate(WorldPosition point) => new(checked(MinX + point.X), checked(MinY + point.Y), checked(MaxX + point.X), checked(MaxY + point.Y));
-}
-
 internal static class BodyGeometry
 {
     internal static bool SweptBox(WorldPosition a, WorldPosition b, WorldBox box, BodyShape body)

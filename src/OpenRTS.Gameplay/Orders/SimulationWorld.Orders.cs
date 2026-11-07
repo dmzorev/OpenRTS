@@ -10,22 +10,22 @@ public sealed partial class SimulationWorld
         if (command.Recipients is null)
         {
             if (command.Entity.Value == 0 && command.Kind == CommandKind.MoveGroup)
-                return Enumerable.Range(0, Count).Where(i => !IsStored(_unitHandles[i])).OrderBy(i => _unitHandles[i].Get<UnitIdentity>().Id.Value).ToArray();
-            if (_indices.TryGetValue(command.Entity, out int index)) return IsStored(_unitHandles[index]) ? [] : [index];
+                return Enumerable.Range(0, Count).Where(i => !IsStored(_entityHandles[i])).OrderBy(i => _entityHandles[i].Get<EntityIdentity>().Id.Value).ToArray();
+            if (_indices.TryGetValue(command.Entity, out int index)) return IsStored(_entityHandles[index]) ? [] : [index];
             _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity)); return [];
         }
         var indices = new List<int>(command.Recipients.Count);
         foreach (var id in command.Recipients.Ids)
-            if (_indices.TryGetValue(id, out int index)) { if (!IsStored(_unitHandles[index])) indices.Add(index); }
+            if (_indices.TryGetValue(id, out int index)) { if (!IsStored(_entityHandles[index])) indices.Add(index); }
             else _events.Add(new(Tick, WorldEventKind.MissingEntity, id));
         return indices.ToArray();
     }
 
     private void IssueOrder(int index, UnitOrder order, bool queued)
     {
-        if (IsStored(_unitHandles[index])) return;
-        ref var entity = ref _unitHandles[index];
-        var entityIdentity = entity.Get<UnitIdentity>();
+        if (IsStored(_entityHandles[index])) return;
+        ref var entity = ref _entityHandles[index];
+        var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityOrders = ref entity.Get<OrderState>();
         if (queued && entityOrders.HasOrder)
         {
@@ -39,8 +39,8 @@ public sealed partial class SimulationWorld
 
     private bool StartOrder(int index, UnitOrder order)
     {
-        ref var entity = ref _unitHandles[index];
-        var entityIdentity = entity.Get<UnitIdentity>();
+        ref var entity = ref _entityHandles[index];
+        var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityPresentation = ref entity.Get<PresentationState>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityOrders = ref entity.Get<OrderState>();
@@ -56,7 +56,7 @@ public sealed partial class SimulationWorld
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
-        if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.UnitType].Movable ||
+        if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.Type].Movable ||
             order.Kind is UnitActionKind.Attack or UnitActionKind.AttackMove or UnitActionKind.Repair && weapon is null ||
             order.Kind is UnitActionKind.Attack or UnitActionKind.Repair && !ValidTarget(index, order.Target, weapon!, out _))
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
@@ -68,7 +68,7 @@ public sealed partial class SimulationWorld
             if (DistanceSquared(entity.Get<SpatialState>().Position, order.Position) > (long)distance * distance && !SetTarget(index, order.Position)) return false;
         }
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
-        { if (!_types[entityIdentity.UnitType].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
+        { if (!_types[entityIdentity.Type].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
         else Halt(index);
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
@@ -82,7 +82,7 @@ public sealed partial class SimulationWorld
 
     private void Halt(int index)
     {
-        ref var entity = ref _unitHandles[index];
+        ref var entity = ref _entityHandles[index];
         ref var entityMotion = ref entity.Get<MotionState>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         entityMotion.Moving = false; entityMotion.Target = entity.Get<SpatialState>().Position; entityNavigation.GroupMember = false;
@@ -95,8 +95,8 @@ public sealed partial class SimulationWorld
         EnsureMovementOrder();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
-            int i = _movementOrder[orderIndex]; ref var entity = ref _unitHandles[i];
-            var entityIdentity = entity.Get<UnitIdentity>();
+            int i = _movementOrder[orderIndex]; ref var entity = ref _entityHandles[i];
+            var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityNavigation = ref entity.Get<NavigationAgentState>();
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
@@ -134,11 +134,11 @@ public sealed partial class SimulationWorld
                 if ((Tick + entityIdentity.Id.Value) % 4 != 0 && entityOrders.OrderStarted != Tick) continue;
                 target = AcquireWeaponTarget(i, weapon, range);
                 if (target < 0 || !InWeaponRange(i, target, range)) continue;
-                entityOrders.CombatTarget = _unitHandles[target].Get<UnitIdentity>().Id;
+                entityOrders.CombatTarget = _entityHandles[target].Get<EntityIdentity>().Id;
             }
             entityPresentation.HasAim = true; entityPresentation.AimEntity = entityOrders.CombatTarget;
-            if (InWeaponRange(i, target, weapon.Range) && (_types[entityIdentity.UnitType].Footprint is not null || StopAllowed(entityIdentity.UnitType, entity.Get<SpatialState>().Position))) { Halt(i); entityOrders.OrderPhase = OrderPhase.Engaging; }
-            else if ((aggressive || attack) && _types[entityIdentity.UnitType].Movable)
+            if (InWeaponRange(i, target, weapon.Range) && (_types[entityIdentity.Type].Footprint is not null || StopAllowed(entityIdentity.Type, entity.Get<SpatialState>().Position))) { Halt(i); entityOrders.OrderPhase = OrderPhase.Engaging; }
+            else if ((aggressive || attack) && _types[entityIdentity.Type].Movable)
             {
                 if (!entityMotion.Moving || (Tick + entityIdentity.Id.Value) % 4 == 0)
                 {

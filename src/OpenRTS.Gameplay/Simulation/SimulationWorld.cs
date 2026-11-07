@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using OpenRTS.Core.Production;
@@ -7,32 +6,18 @@ using OpenRTS.Core.Simulation;
 namespace OpenRTS.Core;
 
 /// <summary>Single-owner world. Hosts exchange commands and copied poses, never its mutable storage.</summary>
-public sealed partial class SimulationWorld : IDisposable
+public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEvent>
 {
     private readonly UnitDefinition[] _types;
-    // Derived dense handle list, independent of Frent rows and spatial-index slots.
-    private Frent.Entity[] _unitHandles;
-    private readonly Dictionary<EntityId, int> _indices;
-    private readonly List<WorldEvent> _events = [];
-    private readonly CommandBatch<WorldCommand> _commands = new();
-    private readonly Action<WorldCommand> _validateCommand;
-    private uint _nextId = 1;
-    private DeterministicRandom _random;
-    private readonly GridNavigator? _navigation;
+    private readonly IGridPathfinder? _navigation;
     private readonly MotionIndex? _motion;
     private readonly MotionIndex? _combatIndex;
-    private CancellationToken _stepCancellation;
     private long _orderGroupSequence;
     private int[] _movementOrder = [], _navigationGoals = [];
-    private bool _orderDirty = true, _failed;
+    private bool _orderDirty = true;
     private readonly IComparer<int> _idOrder;
 
-    public int Width { get; }
-    public int Depth { get; }
-    public int TickRate { get; }
     public int SpeedPerTick { get; }
-    public long Tick { get; private set; }
-    public int Count { get; private set; }
     public NavigationGrid? BaseNavigationGrid => _baseGrid;
     public NavigationGrid? NavigationGrid => _navigation?.Grid;
     public int NavigationWaitingCount { get; private set; }
@@ -40,40 +25,28 @@ public sealed partial class SimulationWorld : IDisposable
     public int NavigationVisitedCells => _weighted?.Visited ?? _navigation?.LastVisitedCells ?? 0;
     public double NavigationBuildMilliseconds => _weighted?.Milliseconds ?? _navigation?.LastBuildMilliseconds ?? 0;
     public int MovingCount => CountMoving();
-    public ReadOnlySpan<WorldEvent> Events => CollectionsMarshal.AsSpan(_events);
-    public ReadOnlySpan<WorldCommand> AppliedCommands => _commands.Applied;
 
     public SimulationWorld(IEnumerable<UnitDefinition> unitTypes, int width, int depth, ulong seed = 1,
         int initialCapacity = 0, int tickRate = 25, int speedPerTick = 128,
         NavigationGrid? navigationGrid = null, int navigationWorkers = 1, int fieldsPerTick = 2,
         int cachedFields = 8, bool reverseNavigationJobs = false, IEnumerable<PlayerDefinition>? players = null)
+        : base(width, depth, seed, initialCapacity, tickRate)
     {
-        if (width < 1 || width > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(width));
-        if (depth < 1 || depth > WorldPosition.MaximumExtent) throw new ArgumentOutOfRangeException(nameof(depth));
-        if (tickRate < 1 || tickRate > 1000) throw new ArgumentOutOfRangeException(nameof(tickRate));
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
-        ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
         _types = unitTypes.ToArray();
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
         InitializePlayers(players);
         InitializeProduction();
-        Width = width;
-        Depth = depth;
-        TickRate = tickRate;
         SpeedPerTick = speedPerTick;
-        _unitHandles = new Frent.Entity[initialCapacity];
-        _indices = new(initialCapacity);
-        _random = new(seed);
-        _validateCommand = ValidateCommand;
-        _idOrder = Comparer<int>.Create((a, b) => _unitHandles[a].Get<UnitIdentity>().Id.Value.CompareTo(_unitHandles[b].Get<UnitIdentity>().Id.Value));
+        _idOrder = Comparer<int>.Create((a, b) => _entityHandles[a].Get<EntityIdentity>().Id.Value.CompareTo(_entityHandles[b].Get<EntityIdentity>().Id.Value));
         if (navigationGrid is not null)
         {
             if (speedPerTick > 1024) throw new ArgumentOutOfRangeException(nameof(speedPerTick), "The current local motion budget allows at most 1024 world units per tick.");
             if (width != (long)navigationGrid.Width * navigationGrid.CellSize || depth != (long)navigationGrid.Height * navigationGrid.CellSize)
                 throw new ArgumentException("World bounds must match the navigation grid.", nameof(navigationGrid));
             _baseGrid = navigationGrid;
-            _navigation = new(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
+            _navigation = new GridNavigator(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
             InitializeLocomotion(navigationGrid, navigationWorkers, fieldsPerTick, cachedFields, reverseNavigationJobs);
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
@@ -104,39 +77,23 @@ public sealed partial class SimulationWorld : IDisposable
         catch { _failed = true; throw; }
     }
 
-    public void Step(ReadOnlySpan<WorldCommand> commands = default, CancellationToken cancellationToken = default)
+    protected override void PrepareStep() => RebuildMotionIndex();
+
+    protected override void Update(CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
-        if (_failed) throw new InvalidOperationException("An interrupted world cannot be advanced.");
-        cancellationToken.ThrowIfCancellationRequested();
-        long nextTick = checked(Tick + 1);
-        _commands.Replace(commands, nextTick, _validateCommand);
-
-        _events.Clear();
-        RebuildMotionIndex();
-        Tick = nextTick;
-        _stepCancellation = cancellationToken;
-        try { foreach (var command in AppliedCommands) Apply(command); }
-        catch { _failed = true; throw; }
-
-        try
-        {
-            CapturePreviousPositions();
-            CapturePreviousFacings();
-            UpdateOrders();
-            if (_transportIndexDirty) RebuildMotionIndex();
-            if (_navigation is not null) UpdateNavigation(cancellationToken);
-            else UpdateDirectMovement();
-            UpdateWeapons();
-            UpdateConstruction();
-            UpdateIncome();
-            UpdateProduction();
-            UpdatePresentation();
-        }
-        catch { _failed = true; throw; }
+        CapturePreviousFacings();
+        UpdateOrders();
+        if (_transportIndexDirty) RebuildMotionIndex();
+        if (_navigation is not null) UpdateNavigation(cancellationToken);
+        else UpdateDirectMovement();
+        UpdateWeapons();
+        UpdateConstruction();
+        UpdateIncome();
+        UpdateProduction();
+        UpdatePresentation();
     }
 
-    private void ValidateCommand(WorldCommand command)
+    protected override void ValidateCommand(WorldCommand command)
     {
         const string batchArgument = "commands";
         if (!Enum.IsDefined(command.Kind))
@@ -164,8 +121,8 @@ public sealed partial class SimulationWorld : IDisposable
         int weaponOffset = 0;
         for (int i = 0; i < Count; i++)
         {
-            ref var entity = ref _unitHandles[i];
-            var entityIdentity = entity.Get<UnitIdentity>();
+            ref var entity = ref _entityHandles[i];
+            var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityPresentation = ref entity.Get<PresentationState>();
             ref var entityOwnership = ref entity.Get<OwnershipState>();
             ref var entityCombat = ref entity.Get<CombatState>();
@@ -182,15 +139,15 @@ public sealed partial class SimulationWorld : IDisposable
                 states = HasPassengers(entity) ? states | mask : states & ~mask;
             }
             var carrier = CarrierOf(entity);
-            if (carrier.Value != 0) spatial = ref _unitHandles[_indices[carrier]].Get<SpatialState>();
+            if (carrier.Value != 0) spatial = ref _entityHandles[_indices[carrier]].Get<SpatialState>();
             bool constructing = IsUnderConstruction(entity);
-            if (!constructing && _types[entityIdentity.UnitType].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.UnitType].StateMask(power.LowPowerState);
+            if (!constructing && _types[entityIdentity.Type].Economy is { } power && LowPower(entityOwnership.Owner)) states |= _types[entityIdentity.Type].StateMask(power.LowPowerState);
             if (producer is not null) for (int q = 0; q < producer.Queues.Length; q++)
-                if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.UnitType].TaskQueues[q].WorkingState is { } state)
-                    states |= _types[entityIdentity.UnitType].StateMask(state);
+                if (producer.Queues[q] is { Count: > 0 } tasks && !tasks[0].Ready && _types[entityIdentity.Type].TaskQueues[q].WorkingState is { } state)
+                    states |= _types[entityIdentity.Type].StateMask(state);
             int captureProgress = 0, captureDuration = 0;
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Capture && entity.Has<CaptureState>() && _indices.TryGetValue(entityOrders.ActiveOrder.Target, out int captureTarget))
-            { captureProgress = entity.Get<CaptureState>().Progress; var targetType = _types[_unitHandles[captureTarget].Get<UnitIdentity>().UnitType]; captureDuration = targetType.Capturable?.Ticks ?? targetType.MaxHealth; }
+            { captureProgress = entity.Get<CaptureState>().Progress; var targetType = _types[_entityHandles[captureTarget].Get<EntityIdentity>().Type]; captureDuration = targetType.Capturable?.Ticks ?? targetType.MaxHealth; }
             ConstructionProgress construction = default;
             if (constructing)
             {
@@ -198,7 +155,7 @@ public sealed partial class SimulationWorld : IDisposable
                 construction = new(site.Work, site.Required);
                 if (TypeOf(entity).States.Contains("constructing")) states |= TypeOf(entity).StateMask("constructing");
             }
-            destination[i] = new(entityIdentity.Id, entityIdentity.UnitType, spatial.Previous, spatial.Position,
+            destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
                 new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, captureProgress, captureDuration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, producer?.HasRally ?? false, producer?.Rally ?? default, carrier, construction);
@@ -206,7 +163,7 @@ public sealed partial class SimulationWorld : IDisposable
         }
     }
 
-    public SimulationReport Report()
+    public override SimulationReport Report()
     {
         ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("An interrupted world has no completed state.");
@@ -215,20 +172,20 @@ public sealed partial class SimulationWorld : IDisposable
         {
             writer.Write(_navigation is null ? 10 : 14);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
-            writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(_nextId); writer.Write(_random.State);
+            writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(NextEntityId); writer.Write(_random.State);
             writer.Write(_types.Length);
             foreach (var type in _types)
             {
                 type.WriteState(writer);
             }
             writer.Write(_orderGroupSequence); writer.Write(Count);
-            foreach (var entity in _unitHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<UnitIdentity>().Id.Value))
+            foreach (var entity in _entityHandles.AsSpan(0, Count).ToArray().OrderBy(e => e.Get<EntityIdentity>().Id.Value))
             {
-                var entityIdentity = entity.Get<UnitIdentity>();
+                var entityIdentity = entity.Get<EntityIdentity>();
                 ref var entityMotion = ref entity.Get<MotionState>();
                 ref var entityNavigation = ref entity.Get<NavigationAgentState>();
                 var position = entity.Get<SpatialState>().Position;
-                writer.Write(entityIdentity.Id.Value); writer.Write(entityIdentity.UnitType); writer.Write(entity.Get<HealthState>().Current);
+                writer.Write(entityIdentity.Id.Value); writer.Write(entityIdentity.Type); writer.Write(entity.Get<HealthState>().Current);
                 writer.Write(position.X); writer.Write(position.Y); writer.Write(position.Elevation);
                 writer.Write(entityMotion.Target.X); writer.Write(entityMotion.Target.Y); writer.Write(entityMotion.Target.Elevation);
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
@@ -271,7 +228,7 @@ public sealed partial class SimulationWorld : IDisposable
         return new(Tick, Count, Convert.ToHexString(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length))));
     }
 
-    private void Apply(WorldCommand command)
+    protected override void ApplyCommand(WorldCommand command)
     {
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally) { ApplyProduction(command); return; }
@@ -289,8 +246,8 @@ public sealed partial class SimulationWorld : IDisposable
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
-            { foreach (int i in members) if (!_types[_unitHandles[i].Get<UnitIdentity>().UnitType].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
-                members = members.Where(i => _types[_unitHandles[i].Get<UnitIdentity>().UnitType].Movable || !TryGetProducer(i, out _)).ToArray(); }
+            { foreach (int i in members) if (!_types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && TryGetProducer(i, out _)) SetRally(i, command.Position);
+                members = members.Where(i => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable || !TryGetProducer(i, out _)).ToArray(); }
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair, CommandKind.CaptureTarget => UnitActionKind.Capture,
                 CommandKind.Enter => UnitActionKind.Enter, CommandKind.UnloadAt => UnitActionKind.UnloadAt, CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
@@ -330,7 +287,7 @@ public sealed partial class SimulationWorld : IDisposable
             for (int i = 0; i < Count; i++)
             {
                 // Per-entity streams make this independent of packed storage and future task scheduling.
-                var random = new DeterministicRandom(seed ^ _unitHandles[i].Get<UnitIdentity>().Id.Value);
+                var random = new DeterministicRandom(seed ^ _entityHandles[i].Get<EntityIdentity>().Id.Value);
                 var target = command.Kind == CommandKind.Scatter
                     ? new WorldPosition(random.NextInt(command.Position.X), random.NextInt(command.Position.Y)) : command.Position;
                 IssueOrder(i, new(UnitActionKind.Move, target), false);
@@ -349,44 +306,38 @@ public sealed partial class SimulationWorld : IDisposable
 
     private void DestroyIndex(int index, bool wreck = true)
     {
-        var actor = _unitHandles[index];
-        var id = actor.Get<UnitIdentity>().Id;
+        var actor = _entityHandles[index];
+        var id = actor.Get<EntityIdentity>().Id;
         if (IsStored(actor)) { DetachPassenger(actor); wreck = false; }
         RemovePassengers(actor);
         index = _indices[id];
-        if (_unitHandles[index].Has<ProducerState>()) _producersDirty = true;
+        if (_entityHandles[index].Has<ProducerState>()) _producersDirty = true;
         bool stamped = _footprints.Remove(id);
-        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _unitHandles[index].Get<SpatialState>().Position, _unitHandles[index].Get<UnitIdentity>().UnitType, Owner: _unitHandles[index].Get<OwnershipState>().Owner));
+        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _powerDirty = true;
-        _unitHandles[index].Delete();
-        _indices.Remove(id); _orderDirty = true; Count--;
-        if (index != Count)
-        {
-            _unitHandles[index] = _unitHandles[Count];
-            _indices[_unitHandles[index].Get<UnitIdentity>().Id] = index;
-        }
-        _unitHandles[Count] = default;
+        DeleteEntity(index);
+        _orderDirty = true;
         if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
     }
 
     private bool SetTarget(int index, WorldPosition position)
     {
-        ref var entity = ref _unitHandles[index];
+        ref var entity = ref _entityHandles[index];
         ref var entitySpatial = ref entity.Get<SpatialState>();
-        var entityIdentity = entity.Get<UnitIdentity>();
+        var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityMotion = ref entity.Get<MotionState>();
-        if (!_types[entityIdentity.UnitType].Movable && position != entitySpatial.Position)
+        if (!_types[entityIdentity.Type].Movable && position != entitySpatial.Position)
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (_navigation is not null)
         {
-            if (!Resolver(entityIdentity.UnitType).Resolve(entitySpatial.Position, position, out var resolved, _stepCancellation))
-            { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.UnitType)); return false; }
-            if (resolved != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, entityIdentity.Id, resolved, entityIdentity.UnitType));
+            if (!Resolver(entityIdentity.Type).Resolve(entitySpatial.Position, position, out var resolved, StepCancellation))
+            { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
+            if (resolved != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, entityIdentity.Id, resolved, entityIdentity.Type));
             position = resolved;
         }
-        else if (!StopAllowed(entityIdentity.UnitType, position))
-        { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.UnitType)); return false; }
+        else if (!StopAllowed(entityIdentity.Type, position))
+        { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
         entityNavigation.GroupMember = false; entityNavigation.OrderGroup = 0; entityMotion.MovementRemainder = 0;
         entityNavigation.WaitTicks = entityNavigation.PathLength = entityNavigation.PathCursor = 0;
         entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0; entityNavigation.LocalTarget = default;
@@ -400,26 +351,16 @@ public sealed partial class SimulationWorld : IDisposable
         return true;
     }
 
-    private EntityId AllocateEntityId()
-    {
-        if (_nextId == uint.MaxValue) throw new InvalidOperationException("Entity ID space exhausted.");
-        return new(_nextId++);
-    }
-
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
         EntityId siteId = default, ConstructionState construction = default)
     {
-        if (Count == _unitHandles.Length)
-        {
-            Array.Resize(ref _unitHandles, checked(Math.Max(16, Count * 2)));
-        }
         var id = siteId.Value == 0 ? AllocateEntityId() : siteId;
         Frent.Entity state;
         var type = _types[unitType];
-        _unitStorage ??= new();
+        var storage = Storage;
         state = type.TaskQueues.Count == 0
-            ? _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-            : _unitStorage.Create(new UnitIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
+            ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+            : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), new HealthState(construction.Required > 0 ? construction.StartingHealth : type.MaxHealth), new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), new ProducerState(type.TaskQueues.Count));
         if (type.Passenger is not null) state.Add(new PassengerState());
         if (type.Transport is not null) state.Add(new TransportState());
         Player(owner);
@@ -428,12 +369,11 @@ public sealed partial class SimulationWorld : IDisposable
         if (type.Capturable is not null) state.Add(new CapturableState());
         if (type.Abilities.Any(a => a.Kind == AbilityKind.Capture)) state.Add(new CaptureState());
         _powerDirty = true;
-        _unitHandles[Count] = state;
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
-        _indices.Add(id, Count++);
+        TrackEntity(state);
         if (type.TaskQueues.Count > 0) _producersDirty = true;
-        for (int a = 0; a < type.Abilities.Count; a++) if (type.Abilities[a].Kind == AbilityKind.Weapon) _unitHandles[_indices[id]].Get<CombatState>().Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
+        for (int a = 0; a < type.Abilities.Count; a++) if (type.Abilities[a].Kind == AbilityKind.Weapon) _entityHandles[_indices[id]].Get<CombatState>().Weapons[AbilityMount(unitType, a)].AutoCast = type.Abilities[a].AutoCast;
         _orderDirty = true;
         return id;
     }
@@ -458,13 +398,6 @@ public sealed partial class SimulationWorld : IDisposable
     private void ValidateType(int type)
     {
         if ((uint)type >= (uint)_types.Length) throw new ArgumentOutOfRangeException(nameof(type));
-    }
-
-    private void ValidatePosition(WorldPosition position)
-    {
-        if (position.X < 0 || position.X > Width || position.Y < 0 || position.Y > Depth ||
-            Math.Abs((long)position.Elevation) > WorldPosition.MaximumExtent)
-            throw new ArgumentOutOfRangeException(nameof(position), "Position is outside world bounds.");
     }
 
     internal static ulong SquareRoot(ulong value)

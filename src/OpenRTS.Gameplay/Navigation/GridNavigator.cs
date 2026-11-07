@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace OpenRTS.Core.Navigation;
 
 /// <summary>Shared reverse-BFS fields with a deterministic work budget and ordered publication.</summary>
-public sealed class GridNavigator
+public sealed class GridNavigator : IGridPathfinder
 {
     private sealed class Field
     {
@@ -135,7 +135,7 @@ public sealed class GridNavigator
         return false;
     }
 
-    internal void WriteState(BinaryWriter writer)
+    public void WriteState(BinaryWriter writer)
     {
         Grid.WriteState(writer);
         writer.Write(FieldsPerTick); writer.Write(CachedFields);

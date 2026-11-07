@@ -27,8 +27,8 @@
 
 ```text
 OpenRTS/
-  src/OpenRTS.Core/          # Стабильные типы и инфраструктура симуляции
-  src/OpenRTS.Gameplay/      # Встроенная RTS-симуляция и механики
+  src/OpenRTS.Core/          # Исполняемое ядро симуляции, Frent и базовые контракты
+  src/OpenRTS.Gameplay/      # Готовая RTS-сборка и реализации механик
   src/OpenRTS.Content/       # RTS определения и подготовка контента
   src/OpenRTS.Godot/         # Адаптер Godot
   libs/DeclarativeContent/  # Переиспользуемая MIT библиотека
