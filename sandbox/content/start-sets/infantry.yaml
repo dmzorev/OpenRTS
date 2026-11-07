@@ -1,0 +1,7 @@
+version: 1
+id: infantry
+credits: 5000
+units:
+  - {type: construction-yard, offset: [0, 0]}
+  - {type: rifleman, offset: [3584, 3072]}
+  - {type: rocketeer, offset: [4608, 3072]}

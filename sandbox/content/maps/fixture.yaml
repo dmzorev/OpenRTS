@@ -1,0 +1,25 @@
+version: 1
+id: sandbox-fixture
+kind: fixture
+size: [20, 12]
+cellSize: 1024
+terrain:
+  palette: {G: grass, R: road, M: mountains}
+  rows:
+    - MMMMMMMMMMMMMMMMMMMM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MRRRRRRRRRRRRRRRRRRM
+    - MRRRRRRRRRRRRRRRRRRM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MGGGGGGGGGGGGGGGGGGM
+    - MMMMMMMMMMMMMMMMMMMM
+slots: [blue, red]
+objects:
+  - {id: blue-infantry, type: rifleman, position: [4608, 5632], owner: blue}
+  - {id: red-infantry, type: rifleman, position: [15872, 6656], owner: red}
+  - {id: tree-line, type: nature-trees, position: [9728, 4096], owner: neutral}

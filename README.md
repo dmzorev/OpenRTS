@@ -122,3 +122,13 @@ MoveGroup собирает толпу около точки и не сохран
 
 
 `./tools/dev.sh headless --skirmish --ticks=1800` выполняет проверочный журнал захвата и строительства на той же карте. Интерактивный skirmish стартует без автоматических приказов.
+
+Штатный skirmish читает [YAML-карту](sandbox/content/maps/skirmish.yaml) и [стартовый набор](sandbox/content/start-sets/construction.yaml). Карта задаёт грунт, нейтральные объекты и точки старта. Набор задаёт кредиты игроков и состав сил с точными смещениями от стартовой точки. Для карты с готовой расстановкой используйте `kind: fixture` и именованные слоты владельцев.
+
+```sh
+./tools/dev.sh run --map=content/maps/fixture.yaml
+./tools/dev.sh run --skirmish --start-set=content/start-sets/infantry.yaml
+./tools/dev.sh headless --map=content/maps/skirmish.yaml --start-set=content/start-sets/infantry.yaml --ticks=25
+```
+
+Относительные пути отсчитываются от `sandbox/`. После редактирования YAML запустите карту заново. Оба хоста используют одну схему и загружают до двух слотов, назначая игроков по порядку имён слотов. Для конечного прогона карты в Godot укажите `--verify-simulation --map=… --ticks=…`. [Формат и правила загрузки](docs/research/game-maps/README.md).

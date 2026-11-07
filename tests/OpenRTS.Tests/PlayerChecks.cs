@@ -182,7 +182,8 @@ internal static class PlayerChecks
         test("Players: skirmish journal captures distant resources and builds for the correct player", () =>
         {
             var catalog = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml")), new("buildings", File.ReadAllText("sandbox/content/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
-            using var a = SkirmishScenario.Create(catalog, 1); using var b = SkirmishScenario.Create(catalog, 4);
+            var match = MapScenario.Load(catalog, path => new(path, File.ReadAllText(Path.Combine("sandbox", path))), MapScenario.DefaultMap);
+            using var a = match.CreateWorld(1); using var b = match.CreateWorld(4);
             var commands = SkirmishScenario.Commands();
             for (int tick = 1; tick <= 1800; tick++)
             {

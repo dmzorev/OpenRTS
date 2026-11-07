@@ -68,7 +68,7 @@ public partial class Sandbox
     }
     private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f));
     private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
-    private bool Controls(uint owner) => owner == 1 || _skirmish && owner == 2;
+    private bool Controls(uint owner) => owner == 1 || _mapMatch is not null && owner == 2;
     private uint CommandOwner => Selected()?.Presentation.Owner ?? 1;
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
     private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;

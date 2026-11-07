@@ -144,6 +144,18 @@ def main():
         raise RuntimeError("Skirmish resource/capture/production journal differs by workers")
     print("PASS Players, construction UI, capture cursor, dual-player controls and 1800-tick skirmish journal", flush=True)
 
+    for file, count, extra in [
+        ("fixture.yaml", 3, []),
+        ("skirmish.yaml", 14, ["--start-set=content/start-sets/infantry.yaml"]),
+    ]:
+        args = ["--map=content/maps/" + file, "--ticks=3", *extra]
+        direct = report(run(headless + args + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")
+        host = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--",
+                    "--verify-simulation", "--workers=4", *args])
+        if direct["EntityCount"] != count or "ERROR:" in host.stderr or report(host.stdout, "OPENRTS_SIMULATION:") != direct:
+            raise RuntimeError("File map host/worker parity failed:\n" + host.stdout + host.stderr)
+    print("PASS file maps with fixed placements and alternate skirmish starts; host/worker parity", flush=True)
+
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)
     if "лимит диагностического стенда" not in invalid.stderr:
         raise RuntimeError("Missing invalid-count diagnostic")

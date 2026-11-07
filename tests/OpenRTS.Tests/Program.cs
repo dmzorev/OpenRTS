@@ -63,6 +63,7 @@ OrdersMotionChecks.Run(Test);
 CombatPresentationChecks.Run(Test);
 EcsNavigationIntegrationChecks.Run(Test);
 PlayerChecks.Run(Test);
+MapChecks.Run(Test);
 CaptureMechanicChecks.Run(Test);
 TransportConstructionMechanicChecks.Run(Test);
 ConstructionChecks.Run(Test);

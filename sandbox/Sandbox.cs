@@ -13,6 +13,7 @@ public partial class Sandbox : Node3D
 {
     private SimulationSession? _session;
     private UnitCatalog? _catalog;
+    private MapMatch? _mapMatch;
     private WorldView? _view;
     private SpriteWorldView? _sprites;
     private CombatEffectsView? _combatEffects;
@@ -44,11 +45,14 @@ public partial class Sandbox : Node3D
         bool verify = Array.Exists(OS.GetCmdlineUserArgs(), a => a == "--verify");
         try
         {
+            string? mapPath = null, startSetPath = null;
             foreach (string arg in OS.GetCmdlineUserArgs())
             {
                 if (arg == "--verify") continue;
                 if (arg == "--verify-actions") { _verifyActions = _buildings = _showcase = _paused = true; continue; }
                 if (arg == "--verify-production") { _productionScenario = _buildings = _showcase = _verifySimulation = true; _ticks = 160; continue; }
+                if (arg.StartsWith("--map=", StringComparison.Ordinal) && arg.Length > 6) { mapPath = arg[6..]; continue; }
+                if (arg.StartsWith("--start-set=", StringComparison.Ordinal) && arg.Length > 12) { startSetPath = arg[12..]; continue; }
                 if (arg == "--skirmish") { _skirmish = _buildings = _showcase = true; continue; }
                 if (arg == "--verify-skirmish") { _verifySkirmish = _skirmish = _buildings = _showcase = true; _paused = true; continue; }
                 if (arg == "--buildings") { _buildings = _showcase = true; continue; }
@@ -66,13 +70,17 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --skirmish, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
+            if (mapPath is not null && (_showcase || _navigation || _verifyControls || verify))
+                throw new ArgumentException("--map выбирает отдельный сценарий.");
+            if (mapPath is not null) _buildings = _showcase = true;
             if (!_navigation && !_verifySimulation && !_verifyControls && !verify && !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)) && !_showcase) _skirmish = _buildings = _showcase = true;
             if (_showcase && _navigation) throw new ArgumentException("Полигон и диагностическая навигация — отдельные режимы.");
             if (_showcase && _count != ShowcaseScenario.UnitCount && Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal)))
                 throw new ArgumentException("Полигон содержит 10 юнитов; для нагрузок используйте --navigation --count=... .");
-            if (_showcase) _count = _skirmish ? SkirmishScenario.UnitCount : _buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount;
+            if (startSetPath is not null && (mapPath is null && !_skirmish || _verifySkirmish))
+                throw new ArgumentException("--start-set доступен при запуске skirmish.");
             if (_verifyBuildings) { _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; }
             if (_verifyPresentation) { _verifySimulation = true; _ticks = 12; }
             if ((verify ? 1 : 0) + (_verifySimulation ? 1 : 0) + (_verifyControls ? 1 : 0) > 1) throw new ArgumentException("Выберите один режим проверки.");
@@ -85,6 +93,12 @@ public partial class Sandbox : Node3D
             _catalog = UnitCatalog.Load(unitSources,
                 LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]),
                 WeaponCatalog.Load([new("weapons.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/weapons.yaml")))]));
+            if (_skirmish || mapPath is not null)
+            {
+                _mapMatch = MapScenario.Load(_catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath);
+                _skirmish = _mapMatch.Map.IsSkirmish;
+            }
+            if (_showcase) _count = _mapMatch?.UnitCount ?? (_buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount);
             if (verify)
             {
                 var preview = PreviewRenderer.Create(_catalog.Units[0], _count);
@@ -106,7 +120,16 @@ public partial class Sandbox : Node3D
                     _sprites = new(_catalog, _modelCatalog, TeamColor);
                     _combatEffects = new(_catalog, EffectCatalog.Load([new("effects.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/effects.yaml")))]));
                     AddChild(_combatEffects.Node);
-                    AddChild(new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width, _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize, ShowcaseScenario.TerrainIds, _skirmish ? SkirmishScenario.TerrainAt : _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, id => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres")).Node); AddChild(_sprites.Node); CreateSelectionRing();
+                    Texture2D TextureFor(string id) => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres");
+                    var map = _mapMatch?.Map;
+                    var view = map is not null
+                        ? new TerrainView(map.Grid.Width, map.Grid.Height, 1, map.TerrainIds, map.TerrainAt, TextureFor)
+                        : new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width,
+                            _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize,
+                            ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, TextureFor);
+                    AddChild(view.Node);
+                    AddChild(_sprites.Node);
+                    CreateSelectionRing();
                 }
                 else { _view = new WorldView(_catalog.Units[0], _count); AddChild(_view.Node); }
                 if (_navigation)
@@ -126,6 +149,15 @@ public partial class Sandbox : Node3D
         }
     }
 
+    private static ContentSource ReadMapSource(string path)
+    {
+        string resource = System.IO.Path.IsPathRooted(path) || path.StartsWith("res://", StringComparison.Ordinal)
+            ? path : "res://" + path;
+        using var file = Godot.FileAccess.Open(resource, Godot.FileAccess.ModeFlags.Read)
+            ?? throw new System.IO.IOException($"Не удалось открыть {resource}: {Godot.FileAccess.GetOpenError()}.");
+        return new(path, file.GetAsText());
+    }
+
     private void StartSession()
     {
         _session?.Dispose();
@@ -137,8 +169,9 @@ public partial class Sandbox : Node3D
         _sitePlacement = null; _selectedProject = default; _visibleProjects = []; _visibleProjectsTick = -1; _constructionViewer = 1;
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
-        _session = new SimulationSession(() => _skirmish ? SkirmishScenario.Create(catalog, _workers) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            _skirmish ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+        var map = _mapMatch;
+        _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -220,6 +253,16 @@ public partial class Sandbox : Node3D
             if (_verifyPresentation && completed)
             {
                 VerifyPresentation(frame); return;
+            }
+            if (_verifySimulation && completed && _mapMatch is not null)
+            {
+                var report = _session.Completion.GetAwaiter().GetResult();
+                if (frame.Tick != report.Tick || frame.Poses.Length != report.EntityCount)
+                    throw new InvalidOperationException("Не опубликован конечный кадр карты.");
+                _verificationDone = true;
+                GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(report));
+                GetTree().Quit();
+                return;
             }
             if (_verifySimulation && completed)
             {
@@ -427,7 +470,7 @@ public partial class Sandbox : Node3D
         Vector2 groundSize = new(side, side);
         if (_navigation || _showcase)
         {
-            var grid = _skirmish ? SkirmishScenario.Grid(_catalog!.Locomotion!) : _buildings ? BuildingScenario.Grid(_catalog!.Locomotion!) : _showcase ? ShowcaseScenario.Grid(_catalog!.Locomotion) : NavigationScenario.Grid(count);
+            var grid = _mapMatch?.Map.Grid ?? (_buildings ? BuildingScenario.Grid(catalog.Locomotion!) : _showcase ? ShowcaseScenario.Grid(catalog.Locomotion) : NavigationScenario.Grid(count));
             float sample = grid.CellSize / (float)WorldPosition.UnitsPerCell;
             side = Math.Max(grid.Width, grid.Height) * sample;
             center = new(grid.Width * sample / 2f, 0, grid.Height * sample / 2f);
@@ -448,7 +491,7 @@ public partial class Sandbox : Node3D
         var camera = new Camera3D
         {
             Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = _skirmish ? 24 : _buildings ? 64 : _showcase ? 28 : side * 1.18f,
+            Size = _skirmish ? 24 : _mapMatch is not null ? side * 1.18f : _buildings ? 64 : _showcase ? 28 : side * 1.18f,
             Position = center + new Vector3(0, side, 0),
             Far = side * 4,
             Current = true

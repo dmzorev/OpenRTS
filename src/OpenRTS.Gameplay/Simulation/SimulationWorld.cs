@@ -110,14 +110,29 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     }
 
     public EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner = 0, uint states = 0)
+        => AddInitialUnit(unitType, position, owner, states, false, false);
+
+    public EntityId AddInitialMapUnit(int unitType, WorldPosition position, uint owner, bool isStart)
+        => AddInitialUnit(unitType, position, owner, 0, true, isStart);
+
+    private EntityId AddInitialUnit(int unitType, WorldPosition position, uint owner, uint states, bool strictMapPlacement, bool isStart)
     {
         ThrowIfDisposed();
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
-        if (_types[unitType].Footprint is null && !StopAllowed(unitType, position)) throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
+        var type = _types[unitType];
+        if (type.Footprint is { } footprint)
+        {
+            if (isStart && _baseGrid is { } basis && (!FootprintFits(footprint, position) || !footprint.AllowsConstruction(basis, position, type.Locomotor)))
+                throw new ArgumentException("Starting footprint cannot be placed on this terrain.", nameof(position));
+            if (strictMapPlacement && _motion is not null && !InitialMapFootprintClear(footprint, position))
+                throw new ArgumentException("Initial footprint overlaps another footprint.", nameof(position));
+        }
+        else if (!StopAllowed(unitType, position))
+            throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
         if (!PrepareFootprint(unitType, position, out var footprintGrid)) throw new ArgumentException("Footprint placement is out of bounds, misaligned or would trap an existing body.", nameof(position));
-        if (_navigation is not null && _types[unitType].Footprint is null)
+        if (_navigation is not null && type.Footprint is null)
         {
             if (!_motion!.ClearPlacement(position, out _, _types[unitType].Body))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));

@@ -1,4 +1,5 @@
 using OpenRTS.Core.Simulation;
+using OpenRTS.Core.Construction;
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
@@ -13,6 +14,19 @@ public sealed partial class SimulationWorld
         int left = position.X - footprint.HalfWidth, top = position.Y - footprint.HalfHeight;
         if (left < 0 || top < 0 || position.X + footprint.HalfWidth > Width || position.Y + footprint.HalfHeight > Depth) return false;
         return _baseGrid is null || left % _baseGrid.CellSize == 0 && top % _baseGrid.CellSize == 0 && footprint.CellSize % _baseGrid.CellSize == 0;
+    }
+    private bool InitialMapFootprintClear(FootprintDefinition footprint, WorldPosition position)
+    {
+        var nearby = new List<EntityId>();
+        _motion!.Query(position, position, Math.Max(footprint.HalfWidth, footprint.HalfHeight), nearby);
+        foreach (var id in nearby)
+        {
+            var other = _entityHandles[_indices[id]];
+            if (TypeOf(other).Footprint is { } existing &&
+                ConstructionGeometry.Overlaps(footprint, position, existing, other.Get<SpatialState>().Position))
+                return false;
+        }
+        return true;
     }
     private NavigationGrid ComposeFootprints(NavigationGrid basis, FootprintDefinition? extra = null, WorldPosition position = default)
     {
