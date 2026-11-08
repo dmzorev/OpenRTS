@@ -321,7 +321,7 @@ public partial class Sandbox
             }
         _terminalNotice!.Text = _paused ? "Пауза" : _notice.Length > 0 ? _notice
             : _sitePlacement is not null || _placing ? "Выберите место строительства · Esc отмена"
-            : HasTargetingMode() && !_pointerDown ? "Укажите цель · Esc отмена" : "";
+            : HasTargetingMode() && !_pointerDown ? "Укажите цель · Esc отмена" : _opponent is not null ? "Соперник: ИИ" : "";
         _terminalNotice.TooltipText = _terminalNotice.Text;
 
         var pose = Selected();

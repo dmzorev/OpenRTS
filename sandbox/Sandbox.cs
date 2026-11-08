@@ -55,6 +55,7 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--start-set=", StringComparison.Ordinal) && arg.Length > 12) { startSetPath = arg[12..]; continue; }
                 if (arg == "--skirmish") { _skirmish = _buildings = _showcase = true; continue; }
                 if (arg == "--verify-match-setup") { _verifyMatchSetup = true; continue; }
+                if (arg == "--verify-ai-match") { _verifyAiMatch = _verifyMatchSetup = true; continue; }
                 if (arg == "--verify-skirmish") { _verifySkirmish = _skirmish = _buildings = _showcase = true; _paused = true; continue; }
                 if (arg == "--buildings") { _buildings = _showcase = true; continue; }
                 if (arg == "--verify-buildings") { _verifyBuildings = _buildings = _showcase = true; _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; continue; }
@@ -71,7 +72,7 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --skirmish, --verify-match-setup, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --skirmish, --verify-match-setup, --verify-ai-match, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
             if (mapPath is not null && (_showcase || _navigation || _verifyControls || verify))
                 throw new ArgumentException("--map выбирает отдельный сценарий.");
@@ -186,12 +187,14 @@ public partial class Sandbox : Node3D
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
         var map = _mapMatch;
-        _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+        var opponent = _opponent = _opponentProfile is { } profile ? SkirmishAiScenario.Create(catalog, profile, 2, startSlot: _opponentSlot) : null;
+        _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers, restrictPlayerCommands: opponent is not null) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
             map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
-            playbackSpeed: _verifySimulation ? 1 : _playbackSpeed, startPaused: !_verifySimulation && (_paused || _matchSetup is not null));
+            playbackSpeed: _verifySimulation ? 1 : _playbackSpeed, startPaused: !_verifySimulation && (_paused || _matchSetup is not null),
+            collectCommands: opponent is null ? null : opponent.Plan);
     }
 
     private static Color TeamColor(uint owner) => owner switch
@@ -257,6 +260,7 @@ public partial class Sandbox : Node3D
                     WorldEventKind.TaskAdded when _selection.Contains(value.Entity) => "Заказ добавлен в очередь.",
                     WorldEventKind.TaskCancelled when _selection.Contains(value.Entity) => "Задача отменена.",
                     WorldEventKind.InvalidOrder => "Действие недоступно выбранному юниту.",
+                    WorldEventKind.CommandDenied when value.Owner == 1 => "Команда отклонена: проверьте владельца юнитов.",
                     WorldEventKind.TransportFull => "В транспорте нет свободных слотов.",
                     WorldEventKind.UnloadBlocked => "Рядом с транспортом нет места для выгрузки.",
                     WorldEventKind.ConstructionCancelled when value.Owner == _constructionViewer => "Проект отменён.",
@@ -271,11 +275,13 @@ public partial class Sandbox : Node3D
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             UpdateTerminal(frame, alpha);
+            if (_verifyAiMatch) { VerifyAiMatch(frame); return; }
             if (_verifyMatchSetup) { VerifyConfiguredMatch(frame); return; }
             if (_verifySkirmish) { VerifySkirmish(frame); return; }
             if (_verifyActions) { VerifyActions(frame); return; }
             if (_verifyControls) { if (_verifyRtsControls) VerifyRtsControls(frame.Tick); else VerifyControls(frame.Tick); return; }
             if (_showcase && DiagnosticsVisible && _label is not null) _label.Text = ShowcaseLabel(frame.Tick) + ConstructionStatus() + "\n" + string.Join("\n", frame.Players.ToArray().Where(p => p.Id != 0).Select(p => $"{p.Name}: кредиты {p.Credits} · энергия {p.EnergyProduced}/{p.EnergyConsumed}{(p.LowPower ? " · LOWPOWER" : "")}")) + (_skirmish ? $"\n{Engine.GetFramesPerSecond()} FPS · P пауза · N шаг · +/− темп · R сброс · F12 скрыть" : "");
+            if (DiagnosticsVisible && _label is not null && _opponent is { } ai) _label.Text += "\nИИ · " + ai.Diagnostics;
             else if (!_showcase && _label is not null)
                 _label.Text = $"OpenRTS · симуляция {frame.TickRate} Гц · ×{_playbackSpeed:0.###}{(_paused ? " · ПАУЗА" : "")}\n\n{frame.Poses.Length:N0} объектов · тик {frame.Tick} · {Engine.GetFramesPerSecond()} FPS\n" +
                     (_navigation ? $"Навигация · до {_workers} потоков поиска\nПриказ выполняют {frame.MovingCount} · ожидают {frame.NavigationWaitingCount} (очередь {frame.NavigationQueueWaitingCount})\nОбходов {frame.NavigationLocalSearches} · уступаний {frame.NavigationYields} за тик\n\nПКМ — компактная область · Пробел — сменить сторону\nB — препятствие под курсором · R — перезапуск\n\nТочные координаты и свободный угол. Локальные обходы ограничены."

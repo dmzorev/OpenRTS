@@ -100,5 +100,49 @@ internal static class SkirmishAiChecks
             });
             NavigationChecks.Check(holding, "Group did not hold the assembly point.");
         });
+
+        test("AI1 session plans on each simulation tick even when publication drops frames", () =>
+        {
+            const int ticks = 350;
+            var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
+            var ai = SkirmishAiScenario.Create(catalog, profile, 2);
+            var observations = new List<long>();
+            using var session = new SimulationSession<SimulationWorld, WorldCommand, WorldEvent>(
+                () => map.CreateWorld(4, restrictPlayerCommands: true), endTick: ticks, realtime: false,
+                tryPublish: world => world.Tick is 0 or ticks,
+                collectCommands: world => { observations.Add(world.Tick); return ai.Plan(world); });
+            var report = session.Completion.WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+            var log = session.GetCommandLog();
+            NavigationChecks.Check(observations.SequenceEqual(Enumerable.Range(0, ticks).Select(i => (long)i)) &&
+                log.Any(c => c.Kind == CommandKind.PlaceProduced), "The collector missed ticks without published frames.");
+            using var replay = map.CreateWorld(1, restrictPlayerCommands: true);
+            NavigationChecks.Check(DiagnosticScenario.Run(replay, ticks, log) == report, "Session journal did not replay in direct headless execution.");
+        });
+
+        test("AI1 checks ownership at application after a same-tick ownership change", () =>
+        {
+            var infantry = new UnitDefinition("infantry", 100, passenger: new("infantry", 1));
+            var footprint = new FootprintDefinition(2, 2, [new(0, 0, new(false, false)), new(1, 0, new(false, false)),
+                new(0, 1, new(false, false)), new(1, 1, new(false, false))]);
+            var building = new UnitDefinition("house", 500, movable: false, footprint: footprint, transport: new(["infantry"], 1));
+            using var world = new SimulationWorld([infantry, building], 16384, 16384, navigationGrid: new NavigationGrid(16, 16));
+            world.RestrictCommandsToPlayers();
+            var house = world.AddInitialUnit(1, new(5120, 5120));
+            var occupant = world.AddInitialUnit(0, new(3584, 5120), 2);
+            var enemy = world.AddInitialUnit(0, new(11000, 9000), 1);
+            world.Step([new(1, 2, 1, CommandKind.Enter, occupant, TargetEntity: house)]);
+            NavigationChecks.Check(Poses(world).Single(p => p.Id == house).Presentation.Owner == 2, "Test did not occupy the neutral building.");
+            world.Step([
+                new(2, 2, 1, CommandKind.Unload, house),
+                new(2, 2, 2, CommandKind.Aim, house, new(8000, 8000)),
+                new(2, 2, 3, CommandKind.MoveSelected, Position: new(10000, 6000), Recipients: new([occupant, enemy])),
+                new(2, 2, 4, CommandKind.Spawn, Position: new(15000, 15000), Owner: 2)
+            ]);
+            var events = world.Events.ToArray();
+            NavigationChecks.Check(events.Any(e => e.Kind == WorldEventKind.OwnerChanged && e.Entity == house && e.Owner == 0) &&
+                events.Count(e => e.Kind == WorldEventKind.CommandDenied) == 3 && world.Count == 3 &&
+                Poses(world).Single(p => p.Id == occupant).Order.Phase == OrderPhase.Idle,
+                "A stale, mixed or privileged command passed player authority.");
+        });
     }
 }

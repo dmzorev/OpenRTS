@@ -31,6 +31,10 @@ public sealed class SkirmishAi
     private long _enemyHealth = long.MaxValue;
     private bool _assembled;
     private long _lastTick = -1;
+    private string _productionStatus = "start";
+    private string _diagnostics = "start";
+
+    public string Diagnostics => Volatile.Read(ref _diagnostics);
 
     public SkirmishAi(uint player, SkirmishAiProfile profile, IReadOnlyList<UnitDefinition> types,
         IEnumerable<WorldPosition> buildingSites, WorldPosition rally, WorldPosition attack)
@@ -69,6 +73,10 @@ public sealed class SkirmishAi
             PlanCapture(tick, own);
         }
         if (tactics) PlanGroup(tick, own);
+        var goal = _groupCommand == CommandKind.AttackMove ? _attack : _rally;
+        string squad = _group.Length == 0 ? "waiting for recruits" : $"{_groupCommand} ({goal.X}, {goal.Y}), {_group.Length} units";
+        string capture = _deposit == default ? "idle" : $"deposit {_deposit.Value}, progress {_captureProgress}";
+        Volatile.Write(ref _diagnostics, $"T{tick} · {_productionStatus} · {squad} · capture {capture}");
         return _commands.Select((command, i) => command.WithStamp(tick + 1, _player, i + 1)).ToArray();
     }
 
@@ -129,6 +137,7 @@ public sealed class SkirmishAi
 
         // The opening observes completed buildings. A paid, ready task still needs its placement command.
         var opening = _profile.Opening.FirstOrDefault(type => Count(type) == 0, -1);
+        _productionStatus = opening < 0 ? "maintenance" : $"opening: {_types[opening].Id}";
         foreach (var building in _profile.Buildings)
             if (Pending(building.Recipe.ProductType) > 0)
                 PlaceReady(building.Recipe);
@@ -146,6 +155,15 @@ public sealed class SkirmishAi
         foreach (var member in _profile.Group)
             if (Count(member.Recipe.ProductType) + Pending(member.Recipe.ProductType) < member.Target)
                 IssueProduction(member.Recipe);
+        var production = _commands.FirstOrDefault();
+        if (production.Action is { } action) _productionStatus += $" · {production.Kind} {action}";
+        else if (opening >= 0)
+        {
+            var recipe = _profile.Buildings.First(b => b.Recipe.ProductType == opening).Recipe;
+            bool ready = _tasks.Any(t => t.UnitType == opening && t.Ready && own.Any(p => p.Id == t.Producer));
+            _productionStatus += ready ? " · waiting for placement retry" : Pending(opening) > 0 ? " · producing" :
+                credits < recipe.Cost ? " · waiting for credits" : " · waiting for producer";
+        }
         return;
 
         void PlaceReady(AiRecipe recipe)

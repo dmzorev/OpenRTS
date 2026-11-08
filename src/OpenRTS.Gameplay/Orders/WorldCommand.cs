@@ -19,7 +19,7 @@ public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence
     public WorldCommand WithStamp(long tick, uint issuer, long sequence) => this with { Tick = tick, Issuer = issuer, Sequence = sequence };
 }
 
-public enum WorldEventKind { Spawned, Destroyed, MissingEntity, NoRoute, CellOccupied, CellBlocked, InvalidPresentation, AnimationPlayed, DestinationAdjusted, InvalidOrder, QueueFull, WeaponFired, Damaged, Repaired, ProjectileImpact, ProjectileExpired, TerrainStranded, Removed, ActionUnavailable, TaskAdded, TaskCancelled, ProductionReady, Produced, ProductionBlocked, RallyChanged, OwnerChanged, EnteredTransport, Unloaded, TransportFull, UnloadBlocked, ConstructionStarted, ConstructionCompleted, ConstructionCancelled, ConditionGranted, ConditionRevoked }
+public enum WorldEventKind { Spawned, Destroyed, MissingEntity, NoRoute, CellOccupied, CellBlocked, InvalidPresentation, AnimationPlayed, DestinationAdjusted, InvalidOrder, QueueFull, WeaponFired, Damaged, Repaired, ProjectileImpact, ProjectileExpired, TerrainStranded, Removed, ActionUnavailable, TaskAdded, TaskCancelled, ProductionReady, Produced, ProductionBlocked, RallyChanged, OwnerChanged, EnteredTransport, Unloaded, TransportFull, UnloadBlocked, ConstructionStarted, ConstructionCompleted, ConstructionCancelled, ConditionGranted, ConditionRevoked, CommandDenied }
 public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityId Entity,
     WorldPosition Position = default, int UnitType = -1, int Animation = -1, int DurationTicks = 0, AnimationTrack Track = AnimationTrack.Weapon,
     int Amount = 0, EntityId TargetEntity = default, int Mount = 0, WorldPosition SourcePosition = default, long ProjectileId = 0, uint Owner = 0, uint PreviousOwner = 0)

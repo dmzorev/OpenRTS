@@ -1,6 +1,7 @@
 using System;
 using DeclarativeContent;
 using Godot;
+using OpenRTS.AI;
 using OpenRTS.Content;
 using OpenRTS.Core;
 
@@ -8,6 +9,10 @@ public partial class Sandbox
 {
     private MatchSetupScreen? _matchSetup;
     private bool _startedFromSetup, _verifyMatchSetup;
+    private bool _verifyAiMatch;
+    private SkirmishAiProfile? _opponentProfile;
+    private SkirmishAi? _opponent;
+    private string? _opponentSlot;
 
     private void OpenMatchSetup(UnitCatalog catalog)
     {
@@ -28,20 +33,23 @@ public partial class Sandbox
         AddChild(_matchSetup);
         _matchSetup.Build(TerminalTheme(), catalog.Locomotion!, maps, modes);
         _matchSetup.Launch += BeginMatchFromSetup;
-        if (_verifyMatchSetup) SelectVerificationMatch();
+        if (_verifyAiMatch) SelectAiVerificationMatch();
+        else if (_verifyMatchSetup) SelectVerificationMatch();
     }
 
-    private void BeginMatchFromSetup(GameMap map, StartingSet set, string[] slots)
+    private void BeginMatchFromSetup(GameMap map, StartingSet set, string[] slots, bool aiOpponent)
     {
         if (_session is not null) return;
         try
         {
             _mapMatch = MapScenario.Prepare(map, set, slots);
+            _opponentProfile = aiOpponent ? SkirmishAiCatalog.Load(ReadMapSource("content/skirmish-ai.yaml"), _catalog!, SkirmishAiScenario.ProfileId) : null;
+            _opponentSlot = aiOpponent ? slots[1] : null;
             _count = _mapMatch.UnitCount;
             _matchSetup!.SetLaunching(true, "Подготовка поля боя…");
             StartSession();
         }
-        catch (Exception error) when (error is ContentException or ArgumentException)
+        catch (Exception error) when (error is ContentException or ArgumentException or System.IO.IOException)
         {
             MatchSetupFailed(error, canRetry: true);
         }
@@ -83,6 +91,9 @@ public partial class Sandbox
         _session?.Dispose();
         _session = null;
         _mapMatch = null;
+        _opponentProfile = null;
+        _opponent = null;
+        _opponentSlot = null;
         if (_verifyMatchSetup || !canRetry) GD.PushError(error.ToString());
         if (_verifyMatchSetup) GetTree().Quit(1);
         else _matchSetup?.SetLaunching(!canRetry, "Матч не запущен. " + error.Message);

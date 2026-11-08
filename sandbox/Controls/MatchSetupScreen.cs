@@ -9,6 +9,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     private readonly OptionButton _maps = new() { Name = "Maps" };
     private readonly OptionButton _modes = new() { Name = "Modes" };
     private readonly OptionButton _count = new() { Name = "PlayerCount" };
+    private readonly CheckButton _opponent = new() { Name = "AiOpponent", Text = "Играть против ИИ" };
     private readonly GridContainer _players = new() { Name = "Players", Columns = 2 };
     private readonly List<OptionButton> _starts = [];
     private readonly Label _details = new() { AutowrapMode = TextServer.AutowrapMode.WordSmart };
@@ -22,7 +23,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     private (string Title, StartingSet Set)[] _modeChoices = [];
     private LocomotionCatalog _terrain = null!;
 
-    public event Action<GameMap, StartingSet, string[]>? Launch;
+    public event Action<GameMap, StartingSet, string[], bool>? Launch;
 
     public void Build(Theme theme, LocomotionCatalog terrain,
         (string Title, string Description, GameMap Map)[] maps, (string Title, StartingSet Set)[] modes)
@@ -70,13 +71,14 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         AddField(setup, "Карта", _maps);
         AddField(setup, "Режим игры", _modes);
         AddField(setup, "Количество игроков", _count);
+        setup.AddChild(_opponent);
         setup.AddChild(Sandbox.TerminalHeading("СТАРТОВЫЕ ПОЗИЦИИ"));
         _players.AddThemeConstantOverride("h_separation", 12);
         _players.AddThemeConstantOverride("v_separation", 5);
         setup.AddChild(_players);
 
         layout.AddChild(new HSeparator());
-        layout.AddChild(new Label { Text = "Все стороны управляются на одном компьютере." });
+        layout.AddChild(new Label { Text = "ИИ доступен на Долине со строительным стартом и двумя игроками." });
         layout.AddChild(_status);
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         layout.AddChild(buttons);
@@ -90,9 +92,9 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         foreach (var map in maps) _maps.AddItem(map.Title);
         foreach (var mode in modes) _modes.AddItem(mode.Title);
         _maps.ItemSelected += _ => SelectMap(PlayerCount);
-        _modes.ItemSelected += _ => _status.Text = "";
+        _modes.ItemSelected += _ => { UpdateOpponent(); _status.Text = ""; };
         _count.ItemSelected += _ => UpdatePlayers();
-        _launch.Pressed += () => Launch?.Invoke(CurrentMap, _modeChoices[_modes.Selected].Set, AssignedSlots());
+        _launch.Pressed += () => Launch?.Invoke(CurrentMap, _modeChoices[_modes.Selected].Set, AssignedSlots(), _opponent.ButtonPressed && !_opponent.Disabled);
         SelectMap(2);
         _maps.GrabFocus();
     }
@@ -158,14 +160,24 @@ public sealed partial class MatchSetupScreen : CanvasLayer
             _starts.Add(select);
         }
         _preview.SetAssignments(selected);
+        UpdateOpponent();
         _status.Text = "";
     }
 
     private string[] AssignedSlots() => _starts.Select(row => CurrentMap.Slots[row.Selected]).ToArray();
 
+    private bool CanUseOpponent => CurrentMap.Id == "sandbox-skirmish" && _modeChoices[_modes.Selected].Set.Id == "construction" && PlayerCount == 2;
+
+    private void UpdateOpponent()
+    {
+        _opponent.Disabled = !CanUseOpponent;
+        if (_opponent.Disabled) _opponent.SetPressedNoSignal(false);
+    }
+
     public void SetLaunching(bool busy, string message)
     {
         _maps.Disabled = _modes.Disabled = _count.Disabled = _launch.Disabled = busy;
+        _opponent.Disabled = busy || !CanUseOpponent;
         foreach (var start in _starts) start.Disabled = busy;
         _status.Text = message;
     }

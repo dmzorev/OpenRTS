@@ -307,6 +307,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     protected override void ApplyCommand(WorldCommand command)
     {
+        if (_restrictPlayerCommands && command.Issuer != 0 && !CanApplyPlayerCommand(command))
+        {
+            _events.Add(new(Tick, WorldEventKind.CommandDenied, command.Entity, TargetEntity: command.TargetEntity, Owner: command.Issuer));
+            return;
+        }
         if (command.Kind is CommandKind.GrantCondition or CommandKind.RevokeCondition) { ApplyConditionCommand(command); return; }
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally)

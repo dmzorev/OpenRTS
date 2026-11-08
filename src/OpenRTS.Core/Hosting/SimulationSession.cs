@@ -18,6 +18,7 @@ public class SimulationSession<TWorld, TCommand, TEvent> : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
     private readonly Func<TWorld, bool>? _tryPublish;
+    private readonly Func<TWorld, TCommand[]>? _collectCommands;
     private readonly ConcurrentQueue<TCommand> _input = new();
     private readonly ConcurrentQueue<TEvent> _events = new();
     private readonly List<TCommand> _journal = [];
@@ -115,7 +116,7 @@ public class SimulationSession<TWorld, TCommand, TEvent> : IDisposable
 
     public SimulationSession(Func<TWorld> createWorld, IEnumerable<TCommand>? scriptedCommands = null,
         long? endTick = null, bool realtime = true, int maximumEventBacklog = 65536, double playbackSpeed = 1, bool startPaused = false,
-        Func<TWorld, bool>? tryPublish = null)
+        Func<TWorld, bool>? tryPublish = null, Func<TWorld, TCommand[]>? collectCommands = null)
     {
         ArgumentNullException.ThrowIfNull(createWorld);
         if (endTick is <= 0) throw new ArgumentOutOfRangeException(nameof(endTick));
@@ -128,6 +129,7 @@ public class SimulationSession<TWorld, TCommand, TEvent> : IDisposable
         _realtime = realtime; _playbackSpeed = playbackSpeed; _paused = startPaused;
         _endTick = endTick;
         _tryPublish = tryPublish;
+        _collectCommands = collectCommands;
         _maximumEventBacklog = maximumEventBacklog;
         _thread = new Thread(() => Run(createWorld, script, realtime)) { IsBackground = true, Name = "OpenRTS simulation" };
         _thread.Start();
@@ -187,6 +189,13 @@ public class SimulationSession<TWorld, TCommand, TEvent> : IDisposable
                         Interlocked.Decrement(ref _pendingInput);
                         batch.Add(command.WithStamp(world.Tick + 1, command.Issuer, command.Sequence));
                     }
+                    // Run on the world owner after a tick is authorized, independently of frame publication.
+                    if (_collectCommands is not null)
+                        foreach (var command in _collectCommands(world))
+                        {
+                            if (command.Issuer < 2) throw new InvalidOperationException("Generated commands must use an issuer other than script or live input.");
+                            batch.Add(command);
+                        }
                     world.Step(CollectionsMarshal.AsSpan(batch), _stop.Token);
                     if (world.AppliedCommands.Length > 0)
                         lock (_journalGate)

@@ -78,11 +78,10 @@ public partial class Sandbox
     private void RefreshCommandSelection()
     {
         if (_typeRow is null || _catalog is null) return;
-        if (_panelRevision == _selection.Revision) return;
+        if (_panelRevision == _selection.Revision && (_opponentProfile is null ||
+            Controlled().Where(id => _selectionPoses[id].UnitType == _activeType).SequenceEqual(_activeRecipients))) return;
         var types = _selection.Ids.ToArray().Where(_selectionPoses.ContainsKey).Select(id => _selectionPoses[id].UnitType).Distinct()
             .OrderByDescending(t => _catalog.Presentations[t].Actions?.Count > 0).ThenBy(t => _catalog.Units[t].Id, StringComparer.Ordinal).ToArray();
-        bool changed = _panelRevision != _selection.Revision || !types.SequenceEqual(_panelTypes);
-        if (!changed) return;
         _panelRevision = _selection.Revision; _panelTypes = types; _activeType = types.FirstOrDefault(-1); _armedCustom = null;
         RebuildCommandPanel();
     }

@@ -6,12 +6,14 @@ public sealed class SimulationSession : SimulationSession<SimulationWorld, World
     public FrameExchange Frames { get; }
 
     public SimulationSession(Func<SimulationWorld> createWorld, IEnumerable<WorldCommand>? scriptedCommands = null,
-        long? endTick = null, bool realtime = true, int maximumEventBacklog = 65536, double playbackSpeed = 1, bool startPaused = false)
-        : this(new FrameExchange(), createWorld, scriptedCommands, endTick, realtime, maximumEventBacklog, playbackSpeed, startPaused) { }
+        long? endTick = null, bool realtime = true, int maximumEventBacklog = 65536, double playbackSpeed = 1, bool startPaused = false,
+        Func<SimulationWorld, WorldCommand[]>? collectCommands = null)
+        : this(new FrameExchange(), createWorld, scriptedCommands, endTick, realtime, maximumEventBacklog, playbackSpeed, startPaused, collectCommands) { }
 
     private SimulationSession(FrameExchange frames, Func<SimulationWorld> createWorld, IEnumerable<WorldCommand>? scriptedCommands,
-        long? endTick, bool realtime, int maximumEventBacklog, double playbackSpeed, bool startPaused)
-        : base(createWorld, scriptedCommands, endTick, realtime, maximumEventBacklog, playbackSpeed, startPaused, frames.TryPublish)
+        long? endTick, bool realtime, int maximumEventBacklog, double playbackSpeed, bool startPaused,
+        Func<SimulationWorld, WorldCommand[]>? collectCommands)
+        : base(createWorld, scriptedCommands, endTick, realtime, maximumEventBacklog, playbackSpeed, startPaused, frames.TryPublish, collectCommands)
     {
         Frames = frames;
     }
