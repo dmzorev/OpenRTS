@@ -191,7 +191,7 @@ public partial class Sandbox : Node3D
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
         var map = _mapMatch;
-        var opponent = _opponent = _opponentProfile is { } profile ? SkirmishAiScenario.Create(catalog, profile, 2, startSlot: _opponentSlot) : null;
+        var opponent = _opponent = _opponentProfile is { } profile ? SkirmishAiScenario.Create(catalog, profile, map!.Map, 2, _opponentStarts) : null;
         _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers, restrictPlayerCommands: opponent is not null) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
             map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),

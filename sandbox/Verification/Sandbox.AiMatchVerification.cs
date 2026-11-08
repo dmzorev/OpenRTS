@@ -10,15 +10,21 @@ public partial class Sandbox
     {
         var setup = _matchSetup!;
         var option = (CheckButton)setup.FindChild("AiOpponent", owned: false);
+        if (_aiProfileId == SkirmishAiScenario.MechanizedProfileId)
+        {
+            var maps = (OptionButton)setup.FindChild("Maps", owned: false);
+            maps.Select(1);
+            maps.EmitSignal(OptionButton.SignalName.ItemSelected, 1);
+        }
         var modes = (OptionButton)setup.FindChild("Modes", owned: false);
         modes.Select(1);
         modes.EmitSignal(OptionButton.SignalName.ItemSelected, 1);
         CheckSkirmish(option.Disabled, "AI was offered with an incompatible starting set.");
         modes.Select(0);
         modes.EmitSignal(OptionButton.SignalName.ItemSelected, 0);
-        CheckSkirmish(!option.Disabled, "AI was not offered for the valley construction start.");
+        CheckSkirmish(!option.Disabled, "AI was not offered for the selected map and supply start.");
         option.ButtonPressed = true;
-        // Exchange physical starts. The human remains player 1 and the bot plans from the west.
+        // Exchange physical starts while keeping the human as player 1.
         var starts = (GridContainer)setup.FindChild("Players", owned: false);
         var blue = starts.GetChild<OptionButton>(1);
         blue.Select(1);
@@ -48,7 +54,7 @@ public partial class Sandbox
             _selection.Change([ownEngineer.Id], SelectionChange.Replace);
             RefreshSelection();
             ActivateCustom("site-power", false, false);
-            var site = new WorldPosition(59904, 45056);
+            var site = own.Current with { X = own.Current.X - 8192 };
             HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, site, null);
             session.Submit(CommandKind.PlanConstruction, site, recipients: new([enemyEngineer.Id]), action: "site-power");
             _aiMatchStage = 1;
@@ -73,8 +79,12 @@ public partial class Sandbox
 
         if (frame.Tick < verificationTicks) return;
         CheckSkirmish(frame.Tick == verificationTicks && session.IsPaused, "AI advanced past the requested paused steps.");
-        CheckSkirmish(frame.Poses.ToArray().Any(p => p.Presentation.Owner == 2 && p.Current.X < 40000 &&
-            _catalog!.Units[p.UnitType].Id == "barracks"), "The bot did not build from its assigned western start.");
+        var botStart = _mapMatch!.Map.StartPosition(_opponentStarts![1]);
+        var bot = frame.Poses.ToArray().Where(p => p.Presentation.Owner == 2).ToArray();
+        CheckSkirmish(bot.Any(p => Math.Abs(p.Current.X - botStart.X) <= 16384 && Math.Abs(p.Current.Y - botStart.Y) <= 16384 &&
+            _catalog!.Units[p.UnitType].Id == "barracks" && !p.Construction.Active),
+            $"The bot did not finish its barracks near {botStart}. {_opponent?.Diagnostics}. " +
+            string.Join(", ", bot.Select(p => $"{_catalog!.Units[p.UnitType].Id}@({p.Current.X},{p.Current.Y}) {p.Order.Kind}/{p.Order.Phase}")));
         if (mechanized)
             CheckSkirmish(frame.Poses.ToArray().Count(p => p.Presentation.Owner == 2 && _catalog!.Units[p.UnitType].Id == "apc-mg") == 2,
                 "The mechanized profile did not produce its two APCs.");

@@ -4,6 +4,7 @@ infantry-skirmish:
   Buildings:
     power-plant: 1
     barracks: 1
+  BuildingPriorities: {power-plant: 100, barracks: 50}
   Group:
     rifleman: {Min: 3, Target: 5}
   Capture: {Unit: construction-engineer, Action: capture}
@@ -24,6 +25,7 @@ mechanized-skirmish:
   Opening: [power-plant, barracks, factory]
   Buildings:
     factory: 1
+  BuildingPriorities: {factory: 25}
   Group:
     apc-mg: {Min: 1, Target: 2}
   Recipes:

@@ -7,15 +7,14 @@ namespace OpenRTS.AI;
 /// <summary>Skirmish policy for an exclusively controlled player. Call once per completed world tick.</summary>
 public sealed class SkirmishAi
 {
-    public const int PolicyVersion = 3;
+    public const int PolicyVersion = 4;
 
     private readonly SkirmishAiProfile _profile;
     private readonly IReadOnlyList<UnitDefinition> _types;
-    private readonly WorldPosition[] _buildingSites;
+    private readonly BaseConstructionPlanner _baseConstruction;
+    private readonly WorldPosition _baseCenter;
     private readonly WorldPosition _rally, _attack;
     private readonly uint _player;
-    private readonly Dictionary<long, int> _placementAttempts = [];
-    private readonly Dictionary<int, int> _siteAttempts = [];
     private readonly List<WorldCommand> _commands = [];
     private EntityPose[] _poses = [];
     private PlayerPose[] _players = [];
@@ -41,16 +40,17 @@ public sealed class SkirmishAi
     private string _diagnostics = "start";
 
     public string Diagnostics => Volatile.Read(ref _diagnostics);
+    public long BuildingCandidatesChecked => _baseConstruction.CandidatesChecked;
 
     public SkirmishAi(uint player, SkirmishAiProfile profile, IReadOnlyList<UnitDefinition> types,
-        IEnumerable<WorldPosition> buildingSites, WorldPosition rally, WorldPosition attack)
+        WorldPosition baseCenter, WorldPosition rally, WorldPosition attack, IBuildingSiteSearch? siteSearch = null)
     {
         ArgumentOutOfRangeException.ThrowIfZero(player);
         _player = player;
         _profile = profile;
         _types = types;
-        _buildingSites = buildingSites.ToArray();
-        if (_buildingSites.Length is < 1 or > 64) throw new ArgumentException("AI0 requires 1..64 building sites.", nameof(buildingSites));
+        _baseCenter = baseCenter;
+        _baseConstruction = new(player, baseCenter, types, profile.Buildings, profile.Opening, profile.BlockedGoalTicks, siteSearch);
         _rally = rally;
         _attack = attack;
     }
@@ -77,7 +77,7 @@ public sealed class SkirmishAi
             world.CopyTaskPoses(_tasks);
             Array.Resize(ref _projects, world.ConstructionProjectCount);
             world.CopyConstructionProjects(_projects);
-            long credits = PlanProduction(tick, own);
+            long credits = PlanProduction(world, own);
             PlanCapture(tick, own);
             PlanMineUpgrade(tick, own, credits);
         }
@@ -92,8 +92,7 @@ public sealed class SkirmishAi
 
     private void ValidateStart(SimulationWorld world, EntityPose[] own)
     {
-        if (world.NavigationGrid is null || !_buildingSites.Append(_rally).Append(_attack)
-            .All(p => p.X >= 0 && p.X <= world.Width && p.Y >= 0 && p.Y <= world.Depth))
+        if (world.NavigationGrid is null || !new[] { _baseCenter, _rally, _attack }.All(p => p.X >= 0 && p.X <= world.Width && p.Y >= 0 && p.Y <= world.Depth))
             throw new ArgumentException("AI0 requires a navigation map with in-bounds scenario points.", nameof(world));
         var reachable = own.Where(p => !p.Construction.Active).Select(p => p.UnitType).ToHashSet();
         if (!reachable.Contains(_profile.EngineerType))
@@ -125,11 +124,8 @@ public sealed class SkirmishAi
         actor.Order.Phase == OrderPhase.Idle && actor.Order.QueuedCount == 0 && !actor.Upgrade.Active &&
         !_commands.Any(c => c.Entity == actor.Id);
 
-    private long PlanProduction(long tick, EntityPose[] own)
+    private long PlanProduction(SimulationWorld world, EntityPose[] own)
     {
-        foreach (long finished in _placementAttempts.Keys.Where(id => !_tasks.Any(t => t.Id == id)).ToArray())
-            _placementAttempts.Remove(finished);
-
         long unpaidTasks = _tasks.Where(t => t.Payer == _player).Sum(t => (long)t.UnpaidCost);
         long credits = _players.First(p => p.Id == _player).Credits - _profile.CreditReserve - unpaidTasks -
             _projects.Where(p => p.Owner == _player).Sum(p => (long)p.UnpaidCost);
@@ -144,16 +140,7 @@ public sealed class SkirmishAi
                 if (plannedQueues.Contains(key)) continue;
                 if (_tasks.Any(t => t.Producer == producer.Id && t.Queue == recipe.Queue)) continue;
                 if (credits < recipe.Cost) continue;
-                if (recipe.OnSite)
-                {
-                    if (!FreeBuilder(producer) || _projects.Any(p => p.Owner == _player) ||
-                        _commands.Any(c => c.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite)) continue;
-                    int attempt = _siteAttempts.GetValueOrDefault(recipe.ProductType);
-                    _siteAttempts[recipe.ProductType] = (attempt + 1) % _buildingSites.Length;
-                    _commands.Add(new(0, 0, 0, CommandKind.PlanConstruction, producer.Id,
-                        _buildingSites[attempt], Action: recipe.Action, Queued: true));
-                }
-                else _commands.Add(new(0, 0, 0, CommandKind.EnqueueTask, producer.Id, Action: recipe.Action));
+                _commands.Add(new(0, 0, 0, CommandKind.EnqueueTask, producer.Id, Action: recipe.Action));
                 credits -= recipe.Cost;
                 plannedQueues.Add(key);
                 return true;
@@ -166,38 +153,18 @@ public sealed class SkirmishAi
             own.Count(p => p.UnitType == type && p.Construction.Active) +
             _projects.Count(p => p.Owner == _player && p.UnitType == type);
 
-        var unfinished = _projects.Where(p => p.Owner == _player).Select(p => (p.Id, p.UnitType))
-            .Concat(own.Where(p => p.Construction.Active).Select(p => (p.Id, p.UnitType))).OrderBy(p => p.Id.Value);
-        foreach (var site in unfinished)
+        bool opening = _profile.Opening.Any(type => Count(type) == 0);
+        if (_baseConstruction.Plan(world, _poses, _tasks, _projects, credits, FreeBuilder) is { } construction)
         {
-            var recipe = _profile.Buildings.FirstOrDefault(b => b.Recipe.OnSite && b.Recipe.ProductType == site.UnitType)?.Recipe;
-            if (recipe is null || own.Any(p => p.Order is { Kind: UnitActionKind.Build, Phase: not OrderPhase.Idle } && p.Order.Target == site.Id)) continue;
-            var builder = Array.Find(own, p => p.UnitType == recipe.ProducerType && FreeBuilder(p));
-            if (builder.Id == default) continue;
-            _commands.Add(new(0, 0, 0, CommandKind.BuildSite, builder.Id, TargetEntity: site.Id));
-            break;
+            _commands.Add(construction.Command);
+            credits -= construction.CreditCost;
+            if (construction.Queue >= 0) plannedQueues.Add((construction.Command.Entity, construction.Queue));
         }
-
-        // The opening observes completed buildings. A paid, ready task still needs its placement command.
-        var opening = _profile.Opening.FirstOrDefault(type => Count(type) == 0, -1);
-        _productionStatus = opening < 0 ? "maintenance" : $"opening: {_types[opening].Id}";
-        foreach (var building in _profile.Buildings)
-            if (!building.Recipe.OnSite && Pending(building.Recipe.ProductType) > 0)
-                PlaceReady(building.Recipe);
-        if (opening >= 0)
-        {
-            var building = _profile.Buildings.First(b => b.Recipe.ProductType == opening);
-            if (Pending(opening) == 0) IssueProduction(building.Recipe);
-        }
-        else
-        {
-            foreach (var building in _profile.Buildings)
-                if (Count(building.Recipe.ProductType) + Pending(building.Recipe.ProductType) < building.Target)
-                    IssueProduction(building.Recipe);
-        }
+        _productionStatus = _baseConstruction.Status;
+        int firstUnitCommand = _commands.Count;
         if (_profile.ReplacementEngineer is { } engineer && Count(engineer.ProductType) + Pending(engineer.ProductType) == 0)
             IssueProduction(engineer);
-        if (_profile.Supply is { } supply && (opening < 0 || Count(supply.Truck.ProductType) == 0) &&
+        if (_profile.Supply is { } supply && (!opening || Count(supply.Truck.ProductType) == 0) &&
             Count(supply.Truck.ProductType) + Pending(supply.Truck.ProductType) < supply.Target &&
             _poses.Any(p => (_types[p.UnitType].Supply?.Role == SupplyRole.Mine) && p.Supply.Amount > 0 &&
                 (p.Presentation.Owner == 0 || p.Presentation.Owner == _player)))
@@ -205,37 +172,9 @@ public sealed class SkirmishAi
         foreach (var member in _profile.Group)
             if (Count(member.Recipe.ProductType) + Pending(member.Recipe.ProductType) < member.Target)
                 IssueProduction(member.Recipe);
-        var production = _commands.FirstOrDefault();
-        if (production.Action is { } action) _productionStatus += $" · {production.Kind} {action}";
-        else if (opening >= 0)
-        {
-            var recipe = _profile.Buildings.First(b => b.Recipe.ProductType == opening).Recipe;
-            bool ready = _tasks.Any(t => t.UnitType == opening && t.Ready && own.Any(p => p.Id == t.Producer));
-            _productionStatus += ready ? " · waiting for placement retry" : Pending(opening) > 0 ? " · producing" :
-                credits < recipe.Cost ? " · waiting for credits" : " · waiting for producer";
-        }
+        if (_commands.Count > firstUnitCommand) _productionStatus += $" · {_commands[firstUnitCommand].Action}";
         if (unpaidTasks > 0) _productionStatus += $" · reserved for tasks: {unpaidTasks}";
         return credits;
-
-        void PlaceReady(AiRecipe recipe)
-        {
-            foreach (var task in _tasks.Where(t => t.Ready && t.UnitType == recipe.ProductType).OrderBy(t => t.Id))
-            {
-                var producer = Array.Find(own, p => p.Id == task.Producer && p.UnitType == recipe.ProducerType && !p.Construction.Active);
-                if (producer.Id == default || task.Queue != recipe.Queue ||
-                    task.Product >= _types[producer.UnitType].Products.Count ||
-                    _types[producer.UnitType].Products[task.Product].Id != recipe.Action)
-                    continue;
-                int attempt = _placementAttempts.GetValueOrDefault(task.Id);
-                // shortcut: retry scenario sites in rounds until AI2 introduces placement search.
-                if (attempt > 0 && attempt % _buildingSites.Length == 0 && tick % (_profile.MacroIntervalTicks * 4L) != 0)
-                    continue;
-                if (!plannedQueues.Add((producer.Id, task.Queue))) continue;
-                _placementAttempts[task.Id] = attempt + 1;
-                _commands.Add(new(0, 0, 0, CommandKind.PlaceProduced, producer.Id,
-                    _buildingSites[attempt % _buildingSites.Length], Action: recipe.Action, TaskId: task.Id));
-            }
-        }
     }
 
     private void PlanCapture(long tick, EntityPose[] own)

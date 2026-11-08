@@ -67,6 +67,7 @@ SupplyChecks.Run(Test);
 UpgradeChecks.Run(Test);
 MapChecks.Run(Test);
 SkirmishAiChecks.Run(Test);
+BaseConstructionPlannerChecks.Run(Test);
 CaptureMechanicChecks.Run(Test);
 TransportConstructionMechanicChecks.Run(Test);
 ConstructionChecks.Run(Test);

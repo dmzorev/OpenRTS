@@ -8,7 +8,7 @@
 
 rifleman:
   Inherits: ^unit
-  Passenger: {Type: infantry}
+  Passenger: { Type: infantry }
   Armaments:
     Mounts:
       main: { Weapon: rifleman, FireFromTransport: true }
@@ -28,31 +28,45 @@ rifleman:
 
 rocketeer:
   Inherits: ^unit
-  Passenger: {Type: infantry}
+  Passenger: { Type: infantry }
   Armaments:
     Mounts:
-      main: { Weapon: missile }
+      main: { Weapon: missile, FireFromTransport: true }
   Presentation: { Model: infantry-rocket, Name: Пехотинец с ракетницей }
 
 ^apc:
   Inherits: ^unit
-  Transport: {Accepts: [infantry], Slots: 6, UnloadDistance: 768}
-  Movement: {Locomotor: amphibious}
-  Health: {HP: 250, Armor: Mechanical}
-  Presentation: {States: [damaged, swimming]}
+  Transport: { Accepts: [infantry], Slots: 6, UnloadDistance: 768 }
+  Movement: { Locomotor: amphibious }
+  Health: { HP: 250, Armor: Mechanical }
+  Presentation: { States: [damaged, swimming] }
 
 apc-mg:
   Inherits: ^apc
   Armaments:
     Mounts:
-      main: {Weapon: rifle, FireWhileMoving: true}
-      option-rocket: {Weapon: missile, FireWhileMoving: true}
-      option-cannon: {Weapon: cannon}
+      main: { Weapon: rifle, FireWhileMoving: true }
+      option-rocket: { Weapon: missile, FireWhileMoving: true }
+      option-cannon: { Weapon: cannon }
   Upgrades:
     Variants:
-      rockets: {Cost: 200, Ticks: 90, Support: true, ReplaceWeapons: true, Mounts: [option-rocket]}
-      cannon: {Cost: 250, Ticks: 110, Support: true, ReplaceWeapons: true, Mounts: [option-cannon]}
-      firing-ports: {Cost: 125, Ticks: 75, Support: true, PassengerFire: true}
+      rockets:
+        {
+          Cost: 200,
+          Ticks: 90,
+          Support: true,
+          ReplaceWeapons: true,
+          Mounts: [option-rocket],
+        }
+      cannon:
+        {
+          Cost: 250,
+          Ticks: 110,
+          Support: true,
+          ReplaceWeapons: true,
+          Mounts: [option-cannon],
+        }
+      firing-ports: { Cost: 125, Ticks: 75, Support: true, PassengerFire: true }
   Presentation:
     Model: apc-upgradable
     Animations: [idle, move, fire, construct]
@@ -61,21 +75,21 @@ apc-mg:
 
 apc-rocket:
   Inherits: ^apc
-  Transport: {FireFromInside: true}
+  Transport: { FireFromInside: true }
   Armaments:
     Mounts:
-      main: {Weapon: missile}
-  Presentation: {Model: apc-missiles, Name: БТР · ракеты}
+      main: { Weapon: missile }
+  Presentation: { Model: apc-missiles, Name: БТР · ракеты }
 
 tank:
   Inherits: ^apc
   -Transport:
   Armaments:
     Mounts:
-      main: {Weapon: cannon}
-  Movement: {Locomotor: tracked}
-  Health: {HP: 400}
-  Presentation: {Model: tank, Name: Танк}
+      main: { Weapon: cannon }
+  Movement: { Locomotor: tracked }
+  Health: { HP: 400 }
+  Presentation: { Model: tank, Name: Танк }
 
 tank-mixed:
   Inherits: tank
@@ -90,7 +104,7 @@ tank-mixed:
 
 engineer:
   Inherits: ^unit
-  Builder: {Range: 1536}
+  Builder: { Range: 1536 }
   Actions:
     Definitions:
       capture: { Capture: true, Range: 1024 }
@@ -114,7 +128,7 @@ engineer:
 
 bunker-cannon:
   Inherits: tank
-  Buildable: {Ticks: 100, Cost: 550, Kind: PlaceBuilding}
+  Buildable: { Ticks: 100, Cost: 550, Kind: PlaceBuilding }
   Capturable: {}
   Economy: { Energy: -15 }
   Footprint:
@@ -131,7 +145,7 @@ bunker-cannon:
 
 bunker-mixed:
   Inherits: tank-mixed
-  Buildable: {Ticks: 100, Cost: 750, Kind: PlaceBuilding}
+  Buildable: { Ticks: 100, Cost: 750, Kind: PlaceBuilding }
   Capturable: {}
   Economy: { Energy: -25 }
   Footprint:
@@ -146,11 +160,10 @@ bunker-mixed:
       States: [damaged, working, destroyed, lowpower, constructing],
     }
 
-
 sniper:
   Inherits: ^unit
-  Passenger: {Type: infantry}
+  Passenger: { Type: infantry }
   Armaments:
     Mounts:
-      main: {Weapon: sniper-rifle, FireFromTransport: true}
-  Presentation: {Model: infantry-rifle, Name: Снайпер}
+      main: { Weapon: sniper-rifle, FireFromTransport: true }
+  Presentation: { Model: infantry-rifle, Name: Снайпер }

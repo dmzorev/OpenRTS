@@ -10,22 +10,31 @@ internal static class SkirmishAiScenario
     public const string ProfileId = "infantry-skirmish";
     public const string MechanizedProfileId = "mechanized-skirmish";
 
-    public static SkirmishAi Create(UnitCatalog catalog, SkirmishAiProfile profile, uint player, bool blockFirstSite = false, string? startSlot = null)
+    public static SkirmishAi Create(UnitCatalog catalog, SkirmishAiProfile profile, GameMap map, uint player,
+        IReadOnlyList<string>? assignedSlots = null, IBuildingSiteSearch? siteSearch = null)
     {
-        // These sites belong to sandbox-skirmish and its construction starting set.
-        bool west = (startSlot ?? (player == 1 ? "blue" : "red")) switch
+        var slots = assignedSlots ?? map.Slots;
+        if (!map.IsSkirmish || player == 0 || player > slots.Count || slots.Count < 2)
+            throw new ArgumentException("AI requires a skirmish map with at least two assigned starts.", nameof(map));
+
+        var center = map.StartPosition(slots[(int)player - 1]);
+        var enemy = slots.Where((_, index) => index != (int)player - 1).Select(map.StartPosition)
+            .OrderBy(p => Distance(center, p)).First();
+        int distance = Math.Max(Math.Abs(enemy.X - center.X), Math.Abs(enemy.Y - center.Y));
+        int rallyDistance = Math.Min(10 * map.Grid.CellSize, distance / 3);
+        int attackDistance = Math.Min(4 * map.Grid.CellSize, distance / 4);
+        return new(player, profile, catalog.Units, center, Toward(center, enemy, rallyDistance),
+            Toward(enemy, center, attackDistance), siteSearch);
+
+        static long Distance(WorldPosition a, WorldPosition b)
         {
-            "blue" => true,
-            "red" => false,
-            _ => throw new ArgumentException("AI1 requires a valley starting slot.", nameof(startSlot))
-        };
-        WorldPosition[] sites = west
-            ? [new(22016, 12288), new(22528, 19968), new(13824, 23552), new(10240, 17920)]
-            : [new(59904, 45056), new(59392, 37376), new(68096, 33792), new(71680, 39424)];
-        if (blockFirstSite) sites[0] = new(512, 512); // Mountain border.
-        return new(player, profile, catalog.Units, sites,
-            west ? new(26624, 11264) : new(55296, 46080),
-            west ? new(63936, 45056) : new(17984, 12288));
+            long x = (long)a.X - b.X, y = (long)a.Y - b.Y;
+            return x * x + y * y;
+        }
+
+        WorldPosition Toward(WorldPosition from, WorldPosition to, int step) => distance == 0 ? from :
+            new(from.X + (int)((long)(to.X - from.X) * step / distance),
+                from.Y + (int)((long)(to.Y - from.Y) * step / distance));
     }
 
     public static SimulationReport Run(SimulationWorld world, SkirmishAi ai, int ticks,

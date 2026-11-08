@@ -45,10 +45,12 @@ public static class SkirmishAiCatalog
 
         if (data.Buildings.Count is < 1 or > 16 || data.Group.Count is < 1 or > 16)
             throw Error("Buildings", "Declare 1..16 building types and 1..16 combat member types.");
+        foreach (string name in data.BuildingPriorities.Keys)
+            if (!data.Buildings.ContainsKey(name)) throw Error("BuildingPriorities." + name, "Priority requires a building target.");
         var buildings = data.Buildings.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p =>
         {
             if (p.Value is < 1 or > 16) throw Error("Buildings." + p.Key, "Expected a target in 1..16.");
-            return new AiBuilding(Recipe(p.Key, ProductionKind.PlaceBuilding), p.Value);
+            return new AiBuilding(Recipe(p.Key, ProductionKind.PlaceBuilding), p.Value, data.BuildingPriorities.GetValueOrDefault(p.Key));
         }).ToArray();
         var opening = data.Opening.Select(name => Type(name, "Opening")).ToArray();
         if (opening.Length != opening.Distinct().Count() || opening.Any(type => buildings.All(b => b.Recipe.ProductType != type)))
@@ -90,6 +92,7 @@ public static class SkirmishAiCatalog
         public int Version { get; set; }
         public string[] Opening { get; set; } = [];
         public Dictionary<string, int> Buildings { get; set; } = [];
+        public Dictionary<string, int> BuildingPriorities { get; set; } = [];
         public Dictionary<string, MemberOptions> Group { get; set; } = [];
         public CaptureOptions Capture { get; set; } = new();
         public SupplyOptions? Supply { get; set; }

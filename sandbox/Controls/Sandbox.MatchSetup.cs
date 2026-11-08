@@ -13,7 +13,7 @@ public partial class Sandbox
     private string? _aiProfileId;
     private SkirmishAiProfile? _opponentProfile;
     private SkirmishAi? _opponent;
-    private string? _opponentSlot;
+    private string[]? _opponentStarts;
 
     private void OpenMatchSetup(UnitCatalog catalog)
     {
@@ -45,7 +45,7 @@ public partial class Sandbox
         {
             _mapMatch = MapScenario.Prepare(map, set, slots);
             _opponentProfile = aiOpponent ? SkirmishAiCatalog.Load(ReadMapSource("content/skirmish-ai.yaml"), _catalog!, _aiProfileId ?? SkirmishAiScenario.ProfileId) : null;
-            _opponentSlot = aiOpponent ? slots[1] : null;
+            _opponentStarts = aiOpponent ? slots : null;
             _count = _mapMatch.UnitCount;
             _matchSetup!.SetLaunching(true, "Подготовка поля боя…");
             StartSession();
@@ -94,7 +94,7 @@ public partial class Sandbox
         _mapMatch = null;
         _opponentProfile = null;
         _opponent = null;
-        _opponentSlot = null;
+        _opponentStarts = null;
         if (_verifyMatchSetup || !canRetry) GD.PushError(error.ToString());
         if (_verifyMatchSetup) GetTree().Quit(1);
         else _matchSetup?.SetLaunching(!canRetry, "Матч не запущен. " + error.Message);

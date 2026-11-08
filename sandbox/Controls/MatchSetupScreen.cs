@@ -78,7 +78,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         setup.AddChild(_players);
 
         layout.AddChild(new HSeparator());
-        layout.AddChild(new Label { Text = "ИИ доступен на Долине со строительным стартом и двумя игроками." });
+        layout.AddChild(new Label { Text = "ИИ доступен в режиме «Снабжение» с двумя игроками." });
         layout.AddChild(_status);
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         layout.AddChild(buttons);
@@ -166,7 +166,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
 
     private string[] AssignedSlots() => _starts.Select(row => CurrentMap.Slots[row.Selected]).ToArray();
 
-    private bool CanUseOpponent => CurrentMap.Id == "sandbox-skirmish" && _modeChoices[_modes.Selected].Set.Id == "supply" && PlayerCount == 2;
+    private bool CanUseOpponent => CurrentMap.IsSkirmish && _modeChoices[_modes.Selected].Set.Id == "supply" && PlayerCount == 2;
 
     private void UpdateOpponent()
     {

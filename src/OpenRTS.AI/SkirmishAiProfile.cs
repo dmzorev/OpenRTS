@@ -1,7 +1,7 @@
 namespace OpenRTS.AI;
 
 public sealed record AiRecipe(int ProducerType, int ProductType, int Queue, string Action, int Cost, bool OnSite = false);
-public sealed record AiBuilding(AiRecipe Recipe, int Target);
+public sealed record AiBuilding(AiRecipe Recipe, int Target, int Priority = 0);
 public sealed record AiMember(AiRecipe Recipe, int Minimum, int Target);
 public sealed record AiSupply(AiRecipe Truck, int Target, bool ImproveMines);
 

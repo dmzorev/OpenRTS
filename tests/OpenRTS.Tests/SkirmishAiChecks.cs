@@ -24,17 +24,18 @@ internal static class SkirmishAiChecks
             NavigationChecks.Check(smaller.Group.Single().Target == 3, "Group target did not come from YAML.");
         });
 
-        test("AI0 opens on both sides, retries a rejected placement and captures income", () =>
+        test("AI2 opens on both sides, skips an invalid candidate and captures income", () =>
         {
             for (uint player = 1; player <= 2; player++)
             {
                 var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
                 using var world = map.CreateWorld();
-                int invalidPlacements = 0, sorties = 0;
+                int sorties = 0;
+                var search = new InvalidFirstSearch();
                 long? firstPower = null, firstBarracks = null;
                 bool captured = false, movedInCombat = false;
-                var ai = SkirmishAiScenario.Create(catalog, profile, player, blockFirstSite: true);
-                SkirmishAiScenario.Run(world, ai, SkirmishAiScenario.DefaultTicks, state =>
+                var ai = SkirmishAiScenario.Create(catalog, profile, map.Map, player, siteSearch: search);
+                SkirmishAiScenario.Run(world, ai, 2500, state =>
                 {
                     var own = Poses(state).Where(p => p.Presentation.Owner == player).ToArray();
                     if (own.Any(p => catalog.Units[p.UnitType].Id == "power-plant")) firstPower ??= state.Tick;
@@ -42,8 +43,6 @@ internal static class SkirmishAiChecks
                     foreach (var value in state.Events)
                     {
                         if (value.Kind == WorldEventKind.OwnerChanged && value.Owner == player) captured = true;
-                        if (value.Kind == WorldEventKind.ActionUnavailable && state.AppliedCommands.Length > 0 &&
-                            state.AppliedCommands[0].Kind == CommandKind.PlanConstruction) invalidPlacements++;
                     }
                     foreach (var command in state.AppliedCommands)
                         if (command.Kind == CommandKind.AttackMove)
@@ -53,8 +52,8 @@ internal static class SkirmishAiChecks
                         }
                     movedInCombat |= own.Any(p => p.Order.Kind == UnitActionKind.AttackMove && p.Current != p.Previous);
                 });
-                NavigationChecks.Check(firstPower.HasValue && firstBarracks > firstPower && invalidPlacements > 0,
-                    $"Player {player} did not complete the opening after a rejected placement.");
+                NavigationChecks.Check(firstPower.HasValue && firstBarracks > firstPower && search.OfferedInvalid,
+                    $"Player {player} did not complete the opening after an invalid site candidate.");
                 NavigationChecks.Check(captured && sorties > 0 && movedInCombat, $"Player {player} did not capture and march.");
             }
         });
@@ -65,8 +64,8 @@ internal static class SkirmishAiChecks
             using var single = map.CreateWorld(1);
             using var parallel = map.CreateWorld(4);
             using var replay = map.CreateWorld(1);
-            var first = SkirmishAiScenario.Create(catalog, profile, 2);
-            var second = SkirmishAiScenario.Create(catalog, profile, 2);
+            var first = SkirmishAiScenario.Create(catalog, profile, map.Map, 2);
+            var second = SkirmishAiScenario.Create(catalog, profile, map.Map, 2);
             for (int tick = 1; tick <= SkirmishAiScenario.DefaultTicks; tick++)
             {
                 var a = first.Plan(single);
@@ -89,8 +88,8 @@ internal static class SkirmishAiChecks
             var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
             using var world = map.CreateWorld();
             int rifleman = catalog.Units.ToList().FindIndex(u => u.Id == "rifleman");
-            world.AddInitialUnit(rifleman, new(37888, 11264), owner: 2);
-            var ai = SkirmishAiScenario.Create(catalog, profile, 1);
+            world.AddInitialUnit(rifleman, new(33792, 17408), owner: 2);
+            var ai = SkirmishAiScenario.Create(catalog, profile, map.Map, 1);
             bool holding = false;
             SkirmishAiScenario.Run(world, ai, 1000, state =>
             {
@@ -110,7 +109,7 @@ internal static class SkirmishAiChecks
                 : Read(path), MapScenario.DefaultMap);
             var frequent = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, catalog, profile.Id);
             using var world = map.CreateWorld();
-            var ai = SkirmishAiScenario.Create(catalog, frequent, 2);
+            var ai = SkirmishAiScenario.Create(catalog, frequent, map.Map, 2);
             world.Step(ai.Plan(world));
             var projects = new ConstructionProjectPose[world.ConstructionProjectCount];
             world.CopyConstructionProjects(projects);
@@ -146,7 +145,7 @@ internal static class SkirmishAiChecks
                     using var world = match.CreateWorld();
                     world.AddInitialUnit(powerType, new(59904, 45056), player);
                     var barracks = world.AddInitialUnit(barracksType, new(59392, 37376), player);
-                    var ai = SkirmishAiScenario.Create(definitions, frequent, player);
+                    var ai = SkirmishAiScenario.Create(definitions, frequent, match.Map, player);
                     ai.Plan(world);
                     world.Step([new(1, 0, 1, CommandKind.EnqueueTask, barracks, Action: "rifleman")]);
                     var tasks = new TaskPose[world.TaskCount];
@@ -176,7 +175,7 @@ internal static class SkirmishAiChecks
             for (uint player = 1; player <= 2; player++)
             {
                 using var world = map.CreateWorld(player == 1 ? 1 : 4, restrictPlayerCommands: true);
-                var ai = SkirmishAiScenario.Create(catalog, mechanized, player);
+                var ai = SkirmishAiScenario.Create(catalog, mechanized, map.Map, player);
                 var produced = new HashSet<EntityId>();
                 bool deployed = false;
                 SkirmishAiScenario.Run(world, ai, 3200, state =>
@@ -203,7 +202,7 @@ internal static class SkirmishAiChecks
             var start = Poses(world).Where(p => p.Presentation.Owner == player).ToArray();
             var builder = start.Single(p => p.UnitType == profile.EngineerType).Id;
             var truck = start.Single(p => p.UnitType == profile.Supply!.Truck.ProductType).Id;
-            var ai = SkirmishAiScenario.Create(catalog, profile, player);
+            var ai = SkirmishAiScenario.Create(catalog, profile, map.Map, player);
             world.Step(ai.Plan(world));
             var projects = new ConstructionProjectPose[world.ConstructionProjectCount];
             world.CopyConstructionProjects(projects);
@@ -235,7 +234,7 @@ internal static class SkirmishAiChecks
         {
             const int ticks = 350;
             var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
-            var ai = SkirmishAiScenario.Create(catalog, profile, 2);
+            var ai = SkirmishAiScenario.Create(catalog, profile, map.Map, 2);
             var observations = new List<long>();
             using var session = new SimulationSession<SimulationWorld, WorldCommand, WorldEvent>(
                 () => map.CreateWorld(4, restrictPlayerCommands: true), endTick: ticks, realtime: false,
@@ -274,5 +273,16 @@ internal static class SkirmishAiChecks
                 Poses(world).Single(p => p.Id == occupant).Order.Phase == OrderPhase.Idle,
                 "A stale, mixed or privileged command passed player authority.");
         });
+    }
+    private sealed class InvalidFirstSearch : OpenRTS.AI.IBuildingSiteSearch
+    {
+        public bool OfferedInvalid { get; private set; }
+
+        public IEnumerable<OpenRTS.AI.BuildingSite> Candidates(NavigationGrid grid, WorldPosition center, UnitDefinition building)
+        {
+            OfferedInvalid = true;
+            yield return new(new(512, 512), 0);
+            foreach (var site in new OpenRTS.AI.CompactBuildingSiteSearch().Candidates(grid, center, building)) yield return site;
+        }
     }
 }

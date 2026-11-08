@@ -18,7 +18,7 @@ try
     {
         if (argument == "--skirmish") { skirmish = simulate = true; }
         else if (argument == "--skirmish-ai") { skirmishAi = simulate = true; }
-        else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is 1 or 2) aiPlayer = player;
+        else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is >= 1 and <= MapScenario.MaximumPlayers) aiPlayer = player;
         else if (argument.StartsWith("--ai-config=", StringComparison.Ordinal) && argument.Length > 12) aiConfig = argument[12..];
         else if (argument.StartsWith("--ai-profile=", StringComparison.Ordinal) && argument.Length > 13) aiProfile = argument[13..];
         else if (argument.StartsWith("--map=", StringComparison.Ordinal) && argument.Length > 6) { mapPath = argument[6..]; simulate = true; }
@@ -36,10 +36,10 @@ try
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) { ticks = value; ticksSpecified = true; }
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1|2] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1..4] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
-    if (skirmishAi && (skirmish || mapPath is not null || startSetPath is not null))
-        throw new ArgumentException("AI0 uses the default skirmish map and construction starting set.");
+    if (skirmishAi && skirmish)
+        throw new ArgumentException("Select either the scripted skirmish or the AI skirmish.");
     if (!skirmishAi && (aiConfig is not null || aiPlayer.HasValue || aiProfile is not null))
         throw new ArgumentException("--ai-player, --ai-config and --ai-profile require --skirmish-ai.");
     if (skirmishAi && !ticksSpecified) ticks = SkirmishAiScenario.DefaultTicks;
@@ -76,7 +76,7 @@ try
             uint player = aiPlayer ?? 2;
             string config = aiConfig ?? Path.Combine(Path.GetDirectoryName(path)!, "skirmish-ai.yaml");
             var profile = SkirmishAiCatalog.Load(new(config, File.ReadAllText(config)), catalog, aiProfile ?? SkirmishAiScenario.ProfileId);
-            var ai = SkirmishAiScenario.Create(catalog, profile, player);
+            var ai = SkirmishAiScenario.Create(catalog, profile, map!.Map, player);
             int issued = 0, attacks = 0, completedBuildings = 0, trained = 0, captured = 0, trucks = 0, upgradedMines = 0;
             EntityPose[] poses = [];
             report = SkirmishAiScenario.Run(world, ai, ticks, state =>
@@ -108,7 +108,7 @@ try
                 Player = player, Profile = profile.Id, SkirmishAi.PolicyVersion,
                 ProfileFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(profile))),
                 Commands = issued, Attacks = attacks, Buildings = completedBuildings, Trained = trained, Captured = captured,
-                SupplyTrucks = trucks, UpgradedMines = upgradedMines
+                SupplyTrucks = trucks, UpgradedMines = upgradedMines, BuildingCandidates = ai.BuildingCandidatesChecked
             }));
         }
         else if (benchmark)
