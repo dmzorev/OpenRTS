@@ -230,7 +230,8 @@ public sealed class SkirmishAi
             _types[pose.UnitType].Capturable is not null && !pose.Construction.Active;
         if (tick < _captureRetryAt || own.Any(IncomeSource)) return;
         actor = Array.Find(own, p => p.UnitType == _profile.EngineerType);
-        if (actor.Id == default || _commands.Any(c => c.Entity == actor.Id)) return;
+        if (actor.Id == default || actor.Order.Kind == UnitActionKind.Build && actor.Order.Phase != OrderPhase.Idle ||
+            _commands.Any(c => c.Entity == actor.Id)) return;
         var candidates = _poses.Where(p => p.Presentation.Owner == 0 && p.Carrier == default && IncomeSource(p))
             .OrderBy(p => p.Id == _avoidDeposit).ThenBy(p => Distance(p.Current, actor.Current)).ThenBy(p => p.Id.Value);
         target = candidates.FirstOrDefault();

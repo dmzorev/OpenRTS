@@ -19,3 +19,6 @@ factory-repair:
 sniper-rifle:
   Inherits: rifle
   Effect: {BeamWidth: 0.045}
+
+crane-repair:
+  Inherits: repair

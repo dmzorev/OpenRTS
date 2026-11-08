@@ -1,6 +1,6 @@
 namespace OpenRTS.Core.Orders;
 
-public enum UnitActionKind { Move, AttackMove, Attack, Stop, HoldPosition, Repair, Ability, Capture, Enter, Unload, UnloadAt, Build }
+public enum UnitActionKind { Move, AttackMove, Attack, Stop, HoldPosition, Repair, Ability, Capture, Enter, Unload, UnloadAt, Build, ClaimMine }
 public enum OrderPhase { Idle, Moving, Approaching, Engaging, Holding, Waiting }
 public readonly record struct UnitAction(UnitActionKind Kind, EntitySet Recipients, WorldPosition Position = default,
     EntityId Target = default, bool Queued = false, string? Action = null);

@@ -24,6 +24,7 @@ public sealed record UnitDefinition
     public ReadOnlyCollection<ProductionDefinition> Products => (Definition.Production ?? ProducerDefinition.Empty).Products;
     public BuildDefinition? Build => Definition.Build;
     public int ConstructionRange => Definition.ConstructionRange;
+    public SupplyDefinition? Supply => Definition.Supply;
     public EconomyDefinition? Economy => Definition.Economy;
     public CapturableDefinition? Capturable => Definition.Capturable;
     public PassengerDefinition? Passenger => Definition.Passenger;
@@ -52,17 +53,17 @@ public sealed record UnitDefinition
         if (IdleAnimation < 0 || MoveAnimation < 0) throw new ArgumentException("Units require idle and move semantic animations.", nameof(definition));
     }
 
-    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null, WeaponDefinition? weapon = null, IEnumerable<WeaponMountDefinition>? weapons = null, ArmorKind armor = ArmorKind.Living, bool movable = true, BodyShape? body = null, FootprintDefinition? footprint = null, IEnumerable<AbilityDefinition>? abilities = null, IEnumerable<TaskQueueDefinition>? taskQueues = null, IEnumerable<ProductionDefinition>? products = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, DestructionPolicy destruction = DestructionPolicy.Destroy, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0)
-        : this(Compose(id, maxHealth, animations, states, locomotor, weapon, weapons, armor, movable, body, footprint, abilities, taskQueues, products, build, economy, capturable, destruction, passenger, transport, constructionRange)) { }
+    public UnitDefinition(string id, int maxHealth, IEnumerable<string>? animations = null, IEnumerable<string>? states = null, Locomotor? locomotor = null, WeaponDefinition? weapon = null, IEnumerable<WeaponMountDefinition>? weapons = null, ArmorKind armor = ArmorKind.Living, bool movable = true, BodyShape? body = null, FootprintDefinition? footprint = null, IEnumerable<AbilityDefinition>? abilities = null, IEnumerable<TaskQueueDefinition>? taskQueues = null, IEnumerable<ProductionDefinition>? products = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, DestructionPolicy destruction = DestructionPolicy.Destroy, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null)
+        : this(Compose(id, maxHealth, animations, states, locomotor, weapon, weapons, armor, movable, body, footprint, abilities, taskQueues, products, build, economy, capturable, destruction, passenger, transport, constructionRange, supply)) { }
 
     private static EntityDefinition Compose(string id, int maxHealth, IEnumerable<string>? animations, IEnumerable<string>? states,
         Locomotor? locomotor, WeaponDefinition? weapon, IEnumerable<WeaponMountDefinition>? weapons, ArmorKind armor, bool movable,
         BodyShape? body, FootprintDefinition? footprint, IEnumerable<AbilityDefinition>? abilities,
-        IEnumerable<TaskQueueDefinition>? taskQueues, IEnumerable<ProductionDefinition>? products, BuildDefinition? build, EconomyDefinition? economy, CapturableDefinition? capturable, DestructionPolicy destruction, PassengerDefinition? passenger, TransportDefinition? transport, int constructionRange)
+        IEnumerable<TaskQueueDefinition>? taskQueues, IEnumerable<ProductionDefinition>? products, BuildDefinition? build, EconomyDefinition? economy, CapturableDefinition? capturable, DestructionPolicy destruction, PassengerDefinition? passenger, TransportDefinition? transport, int constructionRange, SupplyDefinition? supply)
     {
         if (weapon is not null && weapons is not null) throw new ArgumentException("Use either a single weapon or mounts.");
         return new(id, new(maxHealth, armor, destruction), new(locomotor, movable, body, footprint), new(animations, states),
-            new(weapons ?? (weapon is null ? [] : [new WeaponMountDefinition("main", weapon)]), abilities), new(taskQueues, products), build, economy, capturable, passenger, transport, constructionRange);
+            new(weapons ?? (weapon is null ? [] : [new WeaponMountDefinition("main", weapon)]), abilities), new(taskQueues, products), build, economy, capturable, passenger, transport, constructionRange, supply);
     }
 
     public void WriteState(BinaryWriter writer)
@@ -89,6 +90,12 @@ public sealed record UnitDefinition
         writer.Write(Products.Count); foreach (var p in Products) { writer.Write(p.Id); writer.Write(p.Unit); writer.Write(p.Queue); writer.Write(p.Override is not null); p.Override?.Write(writer); writer.Write(p.OnSite); }
         writer.Write(Animations.Count); foreach (var name in Animations) writer.Write(name);
         writer.Write(States.Count); foreach (var name in States) writer.Write(name);
+        writer.Write(Supply is not null);
+        if (Supply is { } supply)
+        {
+            writer.Write((int)supply.Role);
+            writer.Write(supply.Capacity);
+        }
     }
     public int AnimationIndex(string name) => Definition.Presentation!.AnimationIndex(name);
     public uint StateMask(string name) => Definition.Presentation!.StateMask(name);

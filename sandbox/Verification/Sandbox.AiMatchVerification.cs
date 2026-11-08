@@ -5,7 +5,7 @@ using OpenRTS.Godot.Controls;
 public partial class Sandbox
 {
     private int _aiMatchStage;
-    private const int AiVerificationTicks = 350;
+    private const int AiVerificationTicks = 550;
 
     private void SelectAiVerificationMatch()
     {
@@ -34,19 +34,21 @@ public partial class Sandbox
         {
             CheckSkirmish(session.IsPaused && frame.Tick == 0 && session.GetCommandLog().Length == 0 &&
                 _opponent?.Diagnostics == "start", "AI planned while the match was paused at tick zero.");
-            var yards = frame.Poses.ToArray().Where(p => _catalog!.Units[p.UnitType].Id == "construction-yard").ToArray();
+            var yards = frame.Poses.ToArray().Where(p => _catalog!.Units[p.UnitType].Id == "supply-center").ToArray();
             var own = yards.Single(p => p.Presentation.Owner == 1);
             var enemy = yards.Single(p => p.Presentation.Owner == 2);
             _selection.Change([enemy.Id], SelectionChange.Replace);
             RefreshSelection();
             CheckSkirmish(Controlled().Length == 0 && !CanIssue(UnitActionKind.Stop) && ActiveRecipients().Length == 0,
                 "Inspecting the AI base allowed player commands.");
-            _selection.Change([own.Id], SelectionChange.Replace);
+            var ownEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 1 && p.Id != own.Id);
+            var enemyEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 2 && p.Id != enemy.Id);
+            _selection.Change([ownEngineer.Id], SelectionChange.Replace);
             RefreshSelection();
             ActivateCustom("site-power", false, false);
             var site = new WorldPosition(59904, 45056);
             HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, site, null);
-            session.Submit(CommandKind.PlanConstruction, site, recipients: new([enemy.Id]), action: "site-power");
+            session.Submit(CommandKind.PlanConstruction, site, recipients: new([enemyEngineer.Id]), action: "site-power");
             _aiMatchStage = 1;
             session.StepOnce();
             return;
@@ -56,11 +58,11 @@ public partial class Sandbox
         {
             if (frame.Tick < 1) return;
             CheckSkirmish(frame.Tick == 1 && session.IsPaused &&
-                frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 4500) && frame.Poses.ToArray().Count(p => p.Construction.Active) == 2,
-                "The human or AI did not pay for exactly one foundation on the single step.");
+                frame.ConstructionProjects.Length == 2,
+                "The human and AI did not each place one project on the single step.");
             var first = session.GetCommandLog();
-            CheckSkirmish(first.Length == 4 && first.All(c => c.Tick == 1) &&
-                first.Count(c => c.Issuer == 1) == 2 && first.Count(c => c.Issuer == 2) == 2,
+            CheckSkirmish(first.Length == 3 && first.All(c => c.Tick == 1) &&
+                first.Count(c => c.Issuer == 1) == 2 && first.Count(c => c.Issuer == 2) == 1,
                 "Live and AI inputs were not journaled with separate issuers.");
             _aiMatchStage = 2;
             for (int i = 1; i < AiVerificationTicks; i++) session.StepOnce();

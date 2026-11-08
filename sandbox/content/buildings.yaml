@@ -1,221 +1,292 @@
 ^building:
-  Buildable: {Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400}
-  Health: {HP: 1000, Armor: Building}
+  Buildable:
+    { Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400 }
+  Health: { HP: 1000, Armor: Building }
   Capturable: {}
-  Economy: {Energy: -20}
-  Movement: {Enabled: false, Locomotor: tracked}
+  Economy: { Energy: -20 }
+  Movement: { Enabled: false, Locomotor: tracked }
   Presentation:
     Animations: [idle, construct, produce, door]
     States: [damaged, working, destroyed, lowpower, constructing]
   Footprint:
     Types:
-      '#': {Traverse: false, CanStop: false}
-      '+': {Traverse: true, CanStop: false, Terrain: road, Targetable: false}
-      '=': {Traverse: true, CanStop: true, Terrain: road, Targetable: false}
+      "#": { Traverse: false, CanStop: false }
+      "+": { Traverse: true, CanStop: false, Terrain: road, Targetable: false }
+      "=": { Traverse: true, CanStop: true, Terrain: road, Targetable: false }
 
 power-plant:
   Inherits: ^building
-  Economy: {Energy: 100}
-  Footprint: {Rows: ['###', '###']}
-  Presentation: {Model: power-plant, Name: Электростанция}
+  Economy: { Energy: 100 }
+  Footprint: { Rows: ["###", "###"] }
+  Presentation: { Model: power-plant, Name: Электростанция }
 
 barracks:
   Inherits: ^building
   TaskQueues:
     Queues:
-      infantry: {Capacity: 20, Payment: Upfront, WorkingState: working, ExitAnimation: door, Exit: [0, 1024]}
+      infantry:
+        {
+          Capacity: 20,
+          Payment: Upfront,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [0, 1024],
+        }
   Actions:
     Definitions:
-      rifleman: {Unit: rifleman}
-      sniper: {Unit: sniper}
-      rocketeer: {Unit: rocketeer}
+      rifleman: { Unit: rifleman }
+      sniper: { Unit: sniper }
+      rocketeer: { Unit: rocketeer }
   ActionPanel:
     Buttons:
-      rifleman: {Label: Автоматчик}
-      sniper: {Label: Снайпер}
-      rocketeer: {Label: Ракетчик}
-  Footprint: {Rows: ['####', '#==#', '#++#']}
-  Presentation: {Model: barracks, Name: Бараки}
+      rifleman: { Label: Автоматчик }
+      sniper: { Label: Снайпер }
+      rocketeer: { Label: Ракетчик }
+  Footprint: { Rows: ["####", "#==#", "#++#"] }
+  Presentation: { Model: barracks, Name: Бараки }
 
 factory:
   Inherits: ^building
   TaskQueues:
     Queues:
-      vehicles: {Capacity: 12, Payment: Progressive, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
+      vehicles:
+        {
+          Capacity: 12,
+          Payment: Progressive,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [1536, 1536],
+        }
   Actions:
     Definitions:
-      apc: {Unit: apc-mg}
-      tank: {Unit: large-tank, Cost: 180, Ticks: 150}
-      repair: {Mount: repair, AutoCast: true}
+      apc: { Unit: apc-mg }
+      tank: { Unit: large-tank, Cost: 180, Ticks: 150 }
+      repair: { Mount: repair, AutoCast: true }
   ActionPanel:
     Buttons:
-      apc: {Label: БТР, Order: 0}
-      tank: {Label: Танк, Order: 1}
-      repair: {Label: Ремонт, Cursor: repair, Order: 2}
-  Footprint: {Rows: ['#####', '###==', '###==', '###++']}
+      apc: { Label: БТР, Order: 0 }
+      tank: { Label: Танк, Order: 1 }
+      repair: { Label: Ремонт, Cursor: repair, Order: 2 }
+  Footprint: { Rows: ["#####", "###==", "###==", "###++"] }
   Armaments:
     Mounts:
-      repair: {Weapon: factory-repair, Animation: produce}
-  Presentation: {Model: factory, Name: Завод · ремонтная зона}
+      repair: { Weapon: factory-repair, Animation: produce }
+  Presentation: { Model: factory, Name: Завод · ремонтная зона }
 
 headquarters:
   Inherits: ^building
-  Footprint: {Rows: ['####', '####', '####']}
-  Presentation: {Model: headquarters, Name: HQ · Радар}
+  Footprint: { Rows: ["####", "####", "####"] }
+  Presentation: { Model: headquarters, Name: HQ · Радар }
 
-construction-yard:
+supply-center:
   Inherits: ^building
-  Economy: {Energy: 0}
-  Builder: {Range: 12288}
+  Buildable: { Ticks: 175, Cost: 800 }
+  Economy: { Energy: 0 }
+  Supply: { Role: Depot }
   TaskQueues:
     Queues:
-      vehicles: {Capacity: 5, Payment: OnCompletion, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
+      vehicles:
+        {
+          Capacity: 5,
+          Payment: Upfront,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [1536, 2560],
+        }
   Actions:
     Definitions:
-      build: {Build: true, AutoCast: true}
-      engineer: {Unit: construction-engineer, Queue: vehicles}
-      site-power: {Unit: power-plant, OnSite: true}
-      site-barracks: {Unit: barracks, OnSite: true}
-      site-factory: {Unit: factory, OnSite: true}
-      site-turret: {Unit: bunker-cannon, OnSite: true}
+      engineer: { Unit: construction-engineer, Queue: vehicles }
+      truck: { Unit: supply-truck, Queue: vehicles }
   ActionPanel:
     Buttons:
-      build: {Label: Помочь строить, Cursor: build, Order: 0}
-      engineer: {Label: Инженер, Order: 3}
-      site-power: {Label: Строить электростанцию, Hotkey: T, Order: 4}
-      site-barracks: {Label: Строить бараки, Hotkey: Y, Order: 5}
-      site-factory: {Label: Строить завод, Hotkey: U, Order: 6}
-      site-turret: {Label: Строить турель, Hotkey: I, Order: 7}
-  Footprint: {Rows: ['#####', '###==', '###==', '###++']}
-  Presentation: {Model: construction-yard, Name: Construction Yard}
+      engineer: { Label: Инженер }
+      truck: { Label: Грузовик снабжения, Order: 1 }
+  Footprint: { Rows: ["#####", "###==", "###==", "###++"] }
+  Presentation: { Model: supply-center, Name: Центр снабжения }
+
+supply-truck:
+  Inherits: ^unit
+  Supply: { Role: Truck, Capacity: 100 }
+  Buildable: { Ticks: 100, Cost: 350 }
+  Movement: { Locomotor: tracked }
+  Health: { HP: 280, Armor: Mechanical }
+  Body: { Kind: Box, HalfSize: [320, 384] }
+  Actions:
+    Definitions:
+      harvest: { Harvest: true, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      harvest: { Label: Добыча, Cursor: harvest }
+  Presentation:
+    { Model: supply-truck, Name: Грузовик снабжения, Animations: [idle, move] }
+
+^structure-recipes:
+  Actions:
+    Definitions:
+      site-power: { Unit: power-plant, OnSite: true }
+      site-barracks: { Unit: barracks, OnSite: true }
+      site-factory: { Unit: factory, OnSite: true }
+      site-turret: { Unit: bunker-cannon, OnSite: true }
+      site-mixed: { Unit: bunker-mixed, OnSite: true }
+      site-supply: { Unit: supply-center, OnSite: true }
+  ActionPanel:
+    Buttons:
+      site-power: { Label: Электростанция, Hotkey: E, Order: 2 }
+      site-barracks: { Label: Бараки, Hotkey: R, Order: 3 }
+      site-factory: { Label: Завод, Hotkey: T, Order: 4 }
+      site-turret: { Label: Пушечная турель, Hotkey: Y, Order: 5 }
+      site-mixed: { Label: Смешанная турель, Hotkey: U, Order: 6 }
+      site-supply: { Label: Центр снабжения, Hotkey: I, Order: 7 }
+
+crane:
+  Inherits: ^building
+  Inherits@recipes: ^structure-recipes
+  Builder: { Range: 12288 }
+  Buildable: { Ticks: 150, Cost: 700 }
+  Actions:
+    Definitions:
+      build: { Build: true, AutoCast: true }
+      repair: { Mount: repair, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      build: { Label: Помочь строить, Cursor: build, Order: 0 }
+      repair: { Label: Ремонт, Cursor: repair, Order: 1 }
+  Armaments:
+    Mounts:
+      repair: { Weapon: crane-repair, Animation: produce }
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: crane, Name: Кран }
 
 mine:
   Inherits: ^building
-  Buildable: {Ticks: 150, Cost: 900}
-  Health: {Destruction: Neutralize}
-  Economy: {Energy: 0, Income: 40, Interval: 100}
-  Footprint: {Rows: ['###', '###', '#+#', '#+#']}
-  Presentation: {Model: mine, Name: Шахта}
+  -Buildable:
+  -Capturable:
+  Supply: { Role: Mine, Capacity: 300000 }
+  Health: { Destruction: Neutralize }
+  Economy: { Energy: 0 }
+  Footprint: { Rows: ["###", "###", "#+#", "#+#"] }
+  Presentation:
+    {
+      Model: mine,
+      Name: Шахта,
+      States: [damaged, working, destroyed, lowpower, constructing, owned],
+    }
 
 oil-derrick:
   Inherits: ^building
-  Buildable: {Ticks: 125, Cost: 700}
-  Health: {Destruction: Neutralize}
-  Economy: {Energy: 0, Income: 30, Interval: 100}
-  Footprint: {Rows: ['###', '###', '###']}
-  Presentation: {Model: oil-derrick, Name: Нефтяная вышка}
+  -Buildable:
+  Health: { Destruction: Neutralize }
+  Economy: { Energy: 0, Income: 30, Interval: 100 }
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: oil-derrick, Name: Нефтяная вышка }
 
 ^nature:
-  Health: {HP: 600, Armor: Building, Destruction: Invulnerable}
-  Movement: {Enabled: false}
-  Presentation: {Animations: [idle], States: [destroyed]}
+  Health: { HP: 600, Armor: Building, Destruction: Invulnerable }
+  Movement: { Enabled: false }
+  Presentation: { Animations: [idle], States: [destroyed] }
 
 nature-trees:
   Inherits: ^nature
   Footprint:
-    Rows: ['ttt', 'ttt']
-    Types: {t: {Traverse: true, Terrain: forest}}
-  Presentation: {Model: nature-trees, Name: Деревья · лес}
+    Rows: ["ttt", "ttt"]
+    Types: { t: { Traverse: true, Terrain: forest } }
+  Presentation: { Model: nature-trees, Name: Деревья · лес }
 
 nature-rocks:
   Inherits: ^nature
   Footprint:
-    Rows: ['rr', 'rr']
-    Types: {r: {Terrain: mountains}}
-  Presentation: {Model: nature-rocks, Name: Груда камней}
+    Rows: ["rr", "rr"]
+    Types: { r: { Terrain: mountains } }
+  Presentation: { Model: nature-rocks, Name: Груда камней }
 
 nature-cliff:
   Inherits: ^nature
   Footprint:
-    Rows: ['.rr', 'rrr', 'rr.']
-    Types: {r: {Terrain: mountains}}
-  Presentation: {Model: nature-cliff, Name: Скала · горы}
+    Rows: [".rr", "rrr", "rr."]
+    Types: { r: { Terrain: mountains } }
+  Presentation: { Model: nature-cliff, Name: Скала · горы }
 
 nature-debris:
   Inherits: ^nature
   Footprint:
-    Rows: ['rrr', 'rrr']
-    Types: {r: {Traverse: false, CanStop: false}}
-  Presentation: {Model: nature-debris, Name: Обломки}
+    Rows: ["rrr", "rrr"]
+    Types: { r: { Traverse: false, CanStop: false } }
+  Presentation: { Model: nature-debris, Name: Обломки }
 
 light-infantry:
   Inherits: rifleman
-  Body: {Kind: Circle, Radius: 160}
-  Presentation: {Name: Пехота · радиус 160}
+  Body: { Kind: Circle, Radius: 160 }
+  Presentation: { Name: Пехота · радиус 160 }
 
 medium-apc:
   Inherits: apc-mg
-  Body: {Kind: Circle, Radius: 384}
-  Presentation: {Name: БТР · радиус 384}
+  Body: { Kind: Circle, Radius: 384 }
+  Presentation: { Name: БТР · радиус 384 }
 
 large-tank:
   Inherits: tank
-  Body: {Kind: Circle, Radius: 640}
-  Presentation: {Name: Танк · радиус 640}
+  Body: { Kind: Circle, Radius: 640 }
+  Presentation: { Name: Танк · радиус 640 }
 
 box-vehicle:
   Inherits: tank
-  Body: {Kind: Box, HalfSize: [640, 320]}
-  Presentation: {Name: Техника · прямоугольное тело}
-
+  Body: { Kind: Box, HalfSize: [640, 320] }
+  Presentation: { Name: Техника · прямоугольное тело }
 
 civilian-house:
-  Transport: {Accepts: [infantry], Slots: 6, FireFromInside: true}
-  Health: {HP: 1000, Armor: Building}
-  Movement: {Enabled: false}
+  Transport: { Accepts: [infantry], Slots: 6, FireFromInside: true }
+  Health: { HP: 1000, Armor: Building }
+  Movement: { Enabled: false }
   Footprint:
-    Rows: ['###', '###', '###']
-    Types: {'#': {Traverse: false, CanStop: false}}
-  Presentation: {Model: civilian-house, Name: Гражданский дом, Animations: [idle], States: [damaged, garrisoned, nearly-destroyed, destroyed]}
-
+    Rows: ["###", "###", "###"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Presentation:
+    {
+      Model: civilian-house,
+      Name: Гражданский дом,
+      Animations: [idle],
+      States: [damaged, garrisoned, nearly-destroyed, destroyed],
+    }
 
 civilian-apartments:
   Inherits: civilian-house
-  Presentation: {Model: civilian-apartments, Name: Жилой комплекс}
-
+  Presentation: { Model: civilian-apartments, Name: Жилой комплекс }
 
 civilian-clinic:
   Inherits: civilian-house
-  Footprint: {Rows: ['##', '##']}
-  Presentation: {Model: civilian-clinic, Name: Клиника}
-
+  Footprint: { Rows: ["##", "##"] }
+  Presentation: { Model: civilian-clinic, Name: Клиника }
 
 civilian-market:
   Inherits: civilian-house
-  Footprint: {Rows: ['####', '####']}
-  Presentation: {Model: civilian-market, Name: Магазин}
-
+  Footprint: { Rows: ["####", "####"] }
+  Presentation: { Model: civilian-market, Name: Магазин }
 
 civilian-library:
   Inherits: civilian-house
-  Footprint: {Rows: ['###', '###', '###']}
-  Presentation: {Model: civilian-library, Name: Библиотека}
-
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: civilian-library, Name: Библиотека }
 
 civilian-station:
   Inherits: civilian-house
-  Footprint: {Rows: ['#####', '#####']}
-  Presentation: {Model: civilian-station, Name: Станция}
-
+  Footprint: { Rows: ["#####", "#####"] }
+  Presentation: { Model: civilian-station, Name: Станция }
 
 civilian-community:
   Inherits: civilian-house
-  Footprint: {Rows: ['####', '####', '####', '####']}
-  Presentation: {Model: civilian-community, Name: Общественный центр}
+  Footprint: { Rows: ["####", "####", "####", "####"] }
+  Presentation: { Model: civilian-community, Name: Общественный центр }
 
 construction-engineer:
   Inherits: engineer
+  Inherits@recipes: ^structure-recipes
   Actions:
     Definitions:
-      site-power: {Unit: power-plant, OnSite: true}
-      site-mine: {Unit: mine, OnSite: true}
-      site-oil: {Unit: oil-derrick, OnSite: true}
-      site-turret: {Unit: bunker-cannon, OnSite: true}
-      site-mixed: {Unit: bunker-mixed, OnSite: true}
+      site-crane: { Unit: crane, OnSite: true }
+      claim-mine: { ClaimMine: true }
   ActionPanel:
     Buttons:
-      site-power: {Label: Электростанция, Hotkey: E, Order: 2}
-      site-mine: {Label: Шахта, Hotkey: R, Order: 3}
-      site-oil: {Label: Вышка, Hotkey: T, Order: 4}
-      site-turret: {Label: Пушечная турель, Hotkey: Y, Order: 5}
-      site-mixed: {Label: Смешанная турель, Hotkey: U, Order: 6}
+      site-crane: { Label: Кран, Hotkey: O, Order: 9 }
+      claim-mine:
+        { Label: Оборудовать шахту, Hotkey: M, Cursor: build, Order: 10 }
+  Presentation: { Name: Инженер }

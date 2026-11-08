@@ -31,6 +31,7 @@ public partial class Sandbox
         _rtsOverlay = new(); layer.AddChild(_rtsOverlay);
         _rtsOverlay.RegisterCursor("ability", new Color(1, 0.7f, 0.2f));
         _rtsOverlay.RegisterCursor("grenade", new Color(1, 0.55f, 0.12f), 18);
+        _rtsOverlay.RegisterCursor("harvest", new Color(0.5f, 0.85f, 1), 18);
         _rtsOverlay.RegisterCursor("build", new Color(0.35f, 0.95f, 1), 20);
         _rtsOverlay.RegisterCursor("capture", new Color(0.95f, 0.85f, 0.2f), 20);
         _rtsOverlay.RegisterCursor("repair", new Color(0.2f, 1, 0.65f));
@@ -77,6 +78,8 @@ public partial class Sandbox
     {
         if (ability.Kind == AbilityKind.Capture) return CapturableTarget(target);
         if (ability.Kind == AbilityKind.Build) return Ally(target) && target.Construction.Active;
+        if (ability.Kind == AbilityKind.ClaimMine) return NeutralMine(target);
+        if (ability.Kind == AbilityKind.Harvest) return HarvestTarget(target);
         var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
         return weapon.Effect == WeaponEffect.Repair ? Ally(target) && target.Health < _catalog!.Units[target.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[target.UnitType].Armor) > 0 : Enemy(target);
     }
@@ -197,6 +200,7 @@ public partial class Sandbox
         if (!CanIssue(UnitActionKind.Stop)) { _notice = "Выберите свои юниты."; return; }
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
+        if (!click.CtrlPressed && picked is { } supply && ContextSupply(supply)) return;
         if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable, click.ShiftPressed)) return;
         bool enemy = picked is { } enemyPose && Enemy(enemyPose);
         bool repair = !enemy && picked is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
@@ -344,6 +348,8 @@ public partial class Sandbox
         else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) &&
             !Input.IsPhysicalKeyPressed(Key.Alt) && CommandPoint(_pointer) is { } workPoint)
         {
+            if (Pick(workPoint) is { } supply && ContextSupplyAction(supply) is { } supplyAction)
+                _rtsOverlay.CustomCursor = supplyAction.Kind == AbilityKind.ClaimMine ? "build" : "harvest";
             var ghost = PickProject(workPoint);
             var site = Pick(workPoint);
             if (ghost is { } plan && BuildersFor(plan.Owner, plan.Position).Length > 0 ||

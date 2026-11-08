@@ -1,0 +1,24 @@
+{
+  "generator": "built-in imagegen",
+  "prompt": "Orthographic top-down transparent OpenRTS sprite. Detailed painterly 3D-rendered sprite for a 2000s desktop RTS, restrained earthy industrial colors, dark readable silhouette, top-left light, two small magenta team-color panels, clean alpha, no background, text, or extra objects.",
+  "assets": [
+    {
+      "asset": "sandbox/assets/units/supply-truck.png",
+      "source_sha256": "42f779779efbcc3ebc97523831c485b9a1834cb9dff48c0ab486a549b1c2538e",
+      "sha256": "dcce7decf5a6f18286b8ea26dc5d8873d9c61496fbae729c70266954a03eb1d4",
+      "subject": "Compact six-wheel military logistics dump truck, short hood, pale steel cab, open olive bin with blue-gray ore, facing north."
+    },
+    {
+      "asset": "sandbox/assets/buildings/crane.png",
+      "source_sha256": "0dbbb97b211ae76cedcadd6d4768ee50442bfdb979c6d0cb967122daaa33df61",
+      "sha256": "72b6f44b110a582b31713c5f84f5f03ab11fc1e717128a2b2ecf3486f6fdac0c",
+      "subject": "Compact military RTS construction and repair crane, low square olive-grey workshop, yellow-gray diagonal lifting arm and outriggers."
+    },
+    {
+      "asset": "sandbox/assets/buildings/ore-mine.png",
+      "source_sha256": "c9ca2a9a64822668fdcc67fc3ffffe39b7fa8d7911e5a36bebfda63fda2dbd49",
+      "sha256": "26d4f58776cbc4bbe062cd9a7c9806ddc934693f6c49f9597b7c5afdf493e7a1",
+      "subject": "Owned military ore loading station, steel hopper and screening machinery over a shallow rock cut, truck ramp toward bottom."
+    }
+  ]
+}

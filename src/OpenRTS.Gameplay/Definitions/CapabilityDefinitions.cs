@@ -82,16 +82,18 @@ public sealed record ArmamentDefinition
         {
             if (!Enum.IsDefined(a.Kind) || a.Range is < 256 or > 8192) throw new ArgumentException("Invalid ability kind/range.");
             if (a.Kind == AbilityKind.Capture) { if (a.AutoCast || a.GroundTarget || a.Mount is null || a.Mount.Length != 0) throw new ArgumentException("Capture requires an entity target and no mount/autocast."); continue; }
-            if (a.Kind == AbilityKind.Build)
+            if (a.Kind is AbilityKind.Build or AbilityKind.Harvest or AbilityKind.ClaimMine)
             {
-                if (a.GroundTarget || a.Mount != "") throw new ArgumentException("Build requires an entity target and no mount.");
+                if (a.GroundTarget || a.Mount != "" || a.Kind == AbilityKind.ClaimMine && a.AutoCast)
+                    throw new ArgumentException("Invalid settings for a targeted non-weapon ability.");
                 continue;
             }
             var w = mounts.Single(m => m.Id == a.Mount).Weapon;
             if (a.GroundTarget && (w.Effect == WeaponEffect.Repair || w.Projectile == ProjectileKind.Missile || w.SplashRadius == 0))
                 throw new ArgumentException("Ground abilities require splash and cannot repair or home.");
         }
-        if (skills.Count(a => a.Kind == AbilityKind.Build) > 1) throw new ArgumentException("Only one build ability is supported.");
+        if (skills.Where(a => a.Kind is AbilityKind.Build or AbilityKind.Harvest or AbilityKind.ClaimMine).GroupBy(a => a.Kind).Any(group => group.Count() > 1))
+            throw new ArgumentException("Only one ability of each construction or supply kind is supported.");
         Weapons = Array.AsReadOnly(mounts); Abilities = Array.AsReadOnly(skills);
     }
 }

@@ -107,13 +107,13 @@ public sealed class SpriteWorldView
 
     private readonly HashSet<EntityId> _ghostIds = new();
 
-    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate, ReadOnlySpan<WeaponPose> weapons = default, ReadOnlySpan<ConstructionProjectPose> projects = default)
+    public void Apply(ReadOnlySpan<EntityPose> poses, float alpha, long tick, int tickRate, ReadOnlySpan<WeaponPose> weapons = default, ReadOnlySpan<ConstructionProjectPose> projects = default, ConstructionProjectPose? preview = null)
     {
         alpha = Math.Clamp(alpha, 0, 1); double time = tick == 0 ? 0 : tick + alpha; SpriteCount = 0;
         foreach (var batch in _batches) batch.Clear();
         Span<Vector2> pivots = stackalloc Vector2[8];
         Span<float> angles = stackalloc float[8];
-        int count = poses.Length + _wrecks.Count + projects.Length;
+        int count = poses.Length + _wrecks.Count + projects.Length + (preview.HasValue ? 1 : 0);
         if (_ordered.Length < count) Array.Resize(ref _ordered, Math.Max(count, _ordered.Length * 2));
         int at = 0;
         foreach (var pose in poses) if (pose.Carrier.Value == 0) _ordered[at++] = pose;
@@ -123,13 +123,30 @@ public sealed class SpriteWorldView
             foreach (var wreck in _wrecks.Values) if (wreck.Presentation.Body.StartTick <= tick && !_liveIds.Contains(wreck.Id)) _ordered[at++] = wreck;
         }
         _ghostIds.Clear();
-        foreach (var project in projects)
+        uint ghostId = uint.MaxValue;
+        if (projects.Length > 0 || preview.HasValue)
         {
-            _ghostIds.Add(project.Id);
+            _liveIds.Clear();
+            for (int i = 0; i < at; i++) _liveIds.Add(_ordered[i].Id);
+            foreach (var project in projects) _liveIds.Add(project.Id);
+            foreach (var project in projects) AppendProject(project);
+            if (preview is { } hovered) AppendProject(hovered);
+        }
+        void AppendProject(ConstructionProjectPose project)
+        {
+            var type = _models[project.UnitType].Unit;
+            var id = project.Id;
+            uint states = 0;
+            if (type.Supply?.Role == SupplyRole.Mine && type.States.Contains("owned"))
+            {
+                states = type.StateMask("owned");
+                do { id = new(ghostId--); } while (!_liveIds.Add(id));
+            }
+            _ghostIds.Add(id);
             var facing = FacingDirection.North;
             var presentation = new EntityPresentation(project.Owner, facing, facing, facing, facing,
-                new(_models[project.UnitType].Unit.IdleAnimation, tick, 0), AnimationPlayback.None, 0);
-            _ordered[at++] = new(project.Id, project.UnitType, project.Position, project.Position, presentation);
+                new(type.IdleAnimation, tick, 0), AnimationPlayback.None, states);
+            _ordered[at++] = new(id, project.UnitType, project.Position, project.Position, presentation);
         }
         count = at;
         bool sorted = true; for (int i = 1; i < count; i++) if (_ordered[i - 1].Id.Value > _ordered[i].Id.Value) { sorted = false; break; }

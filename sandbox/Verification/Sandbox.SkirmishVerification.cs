@@ -12,7 +12,7 @@ public partial class Sandbox
     private int _skirmishCheck;
     private void VerifySkirmish(FrameExchange.FrameLease frame)
     {
-        if (_skirmishCheck == 4) return;
+        if (_skirmishCheck == 6) return;
         if (_skirmishCheck == 0)
         {
             CheckSkirmish(frame.Poses.Length == 12 && frame.Players.Length == 3, "Skirmish players/objects not initialized");
@@ -33,12 +33,11 @@ public partial class Sandbox
             CheckSkirmish(_matchMenu!.Visible && _session!.IsPaused, "Match menu did not pause input and playback");
             ToggleMatchMenu();
             CheckSkirmish(!_matchMenu.Visible && _session!.IsPaused, "Closing menu lost the previous pause state");
-            _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection(); ActivateCustom("site-power", false, false);
-            HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, new(22016, 12288), null);
+            _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection(); ActivateCustom("truck", false, false);
             _selection.Change([new(4)], SelectionChange.Replace); RefreshSelection();
             CheckSkirmish(Controlled().Single().Value == 4 && CanIssue(UnitActionKind.Move), "Red player cannot be controlled");
             ActivateCustom("capture", false, false);
-            var target = frame.Poses.ToArray().Single(p => p.Id.Value == 5);
+            var target = frame.Poses.ToArray().Single(p => p.Id.Value == 7);
             CenterCamera(new Vector2(target.Current.X, target.Current.Y) / WorldPosition.UnitsPerCell);
             var before = GroundPoint(Playfield().GetCenter())!.Value;
             var panel = _customButtons["capture"];
@@ -57,7 +56,7 @@ public partial class Sandbox
         if (_skirmishCheck == 1)
         {
             if (frame.Tick < 1) return;
-            CheckSkirmish(frame.Players.ToArray().Single(p => p.Id == 1).Credits == 4500 && frame.Players.ToArray().Single(p => p.Id == 2).Credits == 5000, "Production charged the wrong player");
+            CheckSkirmish(frame.Players.ToArray().Single(p => p.Id == 1).Credits == 4650 && frame.Players.ToArray().Single(p => p.Id == 2).Credits == 5000, "Production charged the wrong player");
             CheckSkirmish(frame.Poses.ToArray().Single(p => p.Id.Value == 4).Order.Kind == UnitActionKind.Capture, "Capture button did not issue a simulation action");
             _selection.Change([new(2), new(4)], SelectionChange.Replace); RefreshSelection();
             CheckSkirmish(Controlled().Length == 2 && CanIssue(UnitActionKind.Move), "Mixed player control failed");
@@ -80,7 +79,7 @@ public partial class Sandbox
                 }
             }
             Place(2, Key.E, new(24 * 1024 + 512, 25 * 1024), new(27 * 1024 + 512, 30 * 1024));
-            Place(4, Key.T, new WorldPosition(55 * 1024 + 512, 37 * 1024 + 512));
+            Place(4, Key.T, new WorldPosition(55 * 1024 + 512, 37 * 1024));
             _skirmishCheck = 2; _session!.StepOnce(); return;
         }
         if (_skirmishCheck == 2)
@@ -93,7 +92,7 @@ public partial class Sandbox
             UpdateConstructionView(frame);
             CheckSkirmish(_visibleProjects.Length == 2 && _visibleProjects.All(p => p.Owner == 1), "Blue can see an enemy project");
             UpdateFootprintPreview();
-            CheckSkirmish(_footprintView!.Node.GetNode<MeshInstance3D>("ConstructionRange").Visible, "Yard construction radius is hidden");
+            CheckSkirmish(!_footprintView!.Node.GetNode<MeshInstance3D>("ConstructionRange").Visible, "Supply Center still has a construction radius");
             var project = _visibleProjects[0];
             CheckSkirmish(PickProject(project.Position)?.Id == project.Id, "Construction ghost is not selectable");
             _sprites!.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons);
@@ -104,9 +103,37 @@ public partial class Sandbox
             CheckSkirmish(_cancelProject!.Visible && HandleRtsKey(new InputEventKey(), Key.Delete), "Selected project has no cancel action");
             _skirmishCheck = 3; _session!.StepOnce(); return;
         }
-        if (frame.Tick < 3) return;
-        CheckSkirmish(frame.ConstructionProjects.Length == 2 && _visibleProjects.Length == 1, "Cancel action did not remove the selected project");
-        GD.Print("OPENRTS_SKIRMISH:players, capture, construction, layout parity and camera focus passed");
+        var mine = frame.Poses.ToArray().Single(p => p.Id.Value == 5);
+        if (_skirmishCheck == 3)
+        {
+            if (frame.Tick < 3) return;
+            CheckSkirmish(frame.ConstructionProjects.Length == 2 && _visibleProjects.Length == 1, "Cancel action did not remove the selected project");
+            _selection.Change([new(2)], SelectionChange.Replace);
+            RefreshSelection();
+            ActivateCustom("claim-mine", false, false);
+            CenterCamera(new Vector2(mine.Current.X, mine.Current.Y) / WorldPosition.UnitsPerCell);
+            _pointer = Screen(mine);
+            UpdateRtsCursor();
+            CheckSkirmish(MinePreview() is { Id.Value: 5 } && _rtsOverlay!.CustomCursor == "build", "Mine preview or cursor is missing");
+            HandleCustomTarget(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, mine.Current, mine);
+            _skirmishCheck = 4;
+            _session!.StepOnce();
+            return;
+        }
+        if (_skirmishCheck == 4)
+        {
+            if (frame.Tick < 4) return;
+            CheckSkirmish(mine.Supply is { ProjectOwner: 1, ProjectWork: 0 } && _visibleProjects.Any(p => p.Id == mine.Id),
+                "Clicking the mine did not create an owner-visible blueprint on the existing entity");
+            _skirmishCheck = 5;
+            for (int i = 4; i < 650; i++) _session!.StepOnce();
+            return;
+        }
+        if (frame.Tick < 650) return;
+        CheckSkirmish(mine.Presentation.Owner == 1 && mine.Supply.ProjectRequired == 0 &&
+            frame.Poses.ToArray().Any(p => _catalog!.Units[p.UnitType].Supply?.Role == SupplyRole.Truck),
+            "Mine upgrade or truck production did not complete in the live match");
+        GD.Print("OPENRTS_SKIRMISH:players, capture, construction, supply truck, mine blueprint, layout parity and camera focus passed");
         _verificationDone = true;
         if (_capturePath is null || DisplayServer.GetName() == "headless") GetTree().Quit();
         else CaptureTerminal();
@@ -123,7 +150,7 @@ public partial class Sandbox
             var directory = Path.GetFullPath(_capturePath!);
             Directory.CreateDirectory(directory);
             _verificationDone = false;
-            _skirmishCheck = 4;
+            _skirmishCheck = 6;
             foreach (var name in new[] { "terminal-right.png", "terminal-bottom.png" })
             {
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);

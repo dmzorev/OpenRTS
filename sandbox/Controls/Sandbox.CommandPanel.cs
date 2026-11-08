@@ -156,10 +156,15 @@ public partial class Sandbox
         _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _sitePlacement = null; _pointerDown = false;
         if (ability is not null)
         {
-            if (right && ability.Kind == AbilityKind.Capture) { _notice = "Захват применяется вручную."; return; }
+            if (right && ability.Kind is AbilityKind.Capture or AbilityKind.ClaimMine) return;
             if (right)
             {
-                bool enabled = !ids.All(e => ability.Kind == AbilityKind.Build ? _selectionPoses[e].AutoBuild : AbilityPose(e, id)?.AutoCast == true);
+                bool enabled = !ids.All(e => ability.Kind switch
+                {
+                    AbilityKind.Build => _selectionPoses[e].AutoBuild,
+                    AbilityKind.Harvest => _selectionPoses[e].Supply.Automatic,
+                    _ => AbilityPose(e, id)?.AutoCast == true
+                });
                 _session.Submit(CommandKind.SetAutoCast, recipients: new(ids), action: id, enabled: enabled);
             }
             else _armedCustom = id;
@@ -270,6 +275,15 @@ public partial class Sandbox
                     auto = ids.Length > 0 && ids.All(id => _selectionPoses[id].AutoBuild);
                     if (!auto && ids.Any(id => _selectionPoses[id].AutoBuild)) status = " ±авто";
                     button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ — помочь своей стройке. ПКМ — автопомощь стройке в радиусе, пока нет приказов.";
+                }
+                else if (ability.Kind == AbilityKind.Harvest)
+                {
+                    auto = ids.Length > 0 && ids.All(id => _selectionPoses[id].Supply.Automatic);
+                    button.TooltipText = "Добыча [Q]\nЛКМ — назначить шахту или центр снабжения. ПКМ — переключить автоматическую добычу.";
+                }
+                else if (ability.Kind == AbilityKind.ClaimMine)
+                {
+                    button.TooltipText = $"Оборудовать шахту [{action.Hotkey}] · {SimulationWorld.MineProjectCost} кр.\nЛКМ — разместить проект поверх нейтральной шахты.";
                 }
                 else
                 {

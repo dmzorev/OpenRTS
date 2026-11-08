@@ -92,6 +92,7 @@ public sealed partial class SimulationWorld
     private void UpdateOrders()
     {
         _construction?.BeginOrders();
+        BeginSupplyOrders();
         EnsureMovementOrder();
         for (int orderIndex = 0; orderIndex < Count; orderIndex++)
         {
@@ -110,6 +111,12 @@ public sealed partial class SimulationWorld
                 entityOrders.OrderPhase = OrderPhase.Idle;
                 if (entityOrders.AutoBuild && !entityMotion.Moving) _construction!.AddIdleBuilder(entityIdentity.Id);
             }
+            if (_types[entityIdentity.Type].Supply?.Role == SupplyRole.Truck)
+            {
+                UpdateSupplyOrder(i);
+                if (!entityOrders.HasOrder) continue;
+            }
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.ClaimMine) { UpdateMineProject(i); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { _transport!.UpdateEnter(entity, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { _construction!.UpdateOrder(entity, entityOrders.ActiveOrder); continue; }

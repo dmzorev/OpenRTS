@@ -68,6 +68,7 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
+        writer.Write(25); // Unit definitions include the supply capability.
         if (_capture is not null && ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture))
         {
             writer.Write(24);

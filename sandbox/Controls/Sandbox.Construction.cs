@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Godot;
 using OpenRTS.Core;
+using OpenRTS.Core.Orders;
 using OpenRTS.Godot.Controls;
 
 public partial class Sandbox
@@ -12,6 +14,7 @@ public partial class Sandbox
     private long _visibleProjectsTick = -1;
     private uint _visibleProjectsOwner;
     private ConstructionProjectPose[] _visibleProjects = [];
+    private readonly List<ConstructionProjectPose> _visibleProjectBuffer = [];
     private NavigationGrid? _displayBaseGrid;
     private Button? _cancelProject;
 
@@ -25,8 +28,13 @@ public partial class Sandbox
         {
             _visibleProjectsTick = frame.Tick;
             _visibleProjectsOwner = _constructionViewer;
-            _visibleProjects = frame.ConstructionProjects.IsEmpty ? [] :
-                frame.ConstructionProjects.ToArray().Where(p => p.Owner == _constructionViewer).ToArray();
+            _visibleProjectBuffer.Clear();
+            foreach (var project in frame.ConstructionProjects)
+                if (project.Owner == _constructionViewer) _visibleProjectBuffer.Add(project);
+            foreach (var pose in frame.Poses)
+                if (pose.Supply.ProjectOwner == _constructionViewer && pose.Supply.ProjectRequired > 0)
+                    _visibleProjectBuffer.Add(new(pose.Id, _constructionViewer, pose.UnitType, pose.Current, false));
+            _visibleProjects = _visibleProjectBuffer.ToArray();
         }
         if (_selection.Count > 0 || !_visibleProjects.Any(p => p.Id == _selectedProject)) _selectedProject = default;
         RefreshProjectButton();
@@ -120,7 +128,7 @@ public partial class Sandbox
         if (_armedAction is not null || _armedCustom is not null || click.ButtonIndex != MouseButton.Right || click.CtrlPressed || click.AltPressed) return false;
 
         var project = PickProject(point);
-        if (project is { } plan && BuildersFor(plan.Owner, plan.Position) is { Length: > 0 } planners)
+        if (project is { } plan && _catalog!.Units[plan.UnitType].Supply?.Role != SupplyRole.Mine && BuildersFor(plan.Owner, plan.Position) is { Length: > 0 } planners)
         {
             _session!.Submit(CommandKind.BuildSite, recipients: new(planners), targetEntity: plan.Id, queued: click.ShiftPressed);
             return true;
@@ -133,9 +141,64 @@ public partial class Sandbox
         return false;
     }
 
+    private bool NeutralMine(EntityPose pose) => pose.Presentation.Owner == 0 &&
+        _catalog!.Units[pose.UnitType].Supply?.Role == SupplyRole.Mine &&
+        pose.Supply.Amount > 0 && pose.Supply.ProjectRequired == 0;
+
+    private bool HarvestTarget(EntityPose pose) => _catalog!.Units[pose.UnitType].Supply?.Role switch
+    {
+        SupplyRole.Mine => pose.Presentation.Owner == 0 || Ally(pose),
+        SupplyRole.Depot => Ally(pose) && !pose.Construction.Active,
+        _ => false
+    };
+
+    private AbilityDefinition? ContextSupplyAction(EntityPose pose)
+    {
+        if (_activeType < 0 || _activeRecipients.Length == 0) return null;
+        return _catalog!.Units[_activeType].Abilities.FirstOrDefault(a =>
+            a.Kind == AbilityKind.Harvest && HarvestTarget(pose) ||
+            a.Kind == AbilityKind.ClaimMine && NeutralMine(pose));
+    }
+
+    private bool ContextSupply(EntityPose target)
+    {
+        if (ContextSupplyAction(target) is not { } ability || ActiveRecipients() is not { Length: > 0 } ids)
+            return false;
+        _session!.Submit(CommandKind.UseAbility, recipients: new(ids), targetEntity: target.Id, action: ability.Id);
+        return true;
+    }
+
+    private ConstructionProjectPose? MinePreview()
+    {
+        if (_activeType < 0 || _activeRecipients.Length == 0 ||
+            _sitePlacement is not null || _placing || _armedAction is not null) return null;
+        var ability = _catalog!.Units[_activeType].Abilities.FirstOrDefault(a => a.Kind == AbilityKind.ClaimMine);
+        if (ability is null || _armedCustom is not null && _armedCustom != ability.Id ||
+            CommandPoint(_pointer) is not { } point || Pick(point) is not { } mine || !NeutralMine(mine)) return null;
+        return new(mine.Id, CommandOwner, mine.UnitType, mine.Current, false);
+    }
+
     private string ConstructionStatus()
     {
-        if (Selected() is not { } selected || !selected.Construction.Active) return "";
+        if (Selected() is not { } selected) return "";
+        var supply = selected.Supply;
+        if (_catalog!.Units[selected.UnitType].Supply?.Role == SupplyRole.Truck)
+        {
+            string phase = !supply.Automatic ? "автодобыча выкл." : selected.Order.Phase switch
+            {
+                OrderPhase.Engaging => "обслуживание",
+                OrderPhase.Waiting => "ожидание",
+                OrderPhase.Approaching => "в пути",
+                _ => "автодобыча"
+            };
+            return $"\nГруз {supply.Amount}/{supply.Capacity} · {phase}";
+        }
+        if (_catalog.Units[selected.UnitType].Supply?.Role == SupplyRole.Mine)
+        {
+            var project = supply.ProjectRequired > 0 ? $" · оборудование {100 * supply.ProjectWork / supply.ProjectRequired}%" : "";
+            return $"\nРуда {supply.Amount}/{supply.Capacity}{project}";
+        }
+        if (!selected.Construction.Active) return "";
         var progress = selected.Construction;
         return $"\nСтроится · {100.0 * progress.Work / progress.Required:0}%";
     }

@@ -2,5 +2,5 @@ version: 1
 id: construction
 credits: 5000
 units:
-  - {type: construction-yard, offset: [0, 0]}
-  - {type: construction-engineer, offset: [3584, 3072]}
+  - { type: supply-center, offset: [0, 0] }
+  - { type: construction-engineer, offset: [3584, 3072] }

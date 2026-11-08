@@ -22,6 +22,16 @@ public sealed partial class SimulationWorld
             int ability = AbilityIndex(eIdentity.Type, command.Action);
             if (ability < 0 || eOwnership.Owner == 0 || (ReadLocalConditions(e) & GameplayConditions.Constructing) != 0) continue;
             var action = _types[eIdentity.Type].Abilities[ability];
+            if (action.Kind == AbilityKind.Harvest)
+            {
+                issuedOrder |= ApplyHarvest(i, command);
+                continue;
+            }
+            if (action.Kind == AbilityKind.ClaimMine)
+            {
+                if (ApplyMineProject(i, command)) return;
+                continue;
+            }
             if (action.Kind == AbilityKind.Build)
             {
                 if (toggling) { eOrders.AutoBuild = command.Enabled; continue; }

@@ -66,8 +66,8 @@ Profiles:
     CombatGroup: patrol
     CaptureGroup: capture-team
     Recipes:
-      power-plant: [{Producer: construction-yard, Action: site-power}]
-      barracks: [{Producer: construction-yard, Action: site-barracks}]
+      power-plant: [{Producer: crane, Action: site-power}]
+      barracks: [{Producer: crane, Action: site-barracks}]
       rifleman: [{Producer: barracks, Action: rifleman}]
     CreditReserve: 300
     Timing:

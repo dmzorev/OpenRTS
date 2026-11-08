@@ -163,6 +163,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         else UpdateDirectMovement();
         UpdateWeapons();
         _construction?.Advance();
+        AdvanceSupply();
         _economy.AdvanceIncome(ExistingStorage, Tick);
         _production.Advance(ExistingStorage, StepCancellation);
         UpdatePresentation();
@@ -228,11 +229,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (type.WeaponDisableVisualMask != 0 && WeaponsDisabled(entityIdentity.Id))
                 states |= type.WeaponDisableVisualMask;
             var rally = ProductionSystem.Project(entity, type, ref states);
+            var supply = ReadSupply(entity, type, ref states);
             var capture = _capture?.GetProgress(entity, entityOrders) ?? default;
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -277,6 +279,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 WritePresentation(writer, entity); WriteOrders(writer, entity); WriteWeapons(writer, entity);
                 TransportSystem.WriteEntityState(_transport, writer, entity);
                 ConstructionSystem.WriteFoundation(_construction, writer, entity);
+                WriteSupply(writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -321,6 +324,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _production.Apply(command, recipients);
             return;
         }
+        if (command.Kind == CommandKind.CancelConstruction && TryCancelMineProject(command)) return;
         if (command.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite or CommandKind.CancelConstruction)
         {
             ConstructionSystem.Apply(_construction, this, command);
@@ -408,6 +412,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         index = _indices[id];
         _production.BeforeRemove(_entityHandles[index]);
         _construction?.BeforeRemove(_entityHandles[index]);
+        RemoveSupply(_entityHandles[index], actor.Get<EntityIdentity>());
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _economy.InvalidatePower();
@@ -475,6 +480,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             initialize?.Invoke(state);
             _economy.Initialize(state, type.Economy, owner, Tick);
             _capture?.Initialize(state, type);
+            if (type.Supply is not null) InitializeSupply(state, id, type);
         }
         _economy.InvalidatePower();
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);

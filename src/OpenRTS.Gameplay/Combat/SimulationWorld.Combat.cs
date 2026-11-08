@@ -212,7 +212,9 @@ public sealed partial class SimulationWorld
             if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Damaged, id, entitySpatial.Position, entityIdentity.Type, Amount: before - health.Current));
             if (health.Current == 0)
             {
-                if (_types[entityIdentity.Type].Destruction == DestructionPolicy.Neutralize) { health.Current = 1;
+                if (_types[entityIdentity.Type].Destruction == DestructionPolicy.Neutralize)
+                {
+                    health.Current = _types[entityIdentity.Type].Supply?.Role == SupplyRole.Mine ? _types[entityIdentity.Type].MaxHealth : 1;
                     if (_transport?.HasPassengers(entity) == true) _disabledTransports.Add(id);
                     ChangeOwner(i, 0); }
                 else _dead.Add(id);

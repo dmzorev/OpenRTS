@@ -272,7 +272,7 @@ public partial class Sandbox : Node3D
                     _ => _notice
                 };
             }
-            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects);
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects, MinePreview());
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             UpdateTerminal(frame, alpha);
             if (_verifyAiMatch) { VerifyAiMatch(frame); return; }

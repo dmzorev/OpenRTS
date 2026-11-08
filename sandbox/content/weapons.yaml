@@ -73,3 +73,7 @@ sniper-rifle:
     PassengerDamage: 110
     PassengerDamageSpill: false
     Versus: {Living: 100, Mechanical: 0, Building: 0}
+
+crane-repair:
+  Inherits: repair
+  Weapon: {Range: 8192, AcquireRange: 8192, Versus: {Mechanical: 0}}

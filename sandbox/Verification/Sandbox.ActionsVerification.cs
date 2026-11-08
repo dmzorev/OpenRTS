@@ -58,11 +58,11 @@ public partial class Sandbox
                 Check(poses.Single(p => p.Id.Value == 2).HasRally, "RMB did not set building rally");
                 await CaptureActions("actions-production-queue.png");
                 ClickStack("rifleman", false, false); ClickStack("rifleman", false, true); ClickStack("rocketeer", true, false);
-                ClickAction("rifleman"); SelectTypes(5); ClickAction("engineer"); ClickAction("site-power");
+                ClickAction("rifleman"); SelectTypes(5); ClickAction("engineer"); SelectTypes(16); ClickAction("site-power");
                 var shift = new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, ShiftPressed = true };
-                HandleConstructionClick(shift, new(19 * 1024 + 512, 21 * 1024), null);
+                HandleConstructionClick(shift, new(23 * 1024, 30 * 1024), null);
                 Check(_sitePlacement is not null, "Shift left construction placement mode");
-                HandleConstructionClick(shift, new(9 * 1024 + 512, 24 * 1024), null);
+                HandleConstructionClick(shift, new(23 * 1024, 28 * 1024), null);
                 Check(_sitePlacement is not null, "Second Shift click left placement mode");
                 _actionsCheck = 3; Steps(1); return;
             }
@@ -72,8 +72,8 @@ public partial class Sandbox
                     "Stack removal or engineer queue failed");
                 _firstSite = poses.Single(p => p.Construction.Active).Id;
                 _secondSite = lease.ConstructionProjects.ToArray().Single().Id;
-                Check(_firstSite.Value < _secondSite.Value && poses.Single(p => p.Id.Value == 5).Order.QueuedCount == 1,
-                    "The yard did not keep its second Shift placement in the queue");
+                Check(_firstSite.Value < _secondSite.Value && poses.Single(p => p.Id.Value == 16).Order.QueuedCount == 1,
+                    "The engineer did not keep the second Shift placement in the queue");
                 _actionsCheck = 4; Steps(130); return;
             }
             if (_actionsCheck == 4 && tick >= 137)
@@ -81,11 +81,12 @@ public partial class Sandbox
                 var rally = poses.Single(p => p.Id.Value == 2).Rally;
                 Check(poses.Any(p => p.Id.Value > 28 && p.Order.Destination == rally), "Unit production/rally failed");
                 Check(!poses.Single(p => p.Id == _firstSite).Construction.Active &&
-                    poses.Single(p => p.Id == _secondSite).Construction.Active, "The second site did not follow the first");
+                    (poses.Any(p => p.Id == _secondSite && p.Construction.Active) ||
+                        lease.ConstructionProjects.ToArray().Any(p => p.Id == _secondSite)), "The second site did not follow the first");
                 await CaptureActions("actions-building-started.png");
-                _actionsCheck = 6; Steps(130); return;
+                _actionsCheck = 6; Steps(160); return;
             }
-            if (_actionsCheck == 6 && tick >= 267)
+            if (_actionsCheck == 6 && tick >= 297)
             {
                 Check(!poses.Single(p => p.Id == _secondSite).Construction.Active, "The second site did not complete");
                 await CaptureActions("actions-building-complete.png");
@@ -96,7 +97,7 @@ public partial class Sandbox
                 SpawnTransportFixture();
                 _actionsCheck = 7; Steps(1); return;
             }
-            if (_actionsCheck == 7 && tick >= 268)
+            if (_actionsCheck == 7 && tick >= 298)
             {
                 for (int i = 0; i < 2; i++)
                 {
@@ -110,7 +111,7 @@ public partial class Sandbox
                 }
                 _actionsCheck = 8; Steps(1); return;
             }
-            if (_actionsCheck == 8 && tick >= 269)
+            if (_actionsCheck == 8 && tick >= 299)
             {
                 Check(_storedPoses.Count == 2 && _loadedTransports.Count == 2, "Contextual click did not board both passengers");
                 SelectTypes(_loadedTransports.Select(id => id.Value).ToArray());
@@ -122,7 +123,7 @@ public partial class Sandbox
                 button.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left, DoubleClick = true });
                 _actionsCheck = 9; Steps(1); return;
             }
-            if (_actionsCheck == 9 && tick >= 270)
+            if (_actionsCheck == 9 && tick >= 300)
             {
                 Check(_storedPoses.Count == 0 && _session!.GetCommandLog().Last().Recipients?.Count == 2, "Double click did not unload all selected carriers");
                 GD.Print("OPENRTS_ACTIONS:PASS command panel, production, contextual boarding and multi-transport unload");

@@ -46,7 +46,7 @@ public partial class Sandbox
         {
             int slot = owner switch { 1 => 1, 2 => 0, _ => 2 };
             var team = poses.Where(p => p.Presentation.Owner == owner).ToArray();
-            CheckSkirmish(team.Length == 3 && team.Any(p => _catalog!.Units[p.UnitType].Id == "construction-yard" &&
+            CheckSkirmish(team.Length == 3 && team.Any(p => _catalog!.Units[p.UnitType].Id == "crane" &&
                 p.Current == map.StartPosition(map.Slots[slot])) && team.Any(p => _catalog!.Units[p.UnitType].Id == "rocketeer"),
                 "The chosen starting position or mode was ignored.");
         }

@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for shared capture, construction autocast and the on-site production journal.
+    // Rebased for supply state in frame poses and the new skirmish building and production content.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "BF2EC3A5339CB132646141C910641750D4CD76DEC2687792A5B888B4362CF698",
-        ["navigation"] = "92F1BFDEBB153A5E345B5E6FD0ED42DCE5721599B52E4ED757F2366E0E7159BC",
-        ["combat"] = "9ABA3AE80C78100ADC1815B8169214B77442275A3B5143E12A12D84909FD0ED2",
-        ["buildings"] = "0D6ED82DB689BA29773C8C3ABFC530792AE97BB31D0C74ADF193037C9696521B",
-        ["production"] = "BE9D4D50DE4BDFD44FFCBC27216CAAD82D07C3E8E31AD9A307FC5CA34A211733"
+        ["direct"] = "5FFFFEBC309F1BF9A49738880F3AA4E07D1C1A0E0546A7103EBFC6462DA9AE32",
+        ["navigation"] = "22AC8D239C505915827BF9A15939BFB6190AA3DCF6632886DD14647A13EA5E8E",
+        ["combat"] = "06E77A5442272575F5EE71E049CBF1DD8EF62230DEEA12985BFB5AB92E69C182",
+        ["buildings"] = "3853E82F5ADD895E8DDD51B27CD64A213CEFE0462F785AB669AF7A203A278EC2",
+        ["production"] = "AAE6232D73CABD180775C332EEE3EDE4FCB89A446D73D52854D9741CDF70362D"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };
