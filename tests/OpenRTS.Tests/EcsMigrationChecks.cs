@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Includes the capture target projection in the entity snapshots.
+    // Includes capture target progress in entity poses and payment balances in task poses.
     private static readonly Dictionary<string, string> Expected = new()
     {
         ["direct"] = "962D3C761D446CE364B5C973C1B0E1952E072C3D86D002E2CDD791BB7844B942",
         ["navigation"] = "022DA922642B3C114AAFDD4284A9F22FCE0935CD2692DFE717DEF41DBCCA7F89",
         ["combat"] = "48AFA807D495281763991701539BC6287C64E12DB2FD8B03AA85FF95577D8348",
         ["buildings"] = "9EC36FABC652B31DBC7FB5D5C4397F6F422333AB58432DCA5E10E91CCFD228E2",
-        ["production"] = "74D6A9867FB34FDF6447B63C17738B7E02EDE9C9B5CC40E0F51920A85A640FED"
+        ["production"] = "104D861832E78C8BBFAB5C2F5E79100E4A0725AD9741CEE848A2BDED246DFB08"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

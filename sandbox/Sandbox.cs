@@ -56,6 +56,7 @@ public partial class Sandbox : Node3D
                 if (arg == "--skirmish") { _skirmish = _buildings = _showcase = true; continue; }
                 if (arg == "--verify-match-setup") { _verifyMatchSetup = true; continue; }
                 if (arg == "--verify-ai-match") { _verifyAiMatch = _verifyMatchSetup = true; continue; }
+                if (arg.StartsWith("--ai-profile=", StringComparison.Ordinal) && arg.Length > 13) { _aiProfileId = arg[13..]; continue; }
                 if (arg == "--verify-skirmish") { _verifySkirmish = _skirmish = _buildings = _showcase = true; _paused = true; continue; }
                 if (arg == "--buildings") { _buildings = _showcase = true; continue; }
                 if (arg == "--verify-buildings") { _verifyBuildings = _buildings = _showcase = true; _verifySimulation = true; _ticks = BuildingScenario.VerificationTicks; continue; }
@@ -72,7 +73,7 @@ public partial class Sandbox : Node3D
                 if (arg.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(arg[8..], out value) && value is >= 1 and <= 1000000) { _ticks = value; continue; }
                 if (arg.StartsWith("--fps=", StringComparison.Ordinal) && int.TryParse(arg[6..], out value) && value is >= 1 and <= 240) { Engine.MaxFps = value; continue; }
                 if (arg.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(arg[10..], out value) && value is >= 1 and <= 64) { _workers = value; continue; }
-                throw new ArgumentException("Параметры: --skirmish, --verify-match-setup, --verify-ai-match, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
+                throw new ArgumentException("Параметры: --skirmish, --verify-match-setup, --verify-ai-match, --ai-profile=id, --map=path, --start-set=path, --buildings, --verify-buildings, --verify-actions, --verify-production, --showcase, --verify-presentation, --capture=path, --verify, --verify-simulation, --verify-controls, --realtime, --navigation, --workers=1..64, --reverse-jobs, --count=1..1000000 (лимит диагностического стенда), --ticks=1..1000000, --fps=1..240.");
             }
             if (mapPath is not null && (_showcase || _navigation || _verifyControls || verify))
                 throw new ArgumentException("--map выбирает отдельный сценарий.");
@@ -80,6 +81,8 @@ public partial class Sandbox : Node3D
             bool defaultSkirmish = !_navigation && !_verifySimulation && !_verifyControls && !verify && !_showcase &&
                 !Array.Exists(OS.GetCmdlineUserArgs(), a => a.StartsWith("--count=", StringComparison.Ordinal));
             bool showSetup = defaultSkirmish && startSetPath is null;
+            if (_aiProfileId is not null && !showSetup)
+                throw new ArgumentException("--ai-profile требует запуск через экран настройки.");
             if (_verifyMatchSetup && !showSetup)
                 throw new ArgumentException("--verify-match-setup требует запуск через экран настройки.");
             if (defaultSkirmish) _skirmish = _buildings = _showcase = true;

@@ -149,10 +149,11 @@ def main():
         raise RuntimeError("Match setup UI failed:\n" + setup.stdout + setup.stderr)
     print("PASS match setup UI and selected map/mode/player count/start assignments", flush=True)
 
-    ai = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-ai-match"])
-    if "ERROR:" in ai.stderr or "OPENRTS_AI_MATCH:PASS" not in ai.stdout:
-        raise RuntimeError("AI match failed:\n" + ai.stdout + ai.stderr)
-    print("PASS AI match setup, command ownership, pause and journal replay", flush=True)
+    for profile in ("infantry-skirmish", "mechanized-skirmish"):
+        ai = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-ai-match", f"--ai-profile={profile}"])
+        if "ERROR:" in ai.stderr or "OPENRTS_AI_MATCH:PASS" not in ai.stdout:
+            raise RuntimeError(f"AI match {profile} failed:\n" + ai.stdout + ai.stderr)
+        print(f"PASS AI match {profile}: setup, command ownership, pause and journal replay", flush=True)
 
     for file, count, extra in [
         ("fixture.yaml", 3, []),

@@ -38,9 +38,8 @@ public static class SkirmishAiCatalog
             int queue = definition.TaskQueues.ToList().FindIndex(q => q.Id == action.Queue);
             var build = action.Override ?? catalog.Units[product].Build;
             if (build is null || build.Kind != kind || build.Ticks < 2 ||
-                (action.OnSite ? kind != ProductionKind.PlaceBuilding :
-                    queue < 0 || definition.TaskQueues[queue].Payment != PaymentPolicy.Upfront))
-                throw Error(field, "Expected on-site construction or an Upfront queue of the specified kind, with at least two ticks of work.");
+                (action.OnSite ? kind != ProductionKind.PlaceBuilding : queue < 0))
+                throw Error(field, "Expected on-site construction or a queue of the specified kind, with at least two ticks of work.");
             return new(producer, product, queue, action.Id, build.Cost, action.OnSite);
         }
 

@@ -7,7 +7,7 @@ namespace OpenRTS.AI;
 /// <summary>Skirmish policy for an exclusively controlled player. Call once per completed world tick.</summary>
 public sealed class SkirmishAi
 {
-    public const int PolicyVersion = 2;
+    public const int PolicyVersion = 3;
 
     private readonly SkirmishAiProfile _profile;
     private readonly IReadOnlyList<UnitDefinition> _types;
@@ -130,7 +130,8 @@ public sealed class SkirmishAi
         foreach (long finished in _placementAttempts.Keys.Where(id => !_tasks.Any(t => t.Id == id)).ToArray())
             _placementAttempts.Remove(finished);
 
-        long credits = _players.First(p => p.Id == _player).Credits - _profile.CreditReserve -
+        long unpaidTasks = _tasks.Where(t => t.Payer == _player).Sum(t => (long)t.UnpaidCost);
+        long credits = _players.First(p => p.Id == _player).Credits - _profile.CreditReserve - unpaidTasks -
             _projects.Where(p => p.Owner == _player).Sum(p => (long)p.UnpaidCost);
         var plannedQueues = new HashSet<(EntityId, int)>();
         bool IssueProduction(AiRecipe recipe)
@@ -138,6 +139,7 @@ public sealed class SkirmishAi
             foreach (var producer in own)
             {
                 if (producer.UnitType != recipe.ProducerType || producer.Construction.Active) continue;
+                if (!_types[producer.UnitType].ProductEnabled(recipe.Action, producer.Upgrade.Completed)) continue;
                 var key = (producer.Id, recipe.Queue);
                 if (plannedQueues.Contains(key)) continue;
                 if (_tasks.Any(t => t.Producer == producer.Id && t.Queue == recipe.Queue)) continue;
@@ -212,6 +214,7 @@ public sealed class SkirmishAi
             _productionStatus += ready ? " · waiting for placement retry" : Pending(opening) > 0 ? " · producing" :
                 credits < recipe.Cost ? " · waiting for credits" : " · waiting for producer";
         }
+        if (unpaidTasks > 0) _productionStatus += $" · reserved for tasks: {unpaidTasks}";
         return credits;
 
         void PlaceReady(AiRecipe recipe)

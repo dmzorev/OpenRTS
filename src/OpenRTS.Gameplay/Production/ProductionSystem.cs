@@ -336,7 +336,8 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
                 {
                     var recipe = recipes[type, task.Product];
                     destination[at++] = new(id, q, task.Id, task.Product, recipe.UnitType, task.Progress,
-                        recipe.Build.Ticks, recipe.Build.Cost, task.Repeat, task.Ready);
+                        recipe.Build.Ticks, recipe.Build.Cost, task.Repeat, task.Ready)
+                    { Payer = task.Payer, UnpaidCost = recipe.Build.Cost - task.Paid };
                 }
         }
     }

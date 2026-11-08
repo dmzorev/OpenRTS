@@ -8,6 +8,7 @@ internal static class SkirmishAiScenario
 {
     public const int DefaultTicks = 1800;
     public const string ProfileId = "infantry-skirmish";
+    public const string MechanizedProfileId = "mechanized-skirmish";
 
     public static SkirmishAi Create(UnitCatalog catalog, SkirmishAiProfile profile, uint player, bool blockFirstSite = false, string? startSlot = null)
     {

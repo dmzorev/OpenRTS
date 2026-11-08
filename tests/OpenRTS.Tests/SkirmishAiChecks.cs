@@ -121,6 +121,80 @@ internal static class SkirmishAiChecks
                 "The bot committed credits needed to start the unpaid building.");
         });
 
+        test("AI2 reserves deferred queue balances and releases them after cancellation", () =>
+        {
+            const uint player = 2;
+            foreach (var payment in new[] { PaymentPolicy.Progressive, PaymentPolicy.OnCompletion })
+            {
+                var buildings = Read("content/buildings.yaml");
+                var edited = buildings.Text.Replace("Capacity: 20,\n          Payment: Upfront", $"Capacity: 20,\n          Payment: {payment}");
+                var definitions = UnitCatalog.Load([Read("content/units.yaml"), buildings with { Text = edited }],
+                    LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+                int Type(string id) => definitions.Units.ToList().FindIndex(u => u.Id == id);
+                int barracksType = Type("barracks"), powerType = Type("power-plant");
+                NavigationChecks.Check(definitions.Units[barracksType].TaskQueues.Single().Payment == payment,
+                    "Fixture did not load the intended payment policy.");
+                var frequent = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, definitions, profile.Id);
+                int rifleCost = frequent.Group.Single().Recipe.Cost;
+                int truckCost = frequent.Supply!.Truck.Cost;
+                var start = Read(MapScenario.DefaultStartSet);
+                foreach (int surplus in new[] { -1, 0 })
+                {
+                    int initial = frequent.CreditReserve + rifleCost + truckCost + surplus;
+                    var match = MapScenario.Load(definitions, path => path == MapScenario.DefaultStartSet
+                        ? start with { Text = start.Text.Replace("credits: 5000", $"credits: {initial}") } : Read(path), MapScenario.DefaultMap);
+                    using var world = match.CreateWorld();
+                    world.AddInitialUnit(powerType, new(59904, 45056), player);
+                    var barracks = world.AddInitialUnit(barracksType, new(59392, 37376), player);
+                    var ai = SkirmishAiScenario.Create(definitions, frequent, player);
+                    ai.Plan(world);
+                    world.Step([new(1, 0, 1, CommandKind.EnqueueTask, barracks, Action: "rifleman")]);
+                    var tasks = new TaskPose[world.TaskCount];
+                    var players = new PlayerPose[world.PlayerCount];
+                    world.CopyTaskPoses(tasks);
+                    world.CopyPlayers(players);
+                    var task = tasks.Single();
+                    long paid = initial - players.Single(p => p.Id == player).Credits;
+                    NavigationChecks.Check(task.Payer == player && task.UnpaidCost == rifleCost - paid &&
+                        (payment == PaymentPolicy.Progressive ? paid > 0 : paid == 0), $"{payment} published the wrong payment balance.");
+                    var planned = ai.Plan(world);
+                    NavigationChecks.Check(planned.Any(c => c.Action == "truck") == (surplus == 0),
+                        $"{payment} did not respect the exact credit boundary.");
+                    if (surplus == 0) continue;
+                    world.Step([new(2, 0, 1, CommandKind.CancelTasks, barracks, Action: "rifleman", TaskId: task.Id)]);
+                    NavigationChecks.Check(world.TaskCount == 0 && ai.Plan(world).Any(c => c.Action == "truck"),
+                        $"{payment} kept reserving a cancelled task.");
+                }
+            }
+        });
+
+        test("AI2 builds a factory and sends progressively paid vehicles with the infantry", () =>
+        {
+            var mechanized = SkirmishAiCatalog.Load(source, catalog, SkirmishAiScenario.MechanizedProfileId);
+            int vehicle = mechanized.Group.Single(m => catalog.Units[m.Recipe.ProductType].Id == "apc-mg").Recipe.ProductType;
+            var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
+            for (uint player = 1; player <= 2; player++)
+            {
+                using var world = map.CreateWorld(player == 1 ? 1 : 4, restrictPlayerCommands: true);
+                var ai = SkirmishAiScenario.Create(catalog, mechanized, player);
+                var produced = new HashSet<EntityId>();
+                bool deployed = false;
+                SkirmishAiScenario.Run(world, ai, 3200, state =>
+                {
+                    foreach (var e in state.Events)
+                        if (e.Kind == WorldEventKind.Produced)
+                        {
+                            var unit = Poses(state).SingleOrDefault(p => p.Id == e.TargetEntity);
+                            if (unit.UnitType == vehicle && unit.Presentation.Owner == player) produced.Add(unit.Id);
+                        }
+                    foreach (var command in state.AppliedCommands)
+                        if (command.Kind == CommandKind.AttackMove && command.Recipients is { } recipients)
+                            foreach (var id in recipients.Ids) deployed |= produced.Contains(id);
+                });
+                NavigationChecks.Check(produced.Count >= 2 && deployed, $"Player {player} did not produce and deploy two vehicles.");
+            }
+        });
+
         test("AI2 recovers its crew and freight, resumes the blueprint and upgrades a serviced mine", () =>
         {
             const uint player = 2;

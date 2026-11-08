@@ -5,7 +5,6 @@ using OpenRTS.Godot.Controls;
 public partial class Sandbox
 {
     private int _aiMatchStage;
-    private const int AiVerificationTicks = 550;
 
     private void SelectAiVerificationMatch()
     {
@@ -30,10 +29,13 @@ public partial class Sandbox
     private void VerifyAiMatch(FrameExchange.FrameLease frame)
     {
         var session = _session!;
+        bool mechanized = _aiProfileId == SkirmishAiScenario.MechanizedProfileId;
+        int verificationTicks = mechanized ? 1000 : 550;
         if (_aiMatchStage == 0)
         {
             CheckSkirmish(session.IsPaused && frame.Tick == 0 && session.GetCommandLog().Length == 0 &&
                 _opponent?.Diagnostics == "start", "AI planned while the match was paused at tick zero.");
+            CheckSkirmish(_opponentProfile?.Id == (_aiProfileId ?? SkirmishAiScenario.ProfileId), "The selected AI profile was not loaded.");
             var yards = frame.Poses.ToArray().Where(p => _catalog!.Units[p.UnitType].Id == "supply-center").ToArray();
             var own = yards.Single(p => p.Presentation.Owner == 1);
             var enemy = yards.Single(p => p.Presentation.Owner == 2);
@@ -65,17 +67,20 @@ public partial class Sandbox
                 first.Count(c => c.Issuer == 1) == 2 && first.Count(c => c.Issuer == 2) == 1,
                 "Live and AI inputs were not journaled with separate issuers.");
             _aiMatchStage = 2;
-            for (int i = 1; i < AiVerificationTicks; i++) session.StepOnce();
+            for (int i = 1; i < verificationTicks; i++) session.StepOnce();
             return;
         }
 
-        if (frame.Tick < AiVerificationTicks) return;
-        CheckSkirmish(frame.Tick == AiVerificationTicks && session.IsPaused, "AI advanced past the requested paused steps.");
+        if (frame.Tick < verificationTicks) return;
+        CheckSkirmish(frame.Tick == verificationTicks && session.IsPaused, "AI advanced past the requested paused steps.");
         CheckSkirmish(frame.Poses.ToArray().Any(p => p.Presentation.Owner == 2 && p.Current.X < 40000 &&
             _catalog!.Units[p.UnitType].Id == "barracks"), "The bot did not build from its assigned western start.");
+        if (mechanized)
+            CheckSkirmish(frame.Poses.ToArray().Count(p => p.Presentation.Owner == 2 && _catalog!.Units[p.UnitType].Id == "apc-mg") == 2,
+                "The mechanized profile did not produce its two APCs.");
         var log = session.GetCommandLog();
         using var replay = _mapMatch!.CreateWorld(1, restrictPlayerCommands: true);
-        DiagnosticScenario.Run(replay, AiVerificationTicks, log);
+        DiagnosticScenario.Run(replay, verificationTicks, log);
         var frames = new FrameExchange();
         frames.TryPublish(replay);
         using var verified = frames.AcquireLatest()!;

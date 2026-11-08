@@ -18,3 +18,14 @@ infantry-skirmish:
   MacroIntervalTicks: 25
   TacticsIntervalTicks: 5
   BlockedGoalTicks: 250
+
+mechanized-skirmish:
+  Inherits: infantry-skirmish
+  Opening: [power-plant, barracks, factory]
+  Buildings:
+    factory: 1
+  Group:
+    apc-mg: {Min: 1, Target: 2}
+  Recipes:
+    factory: {Producer: construction-engineer, Action: site-factory}
+    apc-mg: {Producer: factory, Action: apc}

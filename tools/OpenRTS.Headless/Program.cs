@@ -9,7 +9,7 @@ using OpenRTS.Core;
 try
 {
     var path = "sandbox/content/units.yaml";
-    string? mapPath = null, startSetPath = null, aiConfig = null;
+    string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null;
     bool skirmishAi = false, ticksSpecified = false;
     uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
@@ -20,6 +20,7 @@ try
         else if (argument == "--skirmish-ai") { skirmishAi = simulate = true; }
         else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is 1 or 2) aiPlayer = player;
         else if (argument.StartsWith("--ai-config=", StringComparison.Ordinal) && argument.Length > 12) aiConfig = argument[12..];
+        else if (argument.StartsWith("--ai-profile=", StringComparison.Ordinal) && argument.Length > 13) aiProfile = argument[13..];
         else if (argument.StartsWith("--map=", StringComparison.Ordinal) && argument.Length > 6) { mapPath = argument[6..]; simulate = true; }
         else if (argument.StartsWith("--start-set=", StringComparison.Ordinal) && argument.Length > 12) { startSetPath = argument[12..]; simulate = true; }
         else if (argument == "--ecs-benchmark") ecsBenchmark = true;
@@ -35,12 +36,12 @@ try
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) { ticks = value; ticksSpecified = true; }
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1|2] [--ai-config=path] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1|2] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
     if (skirmishAi && (skirmish || mapPath is not null || startSetPath is not null))
         throw new ArgumentException("AI0 uses the default skirmish map and construction starting set.");
-    if (!skirmishAi && (aiConfig is not null || aiPlayer.HasValue))
-        throw new ArgumentException("--ai-player and --ai-config require --skirmish-ai.");
+    if (!skirmishAi && (aiConfig is not null || aiPlayer.HasValue || aiProfile is not null))
+        throw new ArgumentException("--ai-player, --ai-config and --ai-profile require --skirmish-ai.");
     if (skirmishAi && !ticksSpecified) ticks = SkirmishAiScenario.DefaultTicks;
     bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
@@ -74,7 +75,7 @@ try
         {
             uint player = aiPlayer ?? 2;
             string config = aiConfig ?? Path.Combine(Path.GetDirectoryName(path)!, "skirmish-ai.yaml");
-            var profile = SkirmishAiCatalog.Load(new(config, File.ReadAllText(config)), catalog, SkirmishAiScenario.ProfileId);
+            var profile = SkirmishAiCatalog.Load(new(config, File.ReadAllText(config)), catalog, aiProfile ?? SkirmishAiScenario.ProfileId);
             var ai = SkirmishAiScenario.Create(catalog, profile, player);
             int issued = 0, attacks = 0, completedBuildings = 0, trained = 0, captured = 0, trucks = 0, upgradedMines = 0;
             EntityPose[] poses = [];

@@ -19,4 +19,9 @@ public sealed record TaskQueueDefinition
     }
 }
 
-public readonly record struct TaskPose(EntityId Producer, int Queue, long Id, int Product, int UnitType, int Progress, int Duration, int Cost, bool Repeat, bool Ready);
+public readonly record struct TaskPose(EntityId Producer, int Queue, long Id, int Product, int UnitType, int Progress, int Duration, int Cost, bool Repeat, bool Ready)
+{
+    public uint Payer { get; init; }
+    /// <summary>Total remaining payment, including amounts due on later ticks.</summary>
+    public int UnpaidCost { get; init; }
+}

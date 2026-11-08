@@ -10,6 +10,7 @@ public partial class Sandbox
     private MatchSetupScreen? _matchSetup;
     private bool _startedFromSetup, _verifyMatchSetup;
     private bool _verifyAiMatch;
+    private string? _aiProfileId;
     private SkirmishAiProfile? _opponentProfile;
     private SkirmishAi? _opponent;
     private string? _opponentSlot;
@@ -43,7 +44,7 @@ public partial class Sandbox
         try
         {
             _mapMatch = MapScenario.Prepare(map, set, slots);
-            _opponentProfile = aiOpponent ? SkirmishAiCatalog.Load(ReadMapSource("content/skirmish-ai.yaml"), _catalog!, SkirmishAiScenario.ProfileId) : null;
+            _opponentProfile = aiOpponent ? SkirmishAiCatalog.Load(ReadMapSource("content/skirmish-ai.yaml"), _catalog!, _aiProfileId ?? SkirmishAiScenario.ProfileId) : null;
             _opponentSlot = aiOpponent ? slots[1] : null;
             _count = _mapMatch.UnitCount;
             _matchSetup!.SetLaunching(true, "Подготовка поля боя…");
