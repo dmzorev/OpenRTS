@@ -76,7 +76,7 @@ try
             string config = aiConfig ?? Path.Combine(Path.GetDirectoryName(path)!, "skirmish-ai.yaml");
             var profile = SkirmishAiCatalog.Load(new(config, File.ReadAllText(config)), catalog, SkirmishAiScenario.ProfileId);
             var ai = SkirmishAiScenario.Create(catalog, profile, player);
-            int issued = 0, attacks = 0, placed = 0, trained = 0, captured = 0;
+            int issued = 0, attacks = 0, completedBuildings = 0, trained = 0, captured = 0, trucks = 0, upgradedMines = 0;
             EntityPose[] poses = [];
             report = SkirmishAiScenario.Run(world, ai, ticks, state =>
             {
@@ -85,15 +85,20 @@ try
                     if (command.Kind == CommandKind.AttackMove) attacks++;
                 foreach (var value in state.Events)
                 {
-                    if (value.Kind == WorldEventKind.OwnerChanged && value.Owner == player) captured++;
-                    if (value.Kind == WorldEventKind.Produced)
+                    if (value.Kind == WorldEventKind.OwnerChanged && value.Owner == player &&
+                        catalog.Units[value.UnitType].Capturable is not null) captured++;
+                    if (value.Kind is WorldEventKind.Produced or WorldEventKind.ConstructionCompleted)
                     {
                         Array.Resize(ref poses, state.Count);
                         state.CopyPoses(poses);
-                        var unit = Array.Find(poses, p => p.Id == value.TargetEntity && p.Presentation.Owner == player);
+                        var id = value.Kind == WorldEventKind.Produced ? value.TargetEntity : value.Entity;
+                        var unit = Array.Find(poses, p => p.Id == id && p.Presentation.Owner == player);
                         if (unit.Id == default) continue;
-                        if (catalog.Units[unit.UnitType].Footprint is null) trained++;
-                        else placed++;
+                        var definition = catalog.Units[unit.UnitType];
+                        if (definition.Supply?.Role == SupplyRole.Mine && unit.Upgrade.Completed is not null) upgradedMines++;
+                        else if (definition.Supply?.Role == SupplyRole.Truck) trucks++;
+                        else if (definition.Footprint is not null && unit.Upgrade.Completed is null) completedBuildings++;
+                        else if (profile.Group.Any(member => member.Recipe.ProductType == unit.UnitType)) trained++;
                     }
                 }
             });
@@ -101,7 +106,8 @@ try
             {
                 Player = player, Profile = profile.Id, SkirmishAi.PolicyVersion,
                 ProfileFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(profile))),
-                Commands = issued, Attacks = attacks, Buildings = placed, Trained = trained, Captured = captured
+                Commands = issued, Attacks = attacks, Buildings = completedBuildings, Trained = trained, Captured = captured,
+                SupplyTrucks = trucks, UpgradedMines = upgradedMines
             }));
         }
         else if (benchmark)

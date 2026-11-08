@@ -65,11 +65,25 @@ public static class SkirmishAiCatalog
         }).ToArray();
         if (group.All(g => g.Minimum == 0) || group.Sum(g => g.Target) > 32)
             throw Error("Group", "The group requires a positive minimum and a total target of at most 32.");
+        AiSupply? supply = null;
+        if (data.Supply is { } logistics)
+        {
+            var truck = Recipe(logistics.Truck, ProductionKind.Unit);
+            var definition = catalog.Units[truck.ProductType];
+            if (logistics.Target is < 1 or > 8 || data.Group.ContainsKey(logistics.Truck) ||
+                definition.Supply?.Role != SupplyRole.Truck || !definition.Abilities.Any(a => a.Kind == AbilityKind.Harvest && a.AutoCast) ||
+                catalog.Units[truck.ProducerType].Supply?.Role != SupplyRole.Depot)
+                throw Error("Supply", "Expected 1..8 automatic supply trucks from a depot, outside the combat group.");
+            if (logistics.ImproveMines && catalog.Units[engineer].ConstructionRange == 0)
+                throw Error("Supply.ImproveMines", "Mine upgrades require an engineer with construction range.");
+            supply = new(truck, logistics.Target, logistics.ImproveMines);
+        }
+        AiRecipe? replacement = data.Recipes.ContainsKey(data.Capture.Unit) ? Recipe(data.Capture.Unit, ProductionKind.Unit) : null;
         foreach (string name in data.Recipes.Keys)
-            if (!data.Buildings.ContainsKey(name) && !data.Group.ContainsKey(name))
+            if (!data.Buildings.ContainsKey(name) && !data.Group.ContainsKey(name) && name != data.Capture.Unit && name != data.Supply?.Truck)
                 throw Error("Recipes." + name, "Unused recipe.");
         return new(id, opening, buildings, group, engineer, data.Capture.Action,
-            data.CreditReserve, data.MacroIntervalTicks, data.TacticsIntervalTicks, data.BlockedGoalTicks);
+            data.CreditReserve, data.MacroIntervalTicks, data.TacticsIntervalTicks, data.BlockedGoalTicks, supply, replacement);
     }
 
     private sealed class ProfileOptions
@@ -79,6 +93,7 @@ public static class SkirmishAiCatalog
         public Dictionary<string, int> Buildings { get; set; } = [];
         public Dictionary<string, MemberOptions> Group { get; set; } = [];
         public CaptureOptions Capture { get; set; } = new();
+        public SupplyOptions? Supply { get; set; }
         public Dictionary<string, RecipeOptions> Recipes { get; set; } = [];
         public int CreditReserve { get; set; }
         public int MacroIntervalTicks { get; set; } = 25;
@@ -88,5 +103,6 @@ public static class SkirmishAiCatalog
 
     private sealed class MemberOptions { public int Min { get; set; } public int Target { get; set; } }
     private sealed class CaptureOptions { public string Unit { get; set; } = ""; public string Action { get; set; } = ""; }
+    private sealed class SupplyOptions { public string Truck { get; set; } = ""; public int Target { get; set; } public bool ImproveMines { get; set; } }
     private sealed class RecipeOptions { public string Producer { get; set; } = ""; public string Action { get; set; } = ""; }
 }

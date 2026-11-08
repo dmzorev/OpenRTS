@@ -3,10 +3,11 @@ namespace OpenRTS.AI;
 public sealed record AiRecipe(int ProducerType, int ProductType, int Queue, string Action, int Cost, bool OnSite = false);
 public sealed record AiBuilding(AiRecipe Recipe, int Target);
 public sealed record AiMember(AiRecipe Recipe, int Minimum, int Target);
+public sealed record AiSupply(AiRecipe Truck, int Target, bool ImproveMines);
 
 public sealed class SkirmishAiProfile(string id, IEnumerable<int> opening, IEnumerable<AiBuilding> buildings,
     IEnumerable<AiMember> group, int engineerType, string captureAction, int creditReserve,
-    int macroIntervalTicks, int tacticsIntervalTicks, int blockedGoalTicks)
+    int macroIntervalTicks, int tacticsIntervalTicks, int blockedGoalTicks, AiSupply? supply = null, AiRecipe? replacementEngineer = null)
 {
     public string Id { get; } = id;
     public IReadOnlyList<int> Opening { get; } = Array.AsReadOnly(opening.ToArray());
@@ -18,4 +19,6 @@ public sealed class SkirmishAiProfile(string id, IEnumerable<int> opening, IEnum
     public int MacroIntervalTicks { get; } = macroIntervalTicks;
     public int TacticsIntervalTicks { get; } = tacticsIntervalTicks;
     public int BlockedGoalTicks { get; } = blockedGoalTicks;
+    public AiSupply? Supply { get; } = supply;
+    public AiRecipe? ReplacementEngineer { get; } = replacementEngineer;
 }

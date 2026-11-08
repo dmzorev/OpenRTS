@@ -157,7 +157,7 @@ def main():
     for file, count, extra in [
         ("fixture.yaml", 3, []),
         ("skirmish.yaml", 14, ["--start-set=content/start-sets/infantry.yaml"]),
-        ("crossroads.yaml", 22, []),
+        ("crossroads.yaml", 26, []),
         ("riverside-station.yaml", 29, ["--start-set=content/start-sets/infantry.yaml"]),
     ]:
         args = ["--map=content/maps/" + file, "--ticks=3", *extra]
@@ -165,7 +165,7 @@ def main():
         host = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--",
                     "--verify-simulation", "--workers=4", *args])
         if direct["EntityCount"] != count or "ERROR:" in host.stderr or report(host.stdout, "OPENRTS_SIMULATION:") != direct:
-            raise RuntimeError("File map host/worker parity failed:\n" + host.stdout + host.stderr)
+            raise RuntimeError(f"File map {file} failed, expected {count} entities, headless reported {direct}:\n" + host.stdout + host.stderr)
     print("PASS file maps with fixed placements and alternate skirmish starts; host/worker parity", flush=True)
 
     invalid = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", "--count=0"], expected=1)

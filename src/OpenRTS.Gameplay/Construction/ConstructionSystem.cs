@@ -398,7 +398,8 @@ internal sealed class ConstructionSystem
         int at = 0;
         foreach (var projects in _constructionProjects.Values)
             foreach (var project in projects.Values)
-                destination[at++] = new(project.Id, project.Owner, project.UnitType, project.Position, project.ReservedAt > 0);
+                destination[at++] = new(project.Id, project.Owner, project.UnitType, project.Position, project.ReservedAt > 0)
+                { UnpaidCost = project.Recipe.Cost };
     }
 
     internal static void WriteProjects(ConstructionSystem? system, BinaryWriter writer)

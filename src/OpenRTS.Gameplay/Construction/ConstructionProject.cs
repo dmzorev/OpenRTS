@@ -2,7 +2,10 @@ using OpenRTS.Core.Presentation;
 
 namespace OpenRTS.Core;
 
-public readonly record struct ConstructionProjectPose(EntityId Id, uint Owner, int UnitType, WorldPosition Position, bool Clearing, string? Upgrade = null, FacingDirection Facing = default);
+public readonly record struct ConstructionProjectPose(EntityId Id, uint Owner, int UnitType, WorldPosition Position, bool Clearing, string? Upgrade = null, FacingDirection Facing = default)
+{
+    public int UnpaidCost { get; init; }
+}
 public readonly record struct ConstructionProgress(int Work, int Required)
 {
     public bool Active => Required > 0;

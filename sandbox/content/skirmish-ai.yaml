@@ -7,10 +7,13 @@ infantry-skirmish:
   Group:
     rifleman: {Min: 3, Target: 5}
   Capture: {Unit: construction-engineer, Action: capture}
+  Supply: {Truck: supply-truck, Target: 2, ImproveMines: true}
   Recipes:
     power-plant: {Producer: construction-engineer, Action: site-power}
     barracks: {Producer: construction-engineer, Action: site-barracks}
     rifleman: {Producer: barracks, Action: rifleman}
+    supply-truck: {Producer: supply-center, Action: truck}
+    construction-engineer: {Producer: supply-center, Action: engineer}
   CreditReserve: 300
   MacroIntervalTicks: 25
   TacticsIntervalTicks: 5

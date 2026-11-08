@@ -101,6 +101,62 @@ internal static class SkirmishAiChecks
             NavigationChecks.Check(holding, "Group did not hold the assembly point.");
         });
 
+        test("AI2 reserves the unpaid blueprint before ordering a replacement truck", () =>
+        {
+            var start = Read(MapScenario.DefaultStartSet);
+            var map = MapScenario.Load(catalog, path => path == MapScenario.DefaultStartSet
+                ? start with { Text = string.Join('\n', start.Text.Replace("credits: 5000", "credits: 1000").Split('\n')
+                    .Where(line => !line.Contains("type: supply-truck", StringComparison.Ordinal))) }
+                : Read(path), MapScenario.DefaultMap);
+            var frequent = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, catalog, profile.Id);
+            using var world = map.CreateWorld();
+            var ai = SkirmishAiScenario.Create(catalog, frequent, 2);
+            world.Step(ai.Plan(world));
+            var projects = new ConstructionProjectPose[world.ConstructionProjectCount];
+            world.CopyConstructionProjects(projects);
+            NavigationChecks.Check(projects.Single() is { Owner: 2, UnpaidCost: 500 }, "The blueprint did not expose its actual unpaid cost.");
+            var players = new PlayerPose[world.PlayerCount];
+            world.CopyPlayers(players);
+            NavigationChecks.Check(players.Single(p => p.Id == 2).Credits == 1000 && !ai.Plan(world).Any(c => c.Action == "truck"),
+                "The bot committed credits needed to start the unpaid building.");
+        });
+
+        test("AI2 recovers its crew and freight, resumes the blueprint and upgrades a serviced mine", () =>
+        {
+            const uint player = 2;
+            var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
+            using var world = map.CreateWorld(4, restrictPlayerCommands: true);
+            var start = Poses(world).Where(p => p.Presentation.Owner == player).ToArray();
+            var builder = start.Single(p => p.UnitType == profile.EngineerType).Id;
+            var truck = start.Single(p => p.UnitType == profile.Supply!.Truck.ProductType).Id;
+            var ai = SkirmishAiScenario.Create(catalog, profile, player);
+            world.Step(ai.Plan(world));
+            var projects = new ConstructionProjectPose[world.ConstructionProjectCount];
+            world.CopyConstructionProjects(projects);
+            var site = projects.Single().Id;
+            world.Step([new(2, 0, 1, CommandKind.Destroy, builder), new(2, 0, 2, CommandKind.Destroy, truck), .. ai.Plan(world)]);
+            bool resumed = false, delivered = false, capturedOil = false;
+            long previousCredits = 5000;
+            var players = new PlayerPose[world.PlayerCount];
+            SkirmishAiScenario.Run(world, ai, 3200, state =>
+            {
+                foreach (var command in state.AppliedCommands)
+                    if (command.Kind == CommandKind.BuildSite && command.TargetEntity == site && command.Entity != builder) resumed = true;
+                foreach (var e in state.Events)
+                    if (e.Kind == WorldEventKind.OwnerChanged && e.Owner == player && catalog.Units[e.UnitType].Economy is { Income: > 0 }) capturedOil = true;
+                state.CopyPlayers(players);
+                long credits = players.Single(p => p.Id == player).Credits;
+                delivered |= !capturedOil && credits > previousCredits;
+                previousCredits = credits;
+            });
+            var own = Poses(world).Where(p => p.Presentation.Owner == player).ToArray();
+            NavigationChecks.Check(resumed && own.Any(p => p.Id == site && !p.Construction.Active), "The replacement engineer did not resume the original blueprint.");
+            NavigationChecks.Check(own.Count(p => p.UnitType == profile.Supply!.Truck.ProductType) == profile.Supply!.Target && delivered,
+                "The bot did not replace the truck and earn freight credits.");
+            NavigationChecks.Check(capturedOil && own.Any(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Mine && p.Upgrade.Completed is not null),
+                "The engineer did not capture oil and finish a mine upgrade.");
+        });
+
         test("AI1 session plans on each simulation tick even when publication drops frames", () =>
         {
             const int ticks = 350;
