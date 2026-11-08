@@ -22,11 +22,15 @@ public sealed class MapMatch
         _seed = seed;
     }
 
-    public SimulationWorld CreateWorld(int workers = 1, bool restrictPlayerCommands = false)
+    public SimulationWorld CreateWorld(int workers = 1, bool restrictPlayerCommands = false) =>
+        CreateWorld(new(), workers: workers, restrictPlayerCommands: restrictPlayerCommands);
+
+    public SimulationWorld CreateWorld(GameplayMechanics mechanics, int speedPerTick = 128, int workers = 1,
+        bool restrictPlayerCommands = false)
     {
         var grid = Map.Grid;
-        var world = new SimulationWorld(_catalog.Units, grid.Width * grid.CellSize, grid.Height * grid.CellSize,
-            seed: _seed, initialCapacity: UnitCount, navigationGrid: grid, navigationWorkers: workers, players: _players);
+        var world = SimulationWorld.CreateWithMechanics(mechanics, _catalog.Units, grid.Width * grid.CellSize, grid.Height * grid.CellSize,
+            seed: _seed, initialCapacity: UnitCount, speedPerTick: speedPerTick, navigationGrid: grid, navigationWorkers: workers, players: _players);
         try
         {
             if (restrictPlayerCommands) world.RestrictCommandsToPlayers();

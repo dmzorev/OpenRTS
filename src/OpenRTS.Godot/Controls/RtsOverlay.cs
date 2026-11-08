@@ -11,6 +11,7 @@ public partial class RtsOverlay : Control
     public RtsCursor Cursor { get; set; }
     public Rect2? Marquee { get; set; }
     public string? CustomCursor { get; set; }
+    public bool ShowCursor { get; set; } = true;
     public Vector2? Rally { get; set; }
     public List<(Rect2 Bounds, float Fraction)> HealthBars { get; } = [];
     public List<(Rect2 Bounds, float Fraction)> UpgradeBars { get; } = [];
@@ -51,6 +52,7 @@ public partial class RtsOverlay : Control
         if (Marquee is { } box)
         { DrawRect(box, new Color(0.2f, 0.8f, 1, 0.12f)); DrawRect(box, new Color(0.4f, 0.9f, 1), false, 1.5f); }
         if (Rally is { } rally) { DrawLine(rally, rally + new Vector2(0, -24), Colors.LimeGreen, 2); DrawColoredPolygon([rally + new Vector2(0, -24), rally + new Vector2(15, -18), rally + new Vector2(0, -12)], Colors.LimeGreen); }
+        if (!ShowCursor) return;
         if (CustomCursor is { } id && _custom.TryGetValue(id, out var custom))
         {
             if (custom.Frames is { } frames)

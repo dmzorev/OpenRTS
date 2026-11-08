@@ -68,7 +68,7 @@ internal sealed class CaptureSystem(ICaptureWorld world, ICaptureMechanic mechan
         switch (step)
         {
             case CaptureStep.Approach:
-                if (!entity.Get<MotionState>().Moving || (tick + actorId.Value) % 4 == 0)
+                if (!entity.Get<MotionState>().Moving || target.Type.Movable && (tick + actorId.Value) % 4 == 0)
                     world.SetMovementTarget(actorId, ObjectGeometry.ClosestPoint(target.Type, targetPosition, position));
                 order.OrderPhase = OrderPhase.Approaching;
                 break;

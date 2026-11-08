@@ -4,6 +4,8 @@ using Godot;
 using OpenRTS.Content;
 using OpenRTS.Core;
 
+namespace OpenRTS.Godot.Controls;
+
 public partial class TerminalMinimap : Control
 {
     private readonly List<(Vector2 Position, Color Color, bool Neutral)> _markers = [];
@@ -14,6 +16,7 @@ public partial class TerminalMinimap : Control
     private bool _dragging;
 
     public event Action<Vector2>? Navigate;
+    public required Func<uint, Color> TeamColor { get; init; }
 
     public void UpdateMap(NavigationGrid grid, LocomotionCatalog locomotion, ReadOnlySpan<EntityPose> poses, long tick, Rect2 camera)
     {
@@ -29,7 +32,7 @@ public partial class TerminalMinimap : Control
             _markers.Clear();
             foreach (var pose in poses)
             {
-                var color = Sandbox.TeamMarkerColor(pose.Presentation.Owner);
+                var color = TeamColor(pose.Presentation.Owner);
                 _markers.Add((new Vector2(pose.Current.X, pose.Current.Y) / WorldPosition.UnitsPerCell, color,
                     pose.Presentation.Owner == 0));
             }
@@ -53,7 +56,7 @@ public partial class TerminalMinimap : Control
         "water" => new("#285567"),
         "road" => new("#737668"),
         "forest" => new("#243c21"),
-        "mountains" => new("#565143"),
+        "rock" or "mountains" => new("#565143"),
         "mud" => new("#544431"),
         "swamp" => new("#3c5244"),
         _ => new("#46592e")

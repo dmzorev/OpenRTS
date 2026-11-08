@@ -1,5 +1,6 @@
 using Godot;
 using OpenRTS.Content;
+using OpenRTS.Godot.Controls;
 
 public sealed partial class MatchSetupPreview : Control
 {

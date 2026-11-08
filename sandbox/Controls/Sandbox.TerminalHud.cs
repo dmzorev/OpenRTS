@@ -2,12 +2,11 @@ using System;
 using Godot;
 using OpenRTS.Core;
 using OpenRTS.Core.Orders;
+using OpenRTS.Godot.Controls;
 
 public partial class Sandbox
 {
-    private static readonly Color TerminalInk = new("#dce6c8");
     private static readonly Color TerminalAmber = new("#efbb60");
-    private static readonly Color TerminalOlive = new("#59654b");
     private const float SidebarWidth = 336, FooterHeight = 252;
     private const string TerminalSettingsPath = "user://terminal.cfg";
     private PanelContainer? _terminal, _diagnostics;
@@ -29,37 +28,9 @@ public partial class Sandbox
     private bool DiagnosticsVisible => _terminal is null || _diagnostics?.Visible == true;
     private bool OverRtsPanel(Vector2 pixel) => _rtsPanels.Exists(panel => panel.IsVisibleInTree() && panel.GetGlobalRect().HasPoint(pixel));
 
-    internal static StyleBoxFlat TerminalBox(Color background, Color border, int padding = 6) => new()
-    {
-        BgColor = background, BorderColor = border,
-        BorderWidthTop = 1, BorderWidthBottom = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
-        CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4, CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4,
-        ContentMarginLeft = padding, ContentMarginRight = padding, ContentMarginTop = padding, ContentMarginBottom = padding
-    };
-
-    private static Theme TerminalTheme()
-    {
-        var theme = new Theme { DefaultFontSize = 13 };
-        theme.SetStylebox("panel", "PanelContainer", TerminalBox(new("#131911"), TerminalOlive, 8));
-        theme.SetStylebox("normal", "Button", TerminalBox(new("#21291c"), TerminalOlive));
-        theme.SetStylebox("hover", "Button", TerminalBox(new("#353d26"), TerminalInk));
-        theme.SetStylebox("pressed", "Button", TerminalBox(new("#393220"), TerminalAmber));
-        theme.SetStylebox("disabled", "Button", TerminalBox(new("#181d16"), new("#343e2f")));
-        theme.SetColor("font_color", "Button", TerminalInk);
-        theme.SetColor("font_disabled_color", "Button", new("#85907a"));
-        theme.SetColor("font_color", "Label", TerminalInk);
-        theme.SetStylebox("background", "ProgressBar", TerminalBox(new("#0d130d"), new("#394733"), 0));
-        theme.SetStylebox("fill", "ProgressBar", TerminalBox(new("#80a653"), new("#80a653"), 0));
-        return theme;
-    }
-
-    internal static Label TerminalHeading(string text)
-    {
-        var heading = new Label { Text = text };
-        heading.AddThemeColorOverride("font_color", TerminalAmber);
-        heading.AddThemeFontSizeOverride("font_size", 13);
-        return heading;
-    }
+    internal static StyleBoxFlat TerminalBox(Color background, Color border, int padding = 6) => TerminalStyle.Box(background, border, padding);
+    private static Theme TerminalTheme() => TerminalStyle.CreateTheme();
+    internal static Label TerminalHeading(string text) => TerminalStyle.Heading(text);
 
     private static Texture2D TerminalIcon(Texture2D texture)
     {
@@ -114,7 +85,7 @@ public partial class Sandbox
         _terminal.AddChild(_terminalLayout);
 
         var radar = AddSection(_terminalLayout, "01   ТАКТИЧЕСКАЯ КАРТА");
-        _minimap = new TerminalMinimap { CustomMinimumSize = new(0, 112), SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        _minimap = new TerminalMinimap { TeamColor = TeamMarkerColor, CustomMinimumSize = new(0, 112), SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         _minimap.TooltipText = "ЛКМ или перетаскивание · переместить камеру\nПолный обзор карты";
         _minimap.Navigate += CenterCamera;
         radar.AddChild(_minimap);

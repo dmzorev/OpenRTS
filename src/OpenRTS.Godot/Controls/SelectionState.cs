@@ -31,6 +31,13 @@ public sealed class SelectionState
         Revision++;
     }
     public void Prune(Func<EntityId, bool> exists) { if (_ids.RemoveWhere(id => !exists(id)) != 0) Revision++; }
+    public void ReplaceEntity(EntityId previous, EntityId replacement)
+    {
+        if (_ids.Remove(previous)) { _ids.Add(replacement); Revision++; }
+        foreach (var group in _groups.Values)
+            for (int i = 0; i < group.Length; i++)
+                if (group[i] == previous) group[i] = replacement;
+    }
     public void StoreGroup(int number) => _groups[number] = Snapshot();
     public void RecallGroup(int number, bool additive, Func<EntityId, bool> exists)
     { if (_groups.TryGetValue(number, out var ids)) Change(ids.Where(exists), additive ? SelectionChange.Add : SelectionChange.Replace); }
