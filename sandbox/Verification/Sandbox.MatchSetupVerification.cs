@@ -52,12 +52,12 @@ public partial class Sandbox
         }
         CheckSkirmish(poses.Any(p => p.Presentation.Owner == 0 && _catalog!.Units[p.UnitType].Id == "civilian-station"),
             "The station was not placed as neutral.");
-        var selected = Selected();
-        CheckSkirmish(selected?.Presentation.Owner == 1 && selected?.Current == map.StartPosition(map.Slots[1]),
+        var selected = Selected() ?? throw new InvalidOperationException("The player's starting unit is not selected.");
+        CheckSkirmish(selected.Presentation.Owner == 1 && selected.Current == map.StartPosition(map.Slots[1]),
             "The initial selection belongs to a different player after exchanging starts.");
         var focus = GroundPoint(Playfield().GetCenter());
-        CheckSkirmish(focus is { } center && Mathf.IsEqualApprox(center.X, selected.Value.Current.X / (float)WorldPosition.UnitsPerCell) &&
-            Mathf.IsEqualApprox(center.Z, selected.Value.Current.Y / (float)WorldPosition.UnitsPerCell),
+        CheckSkirmish(focus is { } center && Mathf.IsEqualApprox(center.X, selected.Current.X / (float)WorldPosition.UnitsPerCell) &&
+            Mathf.IsEqualApprox(center.Z, selected.Current.Y / (float)WorldPosition.UnitsPerCell),
             "The camera did not focus the first player's chosen start.");
         GD.Print("OPENRTS_MATCH_SETUP:PASS maps, mode, player count, start exchange and scene launch");
         _verificationDone = true;

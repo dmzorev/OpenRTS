@@ -64,6 +64,7 @@ CombatPresentationChecks.Run(Test);
 EcsNavigationIntegrationChecks.Run(Test);
 PlayerChecks.Run(Test);
 MapChecks.Run(Test);
+SkirmishAiChecks.Run(Test);
 CaptureMechanicChecks.Run(Test);
 TransportConstructionMechanicChecks.Run(Test);
 ConstructionChecks.Run(Test);

@@ -123,6 +123,8 @@ MoveGroup собирает толпу около точки и не сохран
 
 `./tools/dev.sh headless --skirmish --ticks=1800` выполняет проверочный журнал захвата и строительства на той же карте. Интерактивный skirmish стартует без автоматических приказов.
 
+`./tools/dev.sh headless --skirmish-ai` запускает первого противника на 1800 тиков. По умолчанию он играет за красных. `--ai-player=1` выбирает синих, `--ai-config=path` читает `infantry-skirmish` из другого файла. Билд-ордер, норматив базы и состав группы задаёт [skirmish-ai.yaml](sandbox/content/skirmish-ai.yaml). Строка `OPENRTS_AI` сообщает о постройках, выпущенных бойцах, захватах и приказах атаки. [Проект и границы AI0](docs/research/rts-ai-architecture/prototype.md)
+
 Штатный skirmish читает [YAML-карту](sandbox/content/maps/skirmish.yaml) и [стартовый набор](sandbox/content/start-sets/construction.yaml). Карта задаёт грунт, нейтральные объекты и точки старта. Набор задаёт кредиты игроков и состав сил с точными смещениями от стартовой точки. Для карты с готовой расстановкой используйте `kind: fixture` и именованные слоты владельцев.
 
 ```sh

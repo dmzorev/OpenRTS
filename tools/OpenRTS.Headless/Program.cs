@@ -1,18 +1,25 @@
 using System.Text.Json;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using DeclarativeContent;
+using OpenRTS.AI;
 using OpenRTS.Content;
 using OpenRTS.Core;
 
 try
 {
     var path = "sandbox/content/units.yaml";
-    string? mapPath = null, startSetPath = null;
+    string? mapPath = null, startSetPath = null, aiConfig = null;
+    bool skirmishAi = false, ticksSpecified = false;
+    uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
         if (argument == "--skirmish") { skirmish = simulate = true; }
+        else if (argument == "--skirmish-ai") { skirmishAi = simulate = true; }
+        else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is 1 or 2) aiPlayer = player;
+        else if (argument.StartsWith("--ai-config=", StringComparison.Ordinal) && argument.Length > 12) aiConfig = argument[12..];
         else if (argument.StartsWith("--map=", StringComparison.Ordinal) && argument.Length > 6) { mapPath = argument[6..]; simulate = true; }
         else if (argument.StartsWith("--start-set=", StringComparison.Ordinal) && argument.Length > 12) { startSetPath = argument[12..]; simulate = true; }
         else if (argument == "--ecs-benchmark") ecsBenchmark = true;
@@ -25,12 +32,17 @@ try
         else if (argument == "--navigation") { simulate = true; navigation = true; }
         else if (argument == "--reverse-jobs") reverseJobs = true;
         else if (argument.StartsWith("--count=", StringComparison.Ordinal) && int.TryParse(argument[8..], out int value) && value is >= 1 and <= 1000000) count = value;
-        else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) ticks = value;
+        else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) { ticks = value; ticksSpecified = true; }
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--map=path] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1|2] [--ai-config=path] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
-    bool mapRequested = skirmish || mapPath is not null || startSetPath is not null;
+    if (skirmishAi && (skirmish || mapPath is not null || startSetPath is not null))
+        throw new ArgumentException("AI0 uses the default skirmish map and construction starting set.");
+    if (!skirmishAi && (aiConfig is not null || aiPlayer.HasValue))
+        throw new ArgumentException("--ai-player and --ai-config require --skirmish-ai.");
+    if (skirmishAi && !ticksSpecified) ticks = SkirmishAiScenario.DefaultTicks;
+    bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
         throw new ArgumentException("Select one map or diagnostic scenario.");
     if (ecsBenchmark) { EcsBenchmark.Run(count, ticks); return 0; }
@@ -58,7 +70,41 @@ try
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
         SimulationReport report;
-        if (benchmark)
+        if (skirmishAi)
+        {
+            uint player = aiPlayer ?? 2;
+            string config = aiConfig ?? Path.Combine(Path.GetDirectoryName(path)!, "skirmish-ai.yaml");
+            var profile = SkirmishAiCatalog.Load(new(config, File.ReadAllText(config)), catalog, SkirmishAiScenario.ProfileId);
+            var ai = SkirmishAiScenario.Create(catalog, profile, player);
+            int issued = 0, attacks = 0, placed = 0, trained = 0, captured = 0;
+            EntityPose[] poses = [];
+            report = SkirmishAiScenario.Run(world, ai, ticks, state =>
+            {
+                issued += state.AppliedCommands.Length;
+                foreach (var command in state.AppliedCommands)
+                    if (command.Kind == CommandKind.AttackMove) attacks++;
+                foreach (var value in state.Events)
+                {
+                    if (value.Kind == WorldEventKind.OwnerChanged && value.Owner == player) captured++;
+                    if (value.Kind == WorldEventKind.Produced)
+                    {
+                        Array.Resize(ref poses, state.Count);
+                        state.CopyPoses(poses);
+                        var unit = Array.Find(poses, p => p.Id == value.TargetEntity && p.Presentation.Owner == player);
+                        if (unit.Id == default) continue;
+                        if (catalog.Units[unit.UnitType].Footprint is null) trained++;
+                        else placed++;
+                    }
+                }
+            });
+            Console.WriteLine("OPENRTS_AI:" + JsonSerializer.Serialize(new
+            {
+                Player = player, Profile = profile.Id, SkirmishAi.PolicyVersion,
+                ProfileFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(profile))),
+                Commands = issued, Attacks = attacks, Buildings = placed, Trained = trained, Captured = captured
+            }));
+        }
+        else if (benchmark)
         {
             // Warm JIT on a separate world; measured ticks exclude initialization, snapshots and state hashing.
             using var warmup = Create();
