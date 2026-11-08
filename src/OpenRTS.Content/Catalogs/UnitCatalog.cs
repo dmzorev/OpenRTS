@@ -9,7 +9,7 @@ using OpenRTS.Core.Orders;
 namespace OpenRTS.Content;
 
 public sealed record ActionButtonBinding(string Id, string Label, string? Icon, string Hotkey, string Cursor);
-public sealed record UnitPresentationBinding(string UnitId, string? Model, string Name, ReadOnlyCollection<ActionButtonBinding>? Actions = null);
+public sealed record UnitPresentationBinding(string UnitId, string? Model, string Name, ReadOnlyCollection<ActionButtonBinding>? Actions = null, bool Selectable = true);
 
 public sealed record CatalogSummary(int DefinitionCount, string Fingerprint);
 
@@ -116,7 +116,7 @@ public sealed partial class UnitCatalog
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
                 units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)));
-                bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons));
+                bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons), visual?.Selectable ?? true);
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
 
@@ -137,6 +137,7 @@ public sealed partial class UnitCatalog
     {
         [Required] public string Model { get; set; } = "";
         public string? Name { get; set; }
+        public bool Selectable { get; set; } = true;
         public string[] Animations { get; set; } = ["idle", "move"];
         public string[] States { get; set; } = [];
     }

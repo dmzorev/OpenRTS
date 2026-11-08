@@ -152,7 +152,7 @@ public partial class Sandbox : Node3D
             Texture2D TextureFor(string id) => GD.Load<Texture2D>("res://resources/terrain/" + id + ".tres");
             var map = _mapMatch?.Map;
             var view = map is not null
-                ? new TerrainView(map.Grid.Width, map.Grid.Height, 1, map.TerrainIds, map.TerrainAt, TextureFor)
+                ? new TerrainView(map.Grid.Width, map.Grid.Height, 1, map.VisualIds, map.VisualAt, TextureFor)
                 : new TerrainView(_buildings ? BuildingScenario.Width : ShowcaseScenario.Width,
                     _buildings ? BuildingScenario.Height : ShowcaseScenario.Height, _buildings ? 1 : ShowcaseScenario.TileSize,
                     ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, TextureFor);

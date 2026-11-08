@@ -53,7 +53,9 @@ public partial class Sandbox
         EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false;
         for (int i = 0; i < _displayCount; i++)
         {
-            var pose = _displayPoses[i]; var type = _catalog!.Units[pose.UnitType].WithRotation(pose.QuarterTurns); bool footprint = type.Footprint is not null;
+            var pose = _displayPoses[i];
+            if (!_catalog!.Presentations[pose.UnitType].Selectable) continue;
+            var type = _catalog.Units[pose.UnitType].WithRotation(pose.QuarterTurns); bool footprint = type.Footprint is not null;
             if (footprint)
             {
                 bool inside = type.Footprint!.Cells.Any(c => { var b = type.Footprint.Bounds(c, pose.Current); return point.X >= b.MinX && point.X < b.MaxX && point.Y >= b.MinY && point.Y < b.MaxY; });
@@ -245,7 +247,7 @@ public partial class Sandbox
         if (_dragStart.DistanceTo(end) >= 6)
         {
             var box = new Rect2(_dragStart, end - _dragStart).Abs();
-            var ids = _displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner) && OnScreen(p) && box.HasPoint(Screen(p))).Select(p => p.Id);
+            var ids = _displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner) && _catalog!.Presentations[p.UnitType].Selectable && OnScreen(p) && box.HasPoint(Screen(p))).Select(p => p.Id);
             _selection.Change(ids, _dragAdd && CanIssue(UnitActionKind.Stop) ? SelectionChange.Add : SelectionChange.Replace);
         }
         else if (CommandPoint(end) is { } point)
@@ -286,7 +288,7 @@ public partial class Sandbox
             RefreshSelection(); return true;
         }
         if (code == Key.A && key.CtrlPressed)
-        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner)).Select(p => p.Id), SelectionChange.Replace); RefreshSelection(); return true; }
+        { _selection.Change(_displayPoses.Take(_displayCount).Where(p => Controls(p.Presentation.Owner) && _catalog!.Presentations[p.UnitType].Selectable).Select(p => p.Id), SelectionChange.Replace); RefreshSelection(); return true; }
         if (code == Key.Space)
         {
             var poses = _selection.Snapshot().Where(_selectionPoses.ContainsKey).Select(id => _selectionPoses[id]).ToArray();

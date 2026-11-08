@@ -14,15 +14,17 @@ public sealed class GameMap
     private readonly Dictionary<string, Slot> _slots;
     private readonly Placed[] _objects;
     private readonly Source _source;
+    private readonly TerrainLayout _layout;
     public string Id { get; }
     public bool IsSkirmish { get; }
     public NavigationGrid Grid { get; }
     public IReadOnlyList<string> Slots { get; }
     public IReadOnlyList<string> TerrainIds { get; }
+    public IReadOnlyList<string> VisualIds { get; }
     public IEnumerable<WorldPosition> ObjectPositions => _objects.Select(obj => obj.Position);
 
     private GameMap(string id, bool skirmish, UnitCatalog catalog, Dictionary<string, int> types, NavigationGrid grid,
-        string[] terrainIds, Dictionary<string, Slot> slots, Placed[] objects, Source source)
+        string[] terrainIds, TerrainLayout layout, Dictionary<string, Slot> slots, Placed[] objects, Source source)
     {
         Id = id;
         IsSkirmish = skirmish;
@@ -30,11 +32,15 @@ public sealed class GameMap
         _types = types;
         Grid = grid;
         TerrainIds = Array.AsReadOnly(terrainIds);
+        _layout = layout;
+        VisualIds = Array.AsReadOnly(layout.VisualIds());
         _slots = slots;
         Slots = Array.AsReadOnly(slots.Keys.Order(StringComparer.Ordinal).ToArray());
         _objects = objects;
         _source = source;
     }
+
+    public string VisualAt(int x, int y) => _layout.VisualAt(x, y);
 
     public string TerrainAt(int x, int y) => _catalog.Locomotion!.Terrains[Grid.TerrainAt(Grid.Index(new(x, y)))];
 
@@ -71,7 +77,7 @@ public sealed class GameMap
 
         var locomotion = catalog.Locomotion ?? throw yaml.Error(root, id, "Maps require a terrain catalog.");
         var terrainNode = yaml.Required(fields, "terrain", root, id);
-        var terrain = yaml.Fields(terrainNode, "terrain", "palette", "rows");
+        var terrain = yaml.Fields(terrainNode, "terrain", "palette", "rows", "brushes", "placements");
         var palette = new Dictionary<char, byte>();
         var paletteNode = yaml.Required(terrain, "palette", terrainNode, "terrain");
         foreach (var (symbol, value) in yaml.Fields(paletteNode, "terrain.palette"))
@@ -102,6 +108,67 @@ public sealed class GameMap
                 used.Add(value);
             }
         }
+
+        var layout = new TerrainLayout(size.X, size.Y, samples, samples.Select(value => locomotion.Terrains[value]));
+        var brushes = new Dictionary<string, (int Width, int Height, TerrainBrushCell[] Cells)>(StringComparer.Ordinal);
+        if (terrain.TryGetValue("brushes", out var brushesNode))
+        {
+            foreach (var (name, brushNode) in yaml.Fields(brushesNode, "terrain.brushes"))
+            {
+                string path = "terrain.brushes." + name;
+                var brush = yaml.Fields(brushNode, path, "rows", "palette");
+                var brushRows = yaml.Items(yaml.Required(brush, "rows", brushNode, path), path + ".rows");
+                if (brushRows.Count == 0) throw yaml.Error(brushNode, path, "Brush rows cannot be empty.");
+                var symbols = new Dictionary<char, (byte? Terrain, string? Visual)>();
+                foreach (var (symbol, value) in yaml.Fields(yaml.Required(brush, "palette", brushNode, path), path + ".palette"))
+                {
+                    if (symbol.Length != 1 || symbol == ".") throw yaml.Error(value, path, "Brush symbols must be one character other than '.'.");
+                    var entry = yaml.Fields(value, path + ".palette." + symbol, "terrain", "visual");
+                    byte? type = null;
+                    if (entry.TryGetValue("terrain", out var typeNode))
+                    {
+                        string typeName = yaml.Text(typeNode, path + ".terrain");
+                        int typeIndex = locomotion.Terrains.IndexOf(typeName);
+                        if (typeIndex < 0) throw yaml.Error(typeNode, path, $"Unknown terrain '{typeName}'.");
+                        type = (byte)typeIndex;
+                    }
+                    string? visual = entry.TryGetValue("visual", out var visualNode) ? yaml.Text(visualNode, path + ".visual") : null;
+                    if (type is null && visual is null) throw yaml.Error(value, path, "A brush cell needs terrain or visual.");
+                    symbols.Add(symbol[0], (type, visual));
+                }
+                var cells = new List<TerrainBrushCell>();
+                int brushWidth = 0;
+                for (int y = 0; y < brushRows.Count; y++)
+                {
+                    string row = yaml.Text(brushRows[y], path + ".rows");
+                    if (y == 0) brushWidth = row.Length;
+                    if (row.Length != brushWidth || brushWidth > size.X || brushRows.Count > size.Y)
+                        throw yaml.Error(brushRows[y], path, "Brush rows must have equal length and fit the map.");
+                    for (int x = 0; x < row.Length; x++)
+                    {
+                        if (row[x] == '.') continue;
+                        if (!symbols.TryGetValue(row[x], out var value)) throw yaml.Error(brushRows[y], path, $"Unknown brush symbol '{row[x]}'.");
+                        cells.Add(new(x, y, value.Terrain, value.Visual));
+                    }
+                }
+                brushes.Add(name, (brushWidth, brushRows.Count, cells.ToArray()));
+            }
+        }
+        if (terrain.TryGetValue("placements", out var placementsNode))
+        {
+            foreach (var placementNode in yaml.Items(placementsNode, "terrain.placements"))
+            {
+                var placement = yaml.Fields(placementNode, "terrain.placements", "brush", "cell", "rotation");
+                string name = yaml.Text(yaml.Required(placement, "brush", placementNode, "terrain.placements"), "terrain.placements.brush");
+                if (!brushes.TryGetValue(name, out var brush)) throw yaml.Error(placementNode, "terrain.placements", $"Unknown brush '{name}'.");
+                var cell = yaml.Pair(yaml.Required(placement, "cell", placementNode, "terrain.placements"), "terrain.placements.cell", 0, Math.Max(size.X, size.Y));
+                int rotation = placement.TryGetValue("rotation", out var angle) ? (int)yaml.Integer(angle, "terrain.placements.rotation", 0, 3) : 0;
+                try { layout.Apply(cell.X, cell.Y, brush.Width, brush.Height, brush.Cells, rotation); }
+                catch (ArgumentException error) { throw yaml.Error(placementNode, "terrain.placements", error.Message); }
+            }
+        }
+        used.Clear();
+        for (int y = 0; y < size.Y; y++) for (int x = 0; x < size.X; x++) used.Add(layout.TerrainAt(x, y));
 
         WorldPosition Position(YamlNode node, string path)
         {
@@ -159,8 +226,8 @@ public sealed class GameMap
                 owner, yaml.Location(node)));
         }
 
-        return new(id, skirmish, catalog, types, new(size.X, size.Y, terrain: samples),
-            used.Order().Select(index => locomotion.Terrains[index]).ToArray(), slots, objects.ToArray(), yaml.Location(root));
+        return new(id, skirmish, catalog, types, layout.CreateGrid(),
+            used.Order().Select(index => locomotion.Terrains[index]).ToArray(), layout, slots, objects.ToArray(), yaml.Location(root));
     }
 
     public MapMatch Prepare(IReadOnlyDictionary<string, PlayerDefinition> assignments, StartingSet? startingSet = null, ulong seed = 1)

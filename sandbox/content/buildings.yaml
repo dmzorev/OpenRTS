@@ -216,7 +216,7 @@ oil-derrick:
 ^nature:
   Health: { HP: 600, Armor: Building, Destruction: Invulnerable }
   Movement: { Enabled: false }
-  Presentation: { Animations: [idle], States: [destroyed] }
+  Presentation: { Animations: [idle], States: [destroyed], Selectable: false }
 
 nature-trees:
   Inherits: ^nature
