@@ -42,6 +42,7 @@ public sealed class GameplayMechanics
     public GameplayRegistration<IConstructionMechanic>? Construction { get; init; } = BuiltInConstruction;
     public GameplayRegistration<IEndOfTickRule>? EndOfTick { get; init; }
     public ProductionRateRule? ProductionRate { get; init; }
+    public IReadOnlyList<ActorTransformation> Transformations { get; init; } = [];
     /// <summary>Optional distance fields for unweighted individual routes that need a detour.</summary>
     /// <remarks>The factory must create a pathfinder with the same initial grid instance as the world.</remarks>
     public GameplayRegistration<IGridPathfinder>? GridPathfinder { get; init; }
@@ -62,13 +63,16 @@ public readonly ref struct GameplayTick
     private readonly SimulationWorld _world;
     internal GameplayTick(SimulationWorld world) => _world = world;
     public long Tick => _world.Tick;
-    /// <summary>Read before spawning, since a spawn can invalidate the span.</summary>
+    /// <summary>Finish reading before calling operations that may append events.</summary>
     public ReadOnlySpan<WorldEvent> Events => _world.Events;
     public bool TryGetOwner(EntityId entity, out uint owner) => _world.TryGetGameplayOwner(entity, out owner);
     public void CopySupplySources(List<SupplySourcePose> destination) => _world.CopySupplySources(destination);
     public int ReplenishSupply(EntityId source, int amount) => _world.ReplenishSupply(source, amount);
     public bool TrySpawnSupplySource(int unitType, WorldPosition position, out EntityId created) =>
         _world.TrySpawnSupplySource(unitType, position, out created);
+    /// <summary>Schedules the same named transition used by player commands.</summary>
+    public bool TryTransform(EntityId source, string action, WorldPosition? position = null, int quarterTurns = 0) =>
+        _world.TryStartTransformation(source, action, position, quarterTurns);
     public bool TrySpawnAtExit(EntityId source, int unitType, int radius, out EntityId created) =>
         _world.TrySpawnAtExit(source, unitType, radius, out created);
 }
@@ -77,6 +81,7 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
+        WriteTransformations(writer);
         writer.Write(27); // Includes footprint orientation.
         if (_capture is not null && ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture))
         {

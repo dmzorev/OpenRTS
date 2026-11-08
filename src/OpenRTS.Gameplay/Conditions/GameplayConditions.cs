@@ -18,7 +18,7 @@ public sealed partial class SimulationWorld
 
     private bool WeaponsDisabled(EntityId id) => _conditionGrants?.Has(id) == true;
 
-    private bool IsConstructing(Frent.Entity entity) => _construction?.IsFoundation(entity) == true;
+    private bool IsConstructing(Frent.Entity entity) => _construction?.IsFoundation(entity) == true || IsTransformationLocked(entity);
 
     private GameplayConditions ReadLocalConditions(Frent.Entity entity) =>
         IsConstructing(entity) ? GameplayConditions.Constructing : GameplayConditions.None;

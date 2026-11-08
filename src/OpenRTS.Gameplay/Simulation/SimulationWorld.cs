@@ -72,6 +72,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
             throw new ArgumentException("Unit definitions must be nonempty, nonnull and uniquely named.", nameof(unitTypes));
         _mechanics = mechanics;
+        _transformationRecipes = CompileTransformations(mechanics.Transformations);
         bool usesCapture = _types.Any(type => type.Capturable is not null || type.Abilities.Any(a => a.Kind == AbilityKind.Capture));
         if (usesCapture && mechanics.Capture is null)
             throw new ArgumentException("Unit definitions require a capture mechanic.", nameof(mechanics));
@@ -98,7 +99,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
         }
-        if (_motion is null && _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null)) _combatIndex = new(speedPerTick);
+        if (_motion is null && (_transformationRecipes.Count != 0 || _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null))) _combatIndex = new(speedPerTick);
         if (mechanics.Capture is { } capture && (usesCapture || !ReferenceEquals(capture, GameplayMechanics.BuiltInCapture)))
             _capture = new(this, capture.Create());
         if (mechanics.Transport is { } transport && (usesTransport || !ReferenceEquals(transport, GameplayMechanics.BuiltInTransport)))
@@ -156,6 +157,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     protected override void Update(CancellationToken cancellationToken)
     {
         CapturePreviousFacings();
+        CompleteTransformations();
         PrepareUpgrades();
         UpdateOrders();
         _capture?.EndOrders(Tick);
@@ -163,11 +165,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_navigation is not null) UpdateNavigation(cancellationToken);
         else UpdateDirectMovement();
         UpdateWeapons();
+        AdvanceTransformations();
         _construction?.Advance();
         AdvanceSupply();
         _economy.AdvanceIncome(ExistingStorage, Tick);
         _production.Advance(ExistingStorage, StepCancellation);
         UpdatePresentation();
+        if (_transformations.Count != 0) ApplyTransformationFacings();
         _endOfTick?.Advance(new(this));
     }
 
@@ -185,6 +189,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             throw new ArgumentException("Commands must have a known kind.", batchArgument);
         if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
             ValidatePosition(command.Position);
+        if (command.Kind == CommandKind.Transform)
+        {
+            if (command.Entity == default || command.Recipients is not null || command.Queued ||
+                string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128)
+                throw new ArgumentException("Transform requires one actor and a named transition.", batchArgument);
+            if (!command.TransformHere) ValidatePosition(command.Position);
+        }
         if (command.Kind == CommandKind.StartUpgrade && command.Action is { Length: > 128 })
             throw new ArgumentException("Upgrade ID is too long.", batchArgument);
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.PlanConstruction)
@@ -193,7 +204,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
             throw new ArgumentException("Scatter area must have positive extents.", batchArgument);
         if ((uint)command.QuarterTurns > 3 ||
-            command.QuarterTurns != 0 && command.Kind is not (CommandKind.Spawn or CommandKind.PlanConstruction or CommandKind.PlaceProduced))
+            command.QuarterTurns != 0 && command.Kind is not (CommandKind.Spawn or CommandKind.PlanConstruction or CommandKind.PlaceProduced or CommandKind.Transform))
             throw new ArgumentException("A building orientation requires 0 to 3 quarter turns.", batchArgument);
         if (command.Kind == CommandKind.Spawn)
         {
@@ -239,6 +250,9 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 states |= type.LowPowerVisualMask;
             if (type.WeaponDisableVisualMask != 0 && WeaponsDisabled(entityIdentity.Id))
                 states |= type.WeaponDisableVisualMask;
+            var transformation = ReadTransformation(entityIdentity.Id);
+            if (transformation.Phase is TransformationPhase.Preparing or TransformationPhase.Finishing &&
+                type.States.Contains("constructing")) states |= type.StateMask("constructing");
             var rally = ProductionSystem.Project(entity, type, ref states);
             var upgrade = ReadUpgrade(entity, type, ref states);
             var supply = ReadSupply(entity, type, ref states);
@@ -248,7 +262,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
                 new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Build or UnitActionKind.UpgradeSupport ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply, upgrade, captureTarget)
-                { QuarterTurns = type.Footprint is not null ? RotationOf(entity) : 0 };
+                { QuarterTurns = type.Footprint is not null ? RotationOf(entity) : 0, Transformation = transformation };
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -332,6 +346,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _events.Add(new(Tick, WorldEventKind.CommandDenied, command.Entity, TargetEntity: command.TargetEntity, Owner: command.Issuer));
             return;
         }
+        if (command.Kind == CommandKind.Transform)
+        {
+            if (!TryStartTransformation(command.Entity, command.Action!, command.TransformHere ? null : command.Position, command.QuarterTurns))
+                RejectAction(command.Entity);
+            return;
+        }
         if (command.Kind is CommandKind.GrantCondition or CommandKind.RevokeCondition) { ApplyConditionCommand(command); return; }
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast) { ApplyAbility(command); return; }
         if (command.Kind is CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally)
@@ -409,7 +429,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             return;
         }
         if (command.Kind is CommandKind.PlayAnimation or CommandKind.SetVisualStates or CommandKind.ToggleVisualState or CommandKind.Aim or CommandKind.ClearAim)
-        { ApplyPresentation(index, command); return; }
+        {
+            if (IsTransformationLocked(_entityHandles[index])) RejectAction(command.Entity);
+            else ApplyPresentation(index, command);
+            return;
+        }
         if (command.Kind is CommandKind.Destroy or CommandKind.Remove)
         {
             DestroyIndex(index, wreck: command.Kind == CommandKind.Destroy);
@@ -421,10 +445,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
 
-    private void DestroyIndex(int index, bool wreck = true)
+    private void DestroyIndex(int index, bool wreck = true, bool replacing = false)
     {
         var actor = _entityHandles[index];
         var id = actor.Get<EntityIdentity>().Id;
+        if (!replacing) CancelTransformation(id);
         wreck = _transport?.BeforeRemove(actor, wreck) ?? wreck;
         index = _indices[id];
         _production.BeforeRemove(_entityHandles[index]);
@@ -432,12 +457,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         RemoveSupply(_entityHandles[index], actor.Get<EntityIdentity>());
         CancelUpgrade(actor, restoreNeutral: false);
         bool stamped = _footprints.Remove(id);
-        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
+        if (!replacing) _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
         _economy.InvalidatePower();
         _conditionGrants?.RemoveEntity(id);
         DeleteEntity(index);
         _orderDirty = true;
-        if (stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
+        if (!replacing && stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));
     }
 
     private bool SetTarget(int index, WorldPosition position)

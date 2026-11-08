@@ -31,6 +31,7 @@ public sealed partial class SimulationWorld
                 upgrade.Completed = -1;
         }
 
+        OnTransformationOwnerChanged(identity.Id);
         _economy.EnsurePlayer(owner);
         _production.CancelForOwnerChange(entity);
 

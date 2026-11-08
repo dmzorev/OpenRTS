@@ -51,6 +51,24 @@ internal static class MapChecks
             var invalid = original with { Text = original.Text.Replace("slots: [blue, red]", brush.Replace("[2, 2], rotation: 1", "[19, 11], rotation: 1") + "\nslots: [blue, red]") };
             NavigationChecks.Reject<ContentException>(() => GameMap.Load(invalid, catalog));
         });
+        test("Maps: shared brush files can be reused and reject duplicate or unknown names", () =>
+        {
+            var original = Read(fixturePath);
+            var shared = new ContentSource("brushes.yaml", """
+                path:
+                  rows: ["AB"]
+                  palette:
+                    A: {terrain: road, visual: road-a}
+                    B: {visual: road-b}
+                """);
+            var placed = original with { Text = original.Text.Replace("slots: [blue, red]", "  placements:\n    - {brush: path, cell: [2, 2]}\nslots: [blue, red]") };
+            var first = GameMap.Load(placed, catalog, [shared]);
+            var second = GameMap.Load(placed with { Text = placed.Text.Replace("[2, 2]", "[4, 2]") }, catalog, [shared]);
+            NavigationChecks.Check(first.TerrainAt(2, 2) == "road" && first.VisualAt(3, 2) == "road-b" &&
+                second.VisualAt(4, 2) == "road-a", "Shared brush was not applied to both maps");
+            NavigationChecks.Reject<ContentException>(() => GameMap.Load(placed, catalog, [shared, shared]));
+            NavigationChecks.Reject<ContentException>(() => GameMap.Load(placed, catalog));
+        });
         test("Maps: decorative selection is presentation data and invulnerable groves reject attack", () =>
         {
             int grove = catalog.Units.ToList().FindIndex(u => u.Id == "nature-trees");
@@ -64,9 +82,10 @@ internal static class MapChecks
             var attacker = world.AddInitialUnit(rifle, new(4096, 4096), 1);
             var target = world.AddInitialUnit(grove, new(8192, 4096), 2);
             world.Step([new(1, 0, 1, CommandKind.AttackTarget, attacker, TargetEntity: target)]);
-            for (int i = 0; i < 60; i++) world.Step();
+            bool fired = world.Events.ToArray().Any(e => e.Kind == WorldEventKind.WeaponFired);
+            for (int i = 0; i < 60; i++) { world.Step(); fired |= world.Events.ToArray().Any(e => e.Kind == WorldEventKind.WeaponFired); }
             NavigationChecks.Check(Poses(world).Single(p => p.Id == target).Health == catalog.Units[grove].MaxHealth &&
-                !world.Events.ToArray().Any(e => e.Kind == WorldEventKind.WeaponFired), "Invulnerable grove was attacked");
+                !fired, "Invulnerable grove was attacked");
         });
         test("Maps: a different start set changes the same map with deterministic player assignment", () =>
         {

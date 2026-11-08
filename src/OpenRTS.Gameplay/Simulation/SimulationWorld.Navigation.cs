@@ -213,7 +213,7 @@ public sealed partial class SimulationWorld
         ref var blockerOwnership = ref blocker.Get<OwnershipState>();
         ref var blockerNavigation = ref blocker.Get<NavigationAgentState>();
         ref var blockerMotion = ref blocker.Get<MotionState>();
-        if (!_types[blockerIdentity.Type].Movable || UpgradeImmobilizes(blocker) || requesterOwnership.Owner != blockerOwnership.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
+        if (!_types[blockerIdentity.Type].Movable || UpgradeImmobilizes(blocker) || IsTransformationLocked(blocker) || requesterOwnership.Owner != blockerOwnership.Owner || blockerNavigation.YieldFor.Value != 0 || IsFollowing(requesterIndex, blockerIndex) ||
             !requesterNavigation.GroupMember && requesterMotion.Target == blockerSpatial.Position) return;
         if (blockerMotion.Moving && blockerIdentity.Id.Value < requesterIdentity.Id.Value) return;
         NavigationLocalSearches++;

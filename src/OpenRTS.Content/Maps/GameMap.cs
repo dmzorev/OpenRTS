@@ -50,7 +50,7 @@ public sealed class GameMap
         return _slots[slot].Position;
     }
 
-    public static GameMap Load(ContentSource source, UnitCatalog catalog)
+    public static GameMap Load(ContentSource source, UnitCatalog catalog, IEnumerable<ContentSource>? brushSources = null)
     {
         var yaml = new MapYaml(source);
         var root = yaml.Root();
@@ -111,49 +111,57 @@ public sealed class GameMap
 
         var layout = new TerrainLayout(size.X, size.Y, samples, samples.Select(value => locomotion.Terrains[value]));
         var brushes = new Dictionary<string, (int Width, int Height, TerrainBrushCell[] Cells)>(StringComparer.Ordinal);
-        if (terrain.TryGetValue("brushes", out var brushesNode))
+        void ReadBrushes(MapYaml brushYaml, YamlNode brushesNode)
         {
-            foreach (var (name, brushNode) in yaml.Fields(brushesNode, "terrain.brushes"))
+            foreach (var (name, brushNode) in brushYaml.Fields(brushesNode, "brushes"))
             {
-                string path = "terrain.brushes." + name;
-                var brush = yaml.Fields(brushNode, path, "rows", "palette");
-                var brushRows = yaml.Items(yaml.Required(brush, "rows", brushNode, path), path + ".rows");
-                if (brushRows.Count == 0) throw yaml.Error(brushNode, path, "Brush rows cannot be empty.");
+                string path = "brushes." + name;
+                var brush = brushYaml.Fields(brushNode, path, "rows", "palette");
+                var brushRows = brushYaml.Items(brushYaml.Required(brush, "rows", brushNode, path), path + ".rows");
+                if (brushRows.Count == 0) throw brushYaml.Error(brushNode, path, "Brush rows cannot be empty.");
                 var symbols = new Dictionary<char, (byte? Terrain, string? Visual)>();
-                foreach (var (symbol, value) in yaml.Fields(yaml.Required(brush, "palette", brushNode, path), path + ".palette"))
+                foreach (var (symbol, value) in brushYaml.Fields(brushYaml.Required(brush, "palette", brushNode, path), path + ".palette"))
                 {
-                    if (symbol.Length != 1 || symbol == ".") throw yaml.Error(value, path, "Brush symbols must be one character other than '.'.");
-                    var entry = yaml.Fields(value, path + ".palette." + symbol, "terrain", "visual");
+                    if (symbol.Length != 1 || symbol == ".") throw brushYaml.Error(value, path, "Brush symbols must be one character other than '.'.");
+                    var entry = brushYaml.Fields(value, path + ".palette." + symbol, "terrain", "visual");
                     byte? type = null;
                     if (entry.TryGetValue("terrain", out var typeNode))
                     {
-                        string typeName = yaml.Text(typeNode, path + ".terrain");
+                        string typeName = brushYaml.Text(typeNode, path + ".terrain");
                         int typeIndex = locomotion.Terrains.IndexOf(typeName);
-                        if (typeIndex < 0) throw yaml.Error(typeNode, path, $"Unknown terrain '{typeName}'.");
+                        if (typeIndex < 0) throw brushYaml.Error(typeNode, path, $"Unknown terrain '{typeName}'.");
                         type = (byte)typeIndex;
                     }
-                    string? visual = entry.TryGetValue("visual", out var visualNode) ? yaml.Text(visualNode, path + ".visual") : null;
-                    if (type is null && visual is null) throw yaml.Error(value, path, "A brush cell needs terrain or visual.");
+                    string? visual = entry.TryGetValue("visual", out var visualNode) ? brushYaml.Text(visualNode, path + ".visual") : null;
+                    if (type is null && visual is null) throw brushYaml.Error(value, path, "A brush cell needs terrain or visual.");
                     symbols.Add(symbol[0], (type, visual));
                 }
                 var cells = new List<TerrainBrushCell>();
                 int brushWidth = 0;
                 for (int y = 0; y < brushRows.Count; y++)
                 {
-                    string row = yaml.Text(brushRows[y], path + ".rows");
+                    string row = brushYaml.Text(brushRows[y], path + ".rows");
                     if (y == 0) brushWidth = row.Length;
-                    if (row.Length != brushWidth || brushWidth > size.X || brushRows.Count > size.Y)
-                        throw yaml.Error(brushRows[y], path, "Brush rows must have equal length and fit the map.");
+                    if (row.Length != brushWidth || brushWidth == 0 || (long)brushWidth * brushRows.Count > NavigationGrid.MaximumCells)
+                        throw brushYaml.Error(brushRows[y], path, "Brush rows must have equal nonzero length and fit the cell budget.");
                     for (int x = 0; x < row.Length; x++)
                     {
                         if (row[x] == '.') continue;
-                        if (!symbols.TryGetValue(row[x], out var value)) throw yaml.Error(brushRows[y], path, $"Unknown brush symbol '{row[x]}'.");
+                        if (!symbols.TryGetValue(row[x], out var value)) throw brushYaml.Error(brushRows[y], path, $"Unknown brush symbol '{row[x]}'.");
                         cells.Add(new(x, y, value.Terrain, value.Visual));
                     }
                 }
-                brushes.Add(name, (brushWidth, brushRows.Count, cells.ToArray()));
+                if (!brushes.TryAdd(name, (brushWidth, brushRows.Count, cells.ToArray())))
+                    throw brushYaml.Error(brushNode, path, $"Duplicate brush '{name}'.");
             }
         }
+        if (brushSources is not null)
+            foreach (var brushSource in brushSources)
+            {
+                var brushYaml = new MapYaml(brushSource);
+                ReadBrushes(brushYaml, brushYaml.Root());
+            }
+        if (terrain.TryGetValue("brushes", out var inlineBrushes)) ReadBrushes(yaml, inlineBrushes);
         if (terrain.TryGetValue("placements", out var placementsNode))
         {
             foreach (var placementNode in yaml.Items(placementsNode, "terrain.placements"))

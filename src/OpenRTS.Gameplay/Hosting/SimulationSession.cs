@@ -23,6 +23,11 @@ public sealed class SimulationSession : SimulationSession<SimulationWorld, World
         uint states = 0, EntityId targetEntity = default, EntitySet? recipients = null, bool queued = false, string? action = null, string? queue = null, int amount = 1, bool repeat = false, bool enabled = false, long taskId = 0, int quarterTurns = 0)
         => base.Submit(new WorldCommand(0, 0, 0, kind, entity, position, unitType, owner, animation, durationTicks, track, states, targetEntity, recipients, queued, action, queue, amount, repeat, enabled, taskId) { QuarterTurns = quarterTurns });
 
+    /// <summary>Issue a registered transition at a chosen location, or at the actor's current location.</summary>
+    public long Transform(EntityId entity, string action, WorldPosition? position = null, int quarterTurns = 0) =>
+        Submit(new WorldCommand(0, 0, 0, CommandKind.Transform, entity, position ?? default, Action: action)
+            { TransformHere = !position.HasValue, QuarterTurns = quarterTurns });
+
     protected override void ValidateInput(WorldCommand command)
     {
         if (!Enum.IsDefined(command.Kind)) throw new ArgumentOutOfRangeException("kind");

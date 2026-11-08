@@ -24,6 +24,7 @@ public sealed partial class SimulationWorld
     private void IssueOrder(int index, UnitOrder order, bool queued)
     {
         if (!IsOnMap(_entityHandles[index])) return;
+        if (IsTransformationLocked(_entityHandles[index])) { RejectAction(_entityHandles[index].Get<EntityIdentity>().Id); return; }
         ref var entity = ref _entityHandles[index];
         var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityOrders = ref entity.Get<OrderState>();
@@ -71,6 +72,7 @@ public sealed partial class SimulationWorld
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { if (!_types[entityIdentity.Type].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
         else Halt(index);
+        CancelTransformation(entityIdentity.Id, stop: false);
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
         entityOrders.CombatTarget = default; CancelWindups(index);
@@ -103,6 +105,7 @@ public sealed partial class SimulationWorld
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
             if (!IsOnMap(entity) || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Transform) continue;
             if (UpgradeImmobilizes(entity))
             {
                 if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt)

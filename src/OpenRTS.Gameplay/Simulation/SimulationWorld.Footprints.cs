@@ -28,11 +28,12 @@ public sealed partial class SimulationWorld
         }
         return true;
     }
-    private NavigationGrid ComposeFootprints(NavigationGrid basis, FootprintDefinition? extra = null, WorldPosition position = default)
+    private NavigationGrid ComposeFootprints(NavigationGrid basis, FootprintDefinition? extra = null, WorldPosition position = default, EntityId exclude = default)
     {
         _cellOverrides.Clear();
         foreach (var id in _footprints)
         {
+            if (id == exclude) continue;
             ref var entity = ref _entityHandles[_indices[id]];
             Stamp(TypeOf(entity).Footprint!, entity.Get<SpatialState>().Position);
         }
@@ -52,7 +53,7 @@ public sealed partial class SimulationWorld
             }
         }
     }
-    private bool SafeGrid(NavigationGrid candidate, out EntityId occupant)
+    private bool SafeGrid(NavigationGrid candidate, out EntityId occupant, EntityId exclude = default)
     {
         occupant = default;
         for (int i = 0; i < Count; i++)
@@ -61,7 +62,7 @@ public sealed partial class SimulationWorld
             ref var entitySpatial = ref entity.Get<SpatialState>();
             var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityMotion = ref entity.Get<MotionState>();
-            var type = _types[entityIdentity.Type]; if (type.Footprint is not null || !IsOnMap(entity)) continue;
+            var type = _types[entityIdentity.Type]; if (entityIdentity.Id == exclude || type.Footprint is not null || !IsOnMap(entity)) continue;
             bool clear = TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             bool newNoStop = !TerrainGeometry.CanStop(candidate, entitySpatial.Position, type.Body, type.Locomotor) &&
                 TerrainGeometry.CanStop(_navigation!.Grid, entitySpatial.Position, type.Body, type.Locomotor) && !entityMotion.Moving;

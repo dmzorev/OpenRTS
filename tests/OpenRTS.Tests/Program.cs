@@ -71,6 +71,7 @@ BaseConstructionPlannerChecks.Run(Test);
 CaptureMechanicChecks.Run(Test);
 TransportConstructionMechanicChecks.Run(Test);
 ConstructionChecks.Run(Test);
+TransformationChecks.Run(Test);
 SimulationChecks.Run(Test);
 ExactMovementChecks.Run(Test);
 NavigationChecks.Run(Test);

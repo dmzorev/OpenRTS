@@ -96,10 +96,10 @@ public sealed partial class SimulationWorld
 
     private bool TrySupplyStation(EntityId id, uint owner, bool returning, out Entity station)
     {
-        if (!TryGetEntity(id, out station)) return false;
+        if (!TryGetEntity(id, out station) || IsConstructing(station)) return false;
         uint stationOwner = station.Get<OwnershipState>().Owner;
         if (returning)
-            return TypeOf(station).Supply?.Role == SupplyRole.Depot && stationOwner == owner && !IsConstructing(station);
+            return TypeOf(station).Supply?.Role == SupplyRole.Depot && stationOwner == owner;
         return station.Has<MineState>() && (stationOwner == 0 || stationOwner == owner) &&
             station.Get<MineState>().Remaining > 0 && !IsUpgrading(station);
     }
@@ -232,7 +232,7 @@ public sealed partial class SimulationWorld
         bool removedSource = false;
         foreach (var (id, dock) in _supplyDocks)
         {
-            if (!TryGetEntity(dock.Truck, out var actor) || !IsOnMap(actor)) continue;
+            if (!TryGetEntity(dock.Truck, out var actor) || !IsOnMap(actor) || IsConstructing(actor)) continue;
             ref var truck = ref actor.Get<TruckState>();
             uint owner = actor.Get<OwnershipState>().Owner;
             if (owner == 0 || !TrySupplyStation(new(id), owner, truck.Returning, out var station)) continue;

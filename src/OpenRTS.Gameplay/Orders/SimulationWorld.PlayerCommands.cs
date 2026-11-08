@@ -17,7 +17,7 @@ public sealed partial class SimulationWorld
         bool Owns(EntityId id) => TryGetGameplayOwner(id, out uint owner) && owner == command.Issuer;
         if (command.Kind is CommandKind.CancelConstruction or CommandKind.CancelUpgrade)
             return command.Recipients is null && command.Owner == command.Issuer && command.TargetEntity != default;
-        if (command.Kind is CommandKind.Aim or CommandKind.ClearAim)
+        if (command.Kind is CommandKind.Aim or CommandKind.ClearAim or CommandKind.Transform)
             return command.Recipients is null && Owns(command.Entity);
 
         if (command.Kind is not (CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup or

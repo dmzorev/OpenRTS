@@ -86,9 +86,9 @@ internal sealed class EconomySystem
         if (storage is null) return;
         lock (_storageGate)
         {
-            foreach (var (income, owner, definition) in storage.Query<IncomeState, OwnershipState, EntityDefinition>())
+            foreach (var (entity, income, owner, definition) in storage.Query<IncomeState, OwnershipState, EntityDefinition>().WithEntities())
             {
-                if (tick < income.Value.NextTick) continue;
+                if (tick < income.Value.NextTick || _isConstructing(entity)) continue;
                 var settings = definition.Value.Economy!;
                 income.Value.NextTick = checked(tick + settings.Interval);
                 Credit(owner.Value.Owner, settings.Income);

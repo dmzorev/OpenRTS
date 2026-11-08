@@ -195,7 +195,7 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
     {
         foreach (var actor in recipients)
         {
-            if (world.IsUpgrading(actor) || !TryGetProducer(actor, out var producer)) continue;
+            if (world.IsConstructing(actor) || world.IsUpgrading(actor) || !TryGetProducer(actor, out var producer)) continue;
             var identity = actor.Get<EntityIdentity>();
             var type = types[identity.Type];
             foreach (var tasks in producer.Queues)

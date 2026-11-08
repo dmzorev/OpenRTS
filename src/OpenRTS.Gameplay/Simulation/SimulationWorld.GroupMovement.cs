@@ -20,7 +20,7 @@ public sealed partial class SimulationWorld
 
     private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
     {
-        bool Eligible(int i) => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && !UpgradeImmobilizes(_entityHandles[i]) && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
+        bool Eligible(int i) => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && !UpgradeImmobilizes(_entityHandles[i]) && !IsTransformationLocked(_entityHandles[i]) && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
         foreach (int i in members) if (!Eligible(i)) _events.Add(new(Tick, WorldEventKind.InvalidOrder, _entityHandles[i].Get<EntityIdentity>().Id));
         members = members.Where(Eligible).ToArray();
         var grid = _navigation!.Grid;

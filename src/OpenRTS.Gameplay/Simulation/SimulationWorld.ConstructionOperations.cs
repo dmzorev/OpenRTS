@@ -18,7 +18,7 @@ public sealed partial class SimulationWorld
     {
         int builderType = builder.Get<EntityIdentity>().Type;
         int product = _buildRecipes.FindProduct(builderType, action);
-        if (product >= 0 && _types[builderType].Products[product].OnSite &&
+        if (!IsConstructing(builder) && product >= 0 && _types[builderType].Products[product].OnSite &&
             _types[builderType].ProductEnabled(product, CompletedUpgrade(builder)))
         {
             var resolved = _buildRecipes[builderType, product];
@@ -39,18 +39,22 @@ public sealed partial class SimulationWorld
     bool IConstructionWorld.StopAllowed(int type, WorldPosition position) => StopAllowed(type, position);
     bool IConstructionWorld.TrySetTarget(EntityId actor, WorldPosition position) => SetTarget(_indices[actor], position);
 
-    bool IConstructionWorld.TryEvacuate(EntityId actor, WorldPosition position, bool preserveOrder)
+    bool IConstructionWorld.TryEvacuate(EntityId actor, WorldPosition position, bool preserveOrder) =>
+        TryEvacuate(actor, position, preserveOrder);
+
+    private bool TryEvacuate(EntityId actor, WorldPosition position, bool preserveOrder)
     {
         int index = _indices[actor];
         var entity = _entityHandles[index];
         int typeIndex = entity.Get<EntityIdentity>().Type;
         var type = _types[typeIndex];
         var from = entity.Get<SpatialState>().Position;
-        if (!StopAllowed(typeIndex, position) || !(_motion ?? _combatIndex)!.ClearPlacement(position, out _, type.Body) ||
+        if (IsTransformationLocked(entity) || UpgradeImmobilizes(entity) || !StopAllowed(typeIndex, position) || !(_motion ?? _combatIndex)!.ClearPlacement(position, out _, type.Body) ||
             _navigation is not null && !TerrainGeometry.Clear(_navigation.Grid, from, position, type.Body, type.Locomotor) ||
             !SetTarget(index, position)) return false;
 
         if (preserveOrder) return true;
+        CancelTransformation(actor, stop: false);
         CancelWindups(index);
         ref var orders = ref entity.Get<OrderState>();
         orders.ActiveOrder = new(UnitActionKind.Move, position);
@@ -63,7 +67,9 @@ public sealed partial class SimulationWorld
 
     WorldPosition IConstructionWorld.GroundPosition(WorldPosition position) => GroundPosition(position, position.Elevation);
 
-    bool IConstructionWorld.SiteTerrainAllows(UnitDefinition type, WorldPosition position)
+    bool IConstructionWorld.SiteTerrainAllows(UnitDefinition type, WorldPosition position) => SiteTerrainAllows(type, position);
+
+    private bool SiteTerrainAllows(UnitDefinition type, WorldPosition position)
     {
         var footprint = type.Footprint!;
         if (!FootprintFits(footprint, position)) return false;

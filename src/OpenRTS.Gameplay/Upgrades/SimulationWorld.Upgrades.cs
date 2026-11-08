@@ -55,6 +55,7 @@ public sealed partial class SimulationWorld
             !_economy.Spend(owner, upgrade.Cost))
         { RejectAction(command.TargetEntity); return; }
 
+        CancelTransformation(target.Get<EntityIdentity>().Id);
         ref var project = ref target.Get<UpgradeState>();
         project.Project = variant;
         project.Payer = owner;
