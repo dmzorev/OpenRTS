@@ -117,6 +117,7 @@ internal static class PresentationChecks
             ModelCatalog Load(string value) => ModelCatalog.Load([new("invalid-model", value)]);
             NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x', Parent: body}}}}"));
             NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x', Size: [1]}}}}"));
+            NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x', Facings: 65}}}}"));
             NavigationChecks.Reject<ContentException>(() => Load("m: {Model: {Parts: {body: {Resource: 'res://x'}}, Animations: {idle: {Sequence: stand, Parts: [missing]}}}}"));
             var missing = UnitCatalog.Load([new("u", "u: {Health: {HP: 1}, Presentation: {Model: absent}}")]);
             NavigationChecks.Reject<ArgumentException>(() => models.ValidateUnits(missing));

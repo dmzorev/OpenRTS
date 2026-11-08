@@ -31,6 +31,7 @@ public partial class Sandbox
             sprites.Apply(poses, 1, tick, tickRate);
             if (sprites.Capacity != capacity) throw new InvalidOperationException("Stable frame failed to reuse buffers.");
             VerifyAnimationSequences();
+            VerifyDirectionalAnimation();
             VerifyInfantryWalking();
             var stress = new EntityPose[10000];
             for (int i = 0; i < stress.Length; i++)
@@ -72,7 +73,7 @@ public partial class Sandbox
                 await CaptureWalking(poses, tickRate);
             }
             await VerifyCombatPresentation();
-            GD.Print("OPENRTS_PRESENTATION:PASS alpha sprites and four-frame infantry walking, layered turret, concurrent states, weighted/pingpong timing, 10000-unit buffers and terrain resources");
+            GD.Print("OPENRTS_PRESENTATION:PASS alpha sprites, directional and four-frame infantry walking, layered turret, concurrent states, weighted/pingpong timing, 10000-unit buffers and terrain resources");
             GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(report));
             GetTree().Quit();
         }
@@ -180,6 +181,64 @@ public partial class Sandbox
         }
         static Texture2D TestTexture(string name, Color color) => new GradientTexture2D
         { Width = 4, Height = 4, ResourceName = name, Gradient = new Gradient { Colors = [color, color] } };
+    }
+    private void VerifyDirectionalAnimation()
+    {
+        string resource = $"res://.godot/presentation-tests/facings-{System.Environment.ProcessId}.tres";
+        var frames = new SpriteFrames();
+        frames.AddAnimation("stand");
+        frames.AddFrame("stand", Texture("stand"));
+        for (int direction = 0; direction < 4; direction++)
+        {
+            string sequence = $"travel-{direction}";
+            frames.AddAnimation(sequence);
+            frames.SetAnimationSpeed(sequence, 4);
+            frames.SetAnimationLoopMode(sequence, SpriteFrames.LoopMode.Linear);
+            frames.AddFrame(sequence, Texture($"{sequence}-0"));
+            frames.AddFrame(sequence, Texture($"{sequence}-1"));
+        }
+        if (ResourceSaver.Save(frames, resource) != Error.Ok) throw new IOException("Failed to create directional sprite fixture.");
+        var units = UnitCatalog.Load([new("directional-unit", "u: {Health: {HP: 1}, Presentation: {Model: m, Animations: [idle, move, fire]}}")]);
+        var models = ModelCatalog.Load([new("directional-model", $$"""
+            m:
+              Model:
+                Parts:
+                  body: { Resource: '{{resource}}', Facings: 4 }
+                Animations:
+                  idle: { Sequence: stand, Parts: [body] }
+                  move: { Sequence: travel, Parts: [body] }
+                  fire: { Sequence: travel, Parts: [body], Facing: Weapon }
+            """)]);
+        var probe = new SpriteWorldView(units, models); AddChild(probe.Node);
+        var unit = units.Units[0];
+        var north = FacingDirection.North;
+        var east = new FacingDirection(1, 0);
+        var south = new FacingDirection(0, 1);
+        var west = new FacingDirection(-1, 0);
+        Check(unit.MoveAnimation, north, north, 0, 0, "travel-0-0");
+        Check(unit.MoveAnimation, north, east, 3, 0.75f, "travel-1-1");
+        Check(unit.MoveAnimation, east, east, 5, 0, "travel-1-0");
+        Check(unit.MoveAnimation, south, south, 3, 0, "travel-2-1");
+        Check(unit.MoveAnimation, west, west, 3, 0, "travel-3-1");
+        Check(unit.MoveAnimation, west, north, 3, 0.75f, "travel-0-1");
+        Check(unit.AnimationIndex("fire"), east, east, 3, 0, "travel-3-1");
+        Check(unit.IdleAnimation, east, east, 3, 0, "stand");
+        probe.Node.QueueFree();
+
+        void Check(int animation, FacingDirection previous, FacingDirection current, int tick, float alpha, string expected)
+        {
+            var view = new EntityPresentation(0, previous, current, west, west, new(animation, 0, 0), AnimationPlayback.None, 0);
+            probe.Apply([new(new(1), 0, new(1024, 1024), new(1024, 1024), view)], alpha, tick, 10);
+            var batch = probe.Node.GetChildren().OfType<MultiMeshInstance3D>().Single(n => n.Multimesh.VisibleInstanceCount == 1);
+            var material = (ShaderMaterial)batch.Multimesh.Mesh.SurfaceGetMaterial(0);
+            var texture = (Texture2D)material.GetShaderParameter("sprite_texture").AsGodotObject();
+            if (texture.ResourceName != expected)
+                throw new InvalidOperationException($"Directional animation at tick {tick}: expected {expected}, got {texture.ResourceName}.");
+            if (DisplayServer.GetName() != "headless" && batch.Multimesh.GetInstanceTransform(0).Basis != Basis.Identity)
+                throw new InvalidOperationException("Directional sprite quad was rotated.");
+        }
+        static Texture2D Texture(string name) => new GradientTexture2D
+        { Width = 4, Height = 4, ResourceName = name, Gradient = new Gradient() };
     }
     private int TeamPixels(Image image, EntityPose pose, bool blue)
     {

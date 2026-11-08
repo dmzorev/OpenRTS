@@ -7,8 +7,8 @@ namespace OpenRTS.Content;
 public enum ModelFacing { Body, Weapon }
 public sealed record ModelPart(string Id, int Parent, string Resource, ModelFacing Facing,
     double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer, string? Mount = null, ReadOnlyCollection<string>? VisibleWhen = null, ReadOnlyCollection<string>? HiddenWhen = null,
-    double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null);
-public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0);
+    double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null, int Facings = 0);
+public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0, ModelFacing? Facing = null);
 public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity, double Pulse = 0);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
     ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null);
@@ -42,7 +42,7 @@ public sealed class ModelCatalog
                     int parent = part.Parent is null ? -1 : ordered.FindIndex(p => p.Id == part.Parent);
                     if (part.Parent is not null && parent < 0) continue;
                     ValidateVector(part.Size, 0.01, 32, "Size"); ValidateVector(part.Pivot, 0, 1, "Pivot"); ValidateVector(part.Offset, -32, 32, "Offset");
-                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount, Array.AsReadOnly(part.VisibleWhen), Array.AsReadOnly(part.HiddenWhen), part.Spin, part.SpinWhen, part.LoopWhen, part.LoopAnimation));
+                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount, Array.AsReadOnly(part.VisibleWhen), Array.AsReadOnly(part.HiddenWhen), part.Spin, part.SpinWhen, part.LoopWhen, part.LoopAnimation, part.Facings));
                     pending.RemoveAt(i--); progress = true;
                 }
                 if (!progress) throw node.Error(id + ".Model.Parts", "Part parent cycle.");
@@ -53,7 +53,7 @@ public sealed class ModelCatalog
                 if (string.IsNullOrWhiteSpace(name) || animation.Parts.Length == 0 || animation.Parts.Distinct().Count() != animation.Parts.Length ||
                     animation.Parts.Any(p => !options.Parts.ContainsKey(p))) throw node.Error(id + ".Model.Animations." + name, "Animation references missing or duplicate parts.");
                 if (animation.Slide.Length != 2 || animation.Slide.Any(v => !double.IsFinite(v) || Math.Abs(v) > 16)) throw node.Error(id + ".Model.Animations." + name, "Slide requires two finite values in -16..16.");
-                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash, animation.ScaleFrom, animation.OpacityFrom, animation.Slide[0], animation.Slide[1]));
+                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash, animation.ScaleFrom, animation.OpacityFrom, animation.Slide[0], animation.Slide[1], animation.Facing));
             }
             var states = new Dictionary<string, ModelState>(StringComparer.Ordinal);
             foreach (var (name, state) in options.States)
@@ -112,6 +112,7 @@ public sealed class ModelCatalog
         public string? LoopWhen { get; set; }
         public string? LoopAnimation { get; set; }
         public ModelFacing Facing { get; set; }
+        [Range(0, 64)] public int Facings { get; set; }
         public double[] Size { get; set; } = [1, 1];
         public double[] Pivot { get; set; } = [0.5, 0.5];
         public double[] Offset { get; set; } = [0, 0];
@@ -121,6 +122,7 @@ public sealed class ModelCatalog
     {
         [Required] public string Sequence { get; set; } = "";
         public string[] Parts { get; set; } = [];
+        public ModelFacing? Facing { get; set; }
         [Range(0.0, 1.0)] public double Bob { get; set; }
         [Range(0.0, 1.0)] public double Recoil { get; set; }
         [Range(0.0, 1.0)] public double Flash { get; set; }

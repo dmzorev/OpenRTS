@@ -18,7 +18,7 @@ public sealed class SpriteWorldView
             return Frames[i];
         }
     }
-    private sealed record Part(ModelPart Definition, Sequence?[] Sequences, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation);
+    private sealed record Part(ModelPart Definition, Sequence[]?[] Sequences, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation);
     private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed);
     private readonly Model[] _models;
     private readonly SortedDictionary<EntityId, EntityPose> _wrecks = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
@@ -63,29 +63,25 @@ public sealed class SpriteWorldView
             {
                 var part = definition.Parts[p];
                 var frames = GD.Load<SpriteFrames>(part.Resource) ?? throw new ArgumentException("Missing SpriteFrames: " + part.Resource);
-                var sequences = new Sequence?[type.Animations.Count]; var animations = new ModelAnimation?[sequences.Length];
+                var sequences = new Sequence[]?[type.Animations.Count]; var animations = new ModelAnimation?[sequences.Length];
                 for (int a = 0; a < sequences.Length; a++)
                 {
                     var animation = definition.Animations[type.Animations[a]];
                     if (!animation.Parts.Contains(part.Id)) continue;
-                    var name = new StringName(animation.Sequence);
-                    if (!frames.HasAnimation(name) || frames.GetFrameCount(name) == 0) throw new ArgumentException($"{part.Resource}: missing sequence {name}.");
-                    int sourceCount = frames.GetFrameCount(name); var loop = frames.GetAnimationLoopMode(name);
-                    int count = loop == SpriteFrames.LoopMode.Pingpong && sourceCount > 1 ? sourceCount * 2 - 2 : sourceCount;
-                    var textures = new SpriteBatch[count]; var ends = new double[count];
-                    double total = 0;
-                    for (int frame = 0; frame < count; frame++)
+                    using var name = new StringName(animation.Sequence);
+                    if (part.Facings < 2 || frames.HasAnimation(name))
+                        sequences[a] = [LoadSequence(frames, name, part.Resource)];
+                    else
                     {
-                        int sourceFrame = frame < sourceCount ? frame : sourceCount * 2 - 2 - frame;
-                        var texture = frames.GetFrameTexture(name, sourceFrame) ?? throw new ArgumentException("Animation frame has no texture.");
-                        textures[frame] = Batch(texture);
-                        double duration = frames.GetFrameDuration(name, sourceFrame);
-                        if (!double.IsFinite(duration) || duration <= 0) throw new ArgumentException("Invalid frame duration: " + part.Resource);
-                        total += duration; ends[frame] = total;
+                        var directions = new Sequence[part.Facings];
+                        for (int facing = 0; facing < directions.Length; facing++)
+                        {
+                            using var variant = new StringName(animation.Sequence + "-" + facing.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            directions[facing] = LoadSequence(frames, variant, part.Resource);
+                        }
+                        sequences[a] = directions;
                     }
-                    double speed = frames.GetAnimationSpeed(name);
-                    if (total <= 0 || speed <= 0) throw new ArgumentException("Invalid sequence timing: " + part.Resource);
-                    sequences[a] = new(textures, ends, speed, loop != SpriteFrames.LoopMode.None); animations[a] = animation;
+                    animations[a] = animation;
                 }
                 if (sequences[type.IdleAnimation] is null) throw new ArgumentException($"{definition.Id}.{part.Id}: idle must bind every part.");
                 uint Mask(IEnumerable<string>? names) { uint mask = 0; if (names is not null) foreach (string name in names) mask |= type.StateMask(name); return mask; }
@@ -96,6 +92,27 @@ public sealed class SpriteWorldView
             _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState), type.States.Contains("nearly-destroyed") ? type.StateMask("nearly-destroyed") : 0);
             MaximumParts = Math.Max(MaximumParts, parts.Length);
         }
+    }
+
+    private Sequence LoadSequence(SpriteFrames frames, StringName name, string resource)
+    {
+        if (!frames.HasAnimation(name) || frames.GetFrameCount(name) == 0) throw new ArgumentException($"{resource}: missing sequence {name}.");
+        int sourceCount = frames.GetFrameCount(name); var loop = frames.GetAnimationLoopMode(name);
+        int count = loop == SpriteFrames.LoopMode.Pingpong && sourceCount > 1 ? sourceCount * 2 - 2 : sourceCount;
+        var textures = new SpriteBatch[count]; var ends = new double[count];
+        double total = 0;
+        for (int frame = 0; frame < count; frame++)
+        {
+            int sourceFrame = frame < sourceCount ? frame : sourceCount * 2 - 2 - frame;
+            var texture = frames.GetFrameTexture(name, sourceFrame) ?? throw new ArgumentException("Animation frame has no texture.");
+            textures[frame] = Batch(texture);
+            double duration = frames.GetFrameDuration(name, sourceFrame);
+            if (!double.IsFinite(duration) || duration <= 0) throw new ArgumentException("Invalid frame duration: " + resource);
+            total += duration; ends[frame] = total;
+        }
+        double speed = frames.GetAnimationSpeed(name);
+        if (total <= 0 || speed <= 0) throw new ArgumentException("Invalid sequence timing: " + resource);
+        return new(textures, ends, speed, loop != SpriteFrames.LoopMode.None);
     }
 
     private SpriteBatch Batch(Texture2D texture)
@@ -174,16 +191,6 @@ public sealed class SpriteWorldView
             {
                 var runtime = model.Parts[p]; var part = runtime.Definition;
                 if ((view.States & runtime.Visible) != runtime.Visible || (view.States & runtime.Hidden) != 0) { pivots[p] = origin; angles[p] = body; continue; }
-                float angle = part.Facing == ModelFacing.Body ? body : weapon;
-                if (!ghost && part.Facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
-                {
-                    var aim = weapons[pose.WeaponOffset + runtime.Mount];
-                    angle = Angle(aim.PreviousFacing, aim.Facing, alpha);
-                }
-                if (part.Spin != 0 && (runtime.SpinWhen == 0 || (view.States & runtime.SpinWhen) != 0)) angle += (float)(time / tickRate * part.Spin * Math.PI / 180);
-                Vector2 mount = part.Parent < 0 ? origin : pivots[part.Parent];
-                mount += Rotate(new((float)part.OffsetX * scale, (float)part.OffsetY * scale), part.Parent < 0 ? body : angles[part.Parent]);
-                angles[p] = angle;
                 var playback = construct >= 0 ? new AnimationPlayback(construct, tick - pose.Upgrade.Work + 1, pose.Upgrade.Required) : view.Body;
                 int animation = playback.Animation;
                 if (animation < 0 || animation >= runtime.Sequences.Length || runtime.Sequences[animation] is null)
@@ -207,6 +214,25 @@ public sealed class SpriteWorldView
                         playback = clip; animation = clip.Animation;
                     }
                 var effect = runtime.Animations[animation]!;
+                var facing = effect.Facing ?? part.Facing;
+                float angle = facing == ModelFacing.Body ? body : weapon;
+                if (!ghost && facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
+                {
+                    var aim = weapons[pose.WeaponOffset + runtime.Mount];
+                    angle = Angle(aim.PreviousFacing, aim.Facing, alpha);
+                }
+                if (part.Spin != 0 && (runtime.SpinWhen == 0 || (view.States & runtime.SpinWhen) != 0)) angle += (float)(time / tickRate * part.Spin * Math.PI / 180);
+                int direction = 0;
+                if (part.Facings > 1)
+                {
+                    float step = MathF.Tau / part.Facings;
+                    direction = (int)MathF.Floor(Mathf.PosMod(angle, MathF.Tau) / step + 0.5f) % part.Facings;
+                    angle = direction * step;
+                }
+                Vector2 mount = part.Parent < 0 ? origin : pivots[part.Parent];
+                mount += Rotate(new((float)part.OffsetX * scale, (float)part.OffsetY * scale), part.Parent < 0 ? body : angles[part.Parent]);
+                angles[p] = angle;
+                float drawAngle = part.Facings == 0 ? angle : 0;
                 float progress = playback.DurationTicks > 0 ? (float)Math.Clamp((time - playback.StartTick) / playback.DurationTicks, 0, 1) : 0;
                 float pulse = playback.DurationTicks > 0 ? MathF.Sin(MathF.PI * Math.Clamp(progress * 3, 0, 1)) : 0;
                 float bob = (float)effect.Bob * MathF.Sin((float)(time - playback.StartTick) * MathF.Tau * 3 / tickRate);
@@ -216,10 +242,12 @@ public sealed class SpriteWorldView
                 float buildScale = playback.DurationTicks > 0 ? Mathf.Lerp((float)effect.ScaleFrom, 1, progress) : 1;
                 Vector2 size = new((float)part.Width * scale * buildScale, (float)part.Height * scale * buildScale);
                 var partTint = tint; if (playback.DurationTicks > 0) partTint.A *= Mathf.Lerp((float)effect.OpacityFrom, 1, progress);
-                Vector2 center = mount + Rotate(new((0.5f - (float)part.PivotX) * size.X, (0.5f - (float)part.PivotY) * size.Y), angle);
+                Vector2 center = mount + Rotate(new((0.5f - (float)part.PivotX) * size.X, (0.5f - (float)part.PivotY) * size.Y), drawAngle);
                 var team = _ownerColor(view.Owner);
                 team.A = Math.Max(stateFlash, Math.Max(pulse * (float)effect.Flash, extraFlash));
-                runtime.Sequences[animation]!.At(playback, time, tickRate).Add(new(center.X, elevation + 0.035f + depth + part.Layer * layerStep, center.Y), angle, size, partTint, team);
+                var directions = runtime.Sequences[animation]!;
+                directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate)
+                    .Add(new(center.X, elevation + 0.035f + depth + part.Layer * layerStep, center.Y), drawAngle, size, partTint, team);
                 SpriteCount++;
             }
         }
