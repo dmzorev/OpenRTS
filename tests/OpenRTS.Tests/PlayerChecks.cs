@@ -152,13 +152,18 @@ internal static class PlayerChecks
                 new(1, 0, 2, CommandKind.CaptureTarget, red, TargetEntity: deposit)]);
             world.Step();
             NavigationChecks.Check(Progress(blueA) == 4 && Progress(blueB) == 4 && Progress(red) == 2, "Capture work was not shared by side");
+            NavigationChecks.Check(TargetProgress() is { Owner: 1, Progress: 4, Duration: 8 },
+                "The building did not publish the leading side's capture progress");
             world.Step([new(3, 0, 1, CommandKind.Stop, Recipients: blue)]);
+            NavigationChecks.Check(TargetProgress() is { Owner: 1, Progress: 3 },
+                "Interrupted capture did not remain visible while decaying");
             world.Step();
+            NavigationChecks.Check(TargetProgress() is { Owner: 2, Progress: 4 }, "The capture lead did not switch");
             world.Step([new(5, 0, 1, CommandKind.CaptureTarget, Recipients: blue, TargetEntity: deposit)]);
             NavigationChecks.Check(Progress(blueA) == 4 && Progress(red) == 5, "Interrupted capture did not decay independently");
             world.Step();
             world.Step();
-            NavigationChecks.Check(Poses(world).Single(p => p.Id == deposit).Presentation.Owner == 1 && Progress(red) == 0,
+            NavigationChecks.Check(Poses(world).Single(p => p.Id == deposit).Presentation.Owner == 1 && Progress(red) == 0 && TargetProgress() == default,
                 "First side to finish did not claim the building and clear competing progress");
             world.Step();
             NavigationChecks.Check(Progress(red) == 1, "Losing side did not restart from zero");
@@ -166,6 +171,7 @@ internal static class PlayerChecks
             world.Step([new(10, 0, 1, CommandKind.CaptureTarget, red, TargetEntity: deposit)]);
             NavigationChecks.Check(Progress(red) == 1, "Interrupted capture did not decay all the way to zero");
 
+            OpenRTS.Core.Capture.CaptureTargetProgress TargetProgress() => Poses(world).Single(p => p.Id == deposit).Capture;
             int Progress(EntityId id) => Poses(world).Single(p => p.Id == id).Order.CaptureProgress;
         });
         test("Players: invulnerable props reject direct attacks and splash damage", () =>

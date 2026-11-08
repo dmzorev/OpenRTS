@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for the upgrade state and the APC, bunker and factory capability definitions.
+    // Includes the capture target projection in the entity snapshots.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "CCF73FF995FC0211C5159FC97A8732A33E5A4EA22530AE64FB24201A2B785AA2",
-        ["navigation"] = "89AEF906B2C7E476D0933C2D7A594BC38F1799DAE18542FA2F28425B19588127",
-        ["combat"] = "310671BC83EFD4B9C5B17FD0B64D97C654C58803665A53D731123169A52FFC6C",
-        ["buildings"] = "B3158566E138243B5CB078D111C504E184142AE0DA547D94024C793366992805",
-        ["production"] = "B4A3841820C9B94B591ED147DF06BE5083CA21C5B3AF5DF30CE9DF49A21FCA10"
+        ["direct"] = "962D3C761D446CE364B5C973C1B0E1952E072C3D86D002E2CDD791BB7844B942",
+        ["navigation"] = "022DA922642B3C114AAFDD4284A9F22FCE0935CD2692DFE717DEF41DBCCA7F89",
+        ["combat"] = "48AFA807D495281763991701539BC6287C64E12DB2FD8B03AA85FF95577D8348",
+        ["buildings"] = "9EC36FABC652B31DBC7FB5D5C4397F6F422333AB58432DCA5E10E91CCFD228E2",
+        ["production"] = "74D6A9867FB34FDF6447B63C17738B7E02EDE9C9B5CC40E0F51920A85A640FED"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

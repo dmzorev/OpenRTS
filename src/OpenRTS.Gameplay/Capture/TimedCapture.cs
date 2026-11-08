@@ -86,6 +86,22 @@ internal sealed class TimedCapture : ICaptureMechanic
         return new(progress?.Work ?? 0, Duration(target.Type));
     }
 
+    public CaptureTargetProgress GetTargetProgress(Entity target, UnitDefinition type)
+    {
+        if (!target.Has<CapturableState>() || target.Get<CapturableState>().Sides is not { } sides)
+            return default;
+
+        uint leader = 0;
+        int work = 0;
+        foreach (var (owner, progress) in sides)
+        {
+            if (progress.Work <= work) continue;
+            leader = owner;
+            work = progress.Work;
+        }
+        return work > 0 ? new(leader, work, Duration(type)) : default;
+    }
+
     private static int Duration(UnitDefinition type) => type.Capturable?.Ticks ?? type.MaxHealth;
 
     public void WriteEntityState(BinaryWriter writer, Entity entity)

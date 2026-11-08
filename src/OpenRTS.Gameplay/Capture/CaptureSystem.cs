@@ -96,6 +96,8 @@ internal sealed class CaptureSystem(ICaptureWorld world, ICaptureMechanic mechan
         return _mechanic.GetProgress(entity, ParticipantOf(target));
     }
 
+    internal CaptureTargetProgress GetTargetProgress(Entity entity, UnitDefinition type) => _mechanic.GetTargetProgress(entity, type);
+
     internal void WriteState(BinaryWriter writer) => _mechanic.WriteState(writer);
 
     internal static void WriteEntityState(CaptureSystem? system, BinaryWriter writer, Entity entity)

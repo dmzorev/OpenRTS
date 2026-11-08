@@ -7,6 +7,7 @@ public readonly record struct CaptureParticipant(Entity Entity, UnitDefinition T
 
 public readonly record struct CaptureAttempt(CaptureParticipant Actor, CaptureParticipant Target, long Tick, long DistanceSquared);
 public readonly record struct CaptureProgress(int Progress, int Duration);
+public readonly record struct CaptureTargetProgress(uint Owner, int Progress, int Duration);
 public enum CaptureStep { Approach, Engage, Complete }
 
 /// <summary>A world-local capture implementation. The host owns movement, the order queue and ownership changes.</summary>
@@ -22,6 +23,7 @@ public interface ICaptureMechanic
     void EndOrders(long tick) { }
     CaptureProgress GetProgress(Entity actor, UnitDefinition targetType) => default;
     CaptureProgress GetProgress(Entity actor, CaptureParticipant target) => GetProgress(actor, target.Type);
+    CaptureTargetProgress GetTargetProgress(Entity target, UnitDefinition type) => default;
     // Report callbacks must only read state and write canonical, self-delimiting data.
     void WriteEntityState(BinaryWriter writer, Entity entity);
     void WriteState(BinaryWriter writer) { }

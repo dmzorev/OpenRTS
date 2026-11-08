@@ -351,13 +351,16 @@ public partial class Sandbox
         bars.Clear();
         var upgrades = _rtsOverlay.UpgradeBars;
         upgrades.Clear();
+        var captures = _rtsOverlay.CaptureBars;
+        captures.Clear();
         for (int i = 0; i < _displayCount; i++)
         {
             var pose = _displayPoses[i];
             var type = _catalog!.Units[pose.UnitType];
             bool selected = _selection.Contains(pose.Id);
             bool showHealth = selected || _allHealth || pose.Health < type.MaxHealth;
-            if (!showHealth && !pose.Upgrade.Active) continue;
+            bool showCapture = pose.Capture is { Progress: > 0, Duration: > 0 };
+            if (!showHealth && !pose.Upgrade.Active && !showCapture) continue;
             float x = Mathf.Lerp(pose.Previous.X, pose.Current.X, alpha) / 1024;
             float z = Mathf.Lerp(pose.Previous.Y, pose.Current.Y, alpha) / 1024;
             float y = Mathf.Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha) / 1024;
@@ -366,9 +369,14 @@ public partial class Sandbox
             float width = type.Footprint is null ? 26 : 44;
             var rect = new Rect2(point.X - width / 2, point.Y - 10, width, 5);
             if (showHealth && field.Encloses(rect)) bars.Add((rect, Mathf.Clamp(pose.Health / (float)type.MaxHealth, 0, 1)));
-            if (!pose.Upgrade.Active) continue;
             if (showHealth) rect.Position += new Vector2(0, -6);
-            if (field.Encloses(rect)) upgrades.Add((rect, pose.Upgrade.Work / (float)pose.Upgrade.Required));
+            if (pose.Upgrade.Active)
+            {
+                if (field.Encloses(rect)) upgrades.Add((rect, pose.Upgrade.Work / (float)pose.Upgrade.Required));
+                rect.Position += new Vector2(0, -6);
+            }
+            if (showCapture && field.Encloses(rect))
+                captures.Add((rect, Mathf.Clamp(pose.Capture.Progress / (float)pose.Capture.Duration, 0, 1), TeamMarkerColor(pose.Capture.Owner)));
         }
     }
 }

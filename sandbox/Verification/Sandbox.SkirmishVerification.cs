@@ -144,7 +144,15 @@ public partial class Sandbox
         CheckSkirmish(mine.Presentation.Owner == 1 && mine.Upgrade.Completed == "owned" &&
             frame.Poses.ToArray().Any(p => p.Id.Value > 14 && _catalog!.Units[p.UnitType].Supply?.Role == SupplyRole.Truck),
             "Mine upgrade or truck production did not complete in the live match");
-        GD.Print("OPENRTS_SKIRMISH:players, capture, construction, supply truck, mine blueprint, layout parity and camera focus passed");
+        var oil = frame.Poses.ToArray().Single(p => p.Id.Value == 9);
+        CenterCamera(new Vector2(oil.Current.X, oil.Current.Y) / WorldPosition.UnitsPerCell);
+        UpdateHealthBars(1, Playfield());
+        CheckSkirmish(oil.Capture is { Owner: 2, Progress: > 0, Duration: > 0 } &&
+            !_selection.Contains(oil.Id) && !_selection.Contains(new(5)) &&
+            _rtsOverlay!.CaptureBars.Any(bar => bar.Color == TeamMarkerColor(2) &&
+                Mathf.IsEqualApprox(bar.Fraction, oil.Capture.Progress / (float)oil.Capture.Duration)),
+            "The capture bar is missing without selecting the target or engineer");
+        GD.Print("OPENRTS_SKIRMISH:players, capture bar, construction, supply truck, mine blueprint, layout parity and camera focus passed");
         _verificationDone = true;
         if (_capturePath is null || DisplayServer.GetName() == "headless") GetTree().Quit();
         else CaptureTerminal();

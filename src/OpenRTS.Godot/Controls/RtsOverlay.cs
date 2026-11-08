@@ -14,6 +14,7 @@ public partial class RtsOverlay : Control
     public Vector2? Rally { get; set; }
     public List<(Rect2 Bounds, float Fraction)> HealthBars { get; } = [];
     public List<(Rect2 Bounds, float Fraction)> UpgradeBars { get; } = [];
+    public List<(Rect2 Bounds, float Fraction, Color Color)> CaptureBars { get; } = [];
     private sealed record CursorStyle(Color Color, float Radius, SpriteFrames? Frames, string Sequence, Vector2 Hotspot);
     private readonly System.Collections.Generic.Dictionary<string, CursorStyle> _custom = new(StringComparer.Ordinal);
     public void RegisterCursor(string id, Color color, float radius = 12, SpriteFrames? frames = null, string sequence = "stand", Vector2 hotspot = default)
@@ -25,6 +26,14 @@ public partial class RtsOverlay : Control
     private float _time;
     public override void _Ready() { MouseFilter = MouseFilterEnum.Ignore; SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); }
     public override void _Process(double delta) { _time += (float)delta; QueueRedraw(); }
+    private void DrawProgressBar(Rect2 bounds, float fraction, Color color)
+    {
+        DrawRect(bounds, new Color("#101710"));
+        var fill = bounds.Grow(-1);
+        fill.Size *= new Vector2(fraction, 1);
+        if (fill.HasArea()) DrawRect(fill, color);
+    }
+
     public override void _Draw()
     {
         foreach (var (bounds, fraction) in HealthBars)
@@ -36,12 +45,9 @@ public partial class RtsOverlay : Control
                 DrawRect(fill, fraction > 0.5f ? new Color("#91cf56") : fraction > 0.25f ? new Color("#e6bb53") : new Color("#e36548"));
         }
         foreach (var (bounds, fraction) in UpgradeBars)
-        {
-            DrawRect(bounds, new Color("#101710"));
-            var fill = bounds.Grow(-1);
-            fill.Size *= new Vector2(fraction, 1);
-            if (fill.HasArea()) DrawRect(fill, new Color("#75c8ff"));
-        }
+            DrawProgressBar(bounds, fraction, new Color("#75c8ff"));
+        foreach (var (bounds, fraction, team) in CaptureBars)
+            DrawProgressBar(bounds, fraction, team);
         if (Marquee is { } box)
         { DrawRect(box, new Color(0.2f, 0.8f, 1, 0.12f)); DrawRect(box, new Color(0.4f, 0.9f, 1), false, 1.5f); }
         if (Rally is { } rally) { DrawLine(rally, rally + new Vector2(0, -24), Colors.LimeGreen, 2); DrawColoredPolygon([rally + new Vector2(0, -24), rally + new Vector2(15, -18), rally + new Vector2(0, -12)], Colors.LimeGreen); }
