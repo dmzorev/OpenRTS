@@ -92,7 +92,13 @@ public sealed partial class UnitCatalog
             var body = traits.All<BodyOptions>().SingleOrDefault(); var footprint = traits.All<FootprintOptions>().SingleOrDefault();
             try
             {
-                BodyShape? shape = body is null ? null : body.Kind switch { BodyKind.Circle => BodyShape.Circle(body.Radius), BodyKind.Box when body.HalfSize.Length == 2 => BodyShape.Box(body.HalfSize[0], body.HalfSize[1]), _ => throw new ArgumentException("Body requires Circle/Box and valid dimensions.") };
+                BodyShape? shape = body is null ? null : body.Kind switch
+                {
+                    BodyKind.Circle => BodyShape.Circle(body.Radius),
+                    BodyKind.Box when body.HalfSize.Length == 2 => BodyShape.Box(body.HalfSize[0], body.HalfSize[1]),
+                    BodyKind.None when movement?.Enabled == false => BodyShape.None,
+                    _ => throw new ArgumentException("Body requires Circle/Box with valid dimensions or None on an immobile object.")
+                };
                 FootprintDefinition? stamp = null;
                 if (footprint is not null)
                 {
@@ -173,7 +179,9 @@ public sealed partial class UnitCatalog
     {
         public SupplyRole Role { get; set; }
         public int Capacity { get; set; }
-        public SupplyDefinition Compile() => new(Role, Capacity);
+        public int? InitialAmount { get; set; }
+        public bool RemoveWhenEmpty { get; set; }
+        public SupplyDefinition Compile() => new(Role, Capacity, InitialAmount, RemoveWhenEmpty);
     }
     private sealed class PassengerOptions
     {

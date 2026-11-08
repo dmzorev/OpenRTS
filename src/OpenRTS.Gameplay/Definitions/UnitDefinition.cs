@@ -144,8 +144,15 @@ public sealed record UnitDefinition
         writer.Write(Supply is not null);
         if (Supply is { } supply)
         {
-            writer.Write((int)supply.Role);
+            // Keep the original bytes for definitions that use the default stock and depletion policy.
+            bool extended = supply.RemoveWhenEmpty || supply.InitialAmount != supply.Capacity;
+            writer.Write((int)supply.Role | (extended ? 0x100 : 0));
             writer.Write(supply.Capacity);
+            if (extended)
+            {
+                writer.Write(supply.InitialAmount);
+                writer.Write(supply.RemoveWhenEmpty);
+            }
         }
     }
     internal TransportDefinition? TransportFor(int upgrade) => upgrade < 0 ? Transport : _variantTransport[upgrade];

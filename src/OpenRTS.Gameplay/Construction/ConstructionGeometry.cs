@@ -28,11 +28,14 @@ internal static class ConstructionGeometry
     }
 
     internal static IEnumerable<WorldPosition> Exits(FootprintDefinition footprint, WorldPosition site, WorldPosition from, BodyShape body, int width, int depth)
+        => Exits(footprint.HalfWidth, footprint.HalfHeight, site, from, body, width, depth);
+
+    internal static IEnumerable<WorldPosition> Exits(int halfWidth, int halfHeight, WorldPosition site, WorldPosition from, BodyShape body, int width, int depth)
     {
-        int left = site.X - footprint.HalfWidth - body.HalfWidth - 1;
-        int right = site.X + footprint.HalfWidth + body.HalfWidth + 1;
-        int top = site.Y - footprint.HalfHeight - body.HalfHeight - 1;
-        int bottom = site.Y + footprint.HalfHeight + body.HalfHeight + 1;
+        int left = site.X - halfWidth - body.HalfWidth - 1;
+        int right = site.X + halfWidth + body.HalfWidth + 1;
+        int top = site.Y - halfHeight - body.HalfHeight - 1;
+        int bottom = site.Y + halfHeight + body.HalfHeight + 1;
         int x = Math.Clamp(from.X, left, right), y = Math.Clamp(from.Y, top, bottom);
         WorldPosition[] candidates = [new(left, y), new(right, y), new(x, top), new(x, bottom)];
         return candidates.Where(p => p.X >= body.HalfWidth && p.Y >= body.HalfHeight &&

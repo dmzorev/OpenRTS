@@ -25,6 +25,36 @@ internal static class SupplyChecks
 
     public static void Run(Action<string, Action> test)
     {
+        test("Supply: nearby crates fill one trip and disappear, then a partial load returns", () =>
+        {
+            var crate = UnitCatalog.Load([new("crate.yaml", """
+                crate:
+                  Health: {HP: 20}
+                  Movement: {Enabled: false}
+                  Body: {Radius: 128}
+                  Supply: {Role: Mine, Capacity: 8, InitialAmount: 3, RemoveWhenEmpty: true}
+                """)]).Units[0];
+            using var world = new SimulationWorld([Truck(8), crate, Depot()], 24 * 1024, 16 * 1024,
+                navigationGrid: new(24, 16), speedPerTick: 512);
+            world.AddInitialUnit(2, new(2048, 8192), 1);
+            var truck = world.AddInitialUnit(0, new(8192, 8192), 1);
+            var first = world.AddInitialUnit(1, new(9216, 8192));
+            var second = world.AddInitialUnit(1, new(11264, 8192));
+            var distant = world.AddInitialUnit(1, new(18432, 8192));
+            NavigationChecks.Check(Pose(world, first).Supply is { Amount: 3, Capacity: 8 }, "Wrong starting stock");
+            world.Step([new(1, 0, 1, CommandKind.UseAbility, truck, TargetEntity: first, Action: "harvest")]);
+            var removed = new List<EntityId>();
+            for (int i = 0; i < 160 && Credits(world, 1) < 6; i++)
+            {
+                foreach (var value in world.Events)
+                    if (value.Kind == WorldEventKind.Removed) removed.Add(value.Entity);
+                world.Step();
+            }
+            NavigationChecks.Check(removed.SequenceEqual([first, second]) && Credits(world, 1) == 6 &&
+                Pose(world, distant).Supply.Amount == 3 && Pose(world, truck).Supply.Mine == default,
+                "The truck did not collect both nearby crates before unloading, or included the distant crate");
+        });
+
         test("Supply: one truck per mine and depot, four units unloaded per tick", () =>
         {
             using var world = new SimulationWorld([Truck(8), Mine(16), Depot()], 20000, 16000);

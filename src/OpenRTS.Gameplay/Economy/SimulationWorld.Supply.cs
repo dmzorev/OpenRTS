@@ -8,6 +8,7 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld
 {
     private const int DockRange = 1536;
+    private const int NearbySupplyRange = 4 * WorldPosition.UnitsPerCell;
 
     private struct TruckState(bool automatic)
     {
@@ -34,7 +35,7 @@ public sealed partial class SimulationWorld
                 actor.Add(new TruckState(type.Abilities.Any(a => a.Kind == AbilityKind.Harvest && a.AutoCast)));
                 break;
             case SupplyRole.Mine:
-                actor.Add(new MineState(type.Supply.Capacity));
+                actor.Add(new MineState(type.Supply.InitialAmount));
                 _supplyMines.Add(id.Value);
                 break;
             case SupplyRole.Depot:
@@ -72,7 +73,7 @@ public sealed partial class SimulationWorld
             uint stationOwner = station.Get<OwnershipState>().Owner;
             switch (TypeOf(station).Supply?.Role)
             {
-                case SupplyRole.Mine when stationOwner == 0 || stationOwner == owner:
+                case SupplyRole.Mine when (stationOwner == 0 || stationOwner == owner) && station.Get<MineState>().Remaining > 0:
                     truck.Mine = command.TargetEntity;
                     break;
                 case SupplyRole.Depot when stationOwner == owner:
@@ -103,7 +104,7 @@ public sealed partial class SimulationWorld
             station.Get<MineState>().Remaining > 0 && !IsUpgrading(station);
     }
 
-    private EntityId NearestSupplyStation(Entity actor, uint owner, bool returning)
+    private EntityId NearestSupplyStation(Entity actor, uint owner, bool returning, long maxDistance = long.MaxValue)
     {
         var best = default(EntityId);
         long distance = long.MaxValue;
@@ -114,7 +115,7 @@ public sealed partial class SimulationWorld
             var id = new EntityId(value);
             if (!TrySupplyStation(id, owner, returning, out var station)) continue;
             long candidate = ActorDistanceSquared(actor, station);
-            if (candidate >= distance) continue;
+            if (candidate > maxDistance || candidate >= distance) continue;
             if (candidate > (long)DockRange * DockRange || !StopAllowed(identity.Type, position))
             {
                 bool reachable = false;
@@ -132,9 +133,16 @@ public sealed partial class SimulationWorld
         ObjectGeometry.DistanceSquared(TypeOf(actor), actor.Get<SpatialState>().Position,
             TypeOf(station), station.Get<SpatialState>().Position, out _, out _);
 
-    private IEnumerable<WorldPosition> SupplyExits(Entity actor, Entity station) =>
-        ConstructionGeometry.Exits(TypeOf(station).Footprint!, station.Get<SpatialState>().Position,
+    private IEnumerable<WorldPosition> SupplyExits(Entity actor, Entity station)
+    {
+        var type = TypeOf(station);
+        return ConstructionGeometry.Exits(type.Footprint?.HalfWidth ?? type.Body.HalfWidth,
+            type.Footprint?.HalfHeight ?? type.Body.HalfHeight, station.Get<SpatialState>().Position,
             actor.Get<SpatialState>().Position, TypeOf(actor).Body, Width, Depth);
+    }
+
+    private bool DepletedSupply(EntityId id) => id != default &&
+        (!TryGetEntity(id, out var source) || source.Has<MineState>() && source.Get<MineState>().Remaining == 0);
 
     private bool CanApproachSupply(int type, WorldPosition from, WorldPosition point) =>
         StopAllowed(type, point) && (_navigation is null || Resolver(type).CanReach(from, point, StepCancellation));
@@ -177,9 +185,16 @@ public sealed partial class SimulationWorld
 
         if (!TrySupplyStation(truck.Station, owner, truck.Returning, out var station))
         {
-            if (truck.Station != default && truck.Cargo > 0) truck.Returning = true;
             Halt(index);
             truck.Arrival = 0;
+            var next = default(EntityId);
+            if (!truck.Returning && truck.Station != default && truck.Cargo > 0)
+            {
+                if (DepletedSupply(truck.Station))
+                    next = NearestSupplyStation(actor, owner, false, (long)NearbySupplyRange * NearbySupplyRange);
+                truck.Returning = next == default;
+            }
+            if (DepletedSupply(truck.Mine)) truck.Mine = default;
             var pin = truck.Returning ? truck.Depot : truck.Mine;
             // An explicitly assigned station survives ownership changes and temporary outages.
             if (pin != default && !TryGetEntity(pin, out _))
@@ -188,7 +203,7 @@ public sealed partial class SimulationWorld
                 else truck.Mine = default;
                 pin = default;
             }
-            truck.Station = pin != default ? pin : NearestSupplyStation(actor, owner, truck.Returning);
+            truck.Station = next != default ? next : pin != default ? pin : NearestSupplyStation(actor, owner, truck.Returning);
             if (!TrySupplyStation(truck.Station, owner, truck.Returning, out station))
             {
                 orders.OrderPhase = OrderPhase.Waiting;
@@ -214,6 +229,7 @@ public sealed partial class SimulationWorld
     private void AdvanceSupply()
     {
         if (_supplyDocks.Count == 0) return;
+        bool removedSource = false;
         foreach (var (id, dock) in _supplyDocks)
         {
             if (!TryGetEntity(dock.Truck, out var actor) || !IsOnMap(actor)) continue;
@@ -227,6 +243,7 @@ public sealed partial class SimulationWorld
                 _economy.Credit(owner, transfer);
                 truck.Cargo -= transfer;
                 if (truck.Cargo > 0) continue;
+                SwitchSupplyLeg(ref truck);
             }
             else
             {
@@ -236,12 +253,59 @@ public sealed partial class SimulationWorld
                 int transfer = Math.Min(rate, Math.Min(mine.Remaining, capacity - truck.Cargo));
                 mine.Remaining -= transfer;
                 truck.Cargo += transfer;
-                if (truck.Cargo < capacity && mine.Remaining > 0) continue;
+                if (truck.Cargo == capacity) SwitchSupplyLeg(ref truck);
+                if (mine.Remaining == 0 && TypeOf(station).Supply!.RemoveWhenEmpty)
+                {
+                    DestroyIndex(_indices[new(id)], wreck: false);
+                    removedSource = true;
+                }
             }
-            truck.Returning = !truck.Returning;
-            truck.Station = default;
-            truck.Arrival = 0;
         }
+        if (removedSource) RebuildMotionIndex();
+    }
+
+    private static void SwitchSupplyLeg(ref TruckState truck)
+    {
+        truck.Returning = !truck.Returning;
+        truck.Station = default;
+        truck.Arrival = 0;
+    }
+
+    internal void CopySupplySources(List<SupplySourcePose> destination)
+    {
+        destination.Clear();
+        foreach (uint value in _supplyMines)
+        {
+            var id = new EntityId(value);
+            var source = _entityHandles[_indices[id]];
+            destination.Add(new(id, source.Get<EntityIdentity>().Type, source.Get<SpatialState>().Position,
+                source.Get<MineState>().Remaining, TypeOf(source).Supply!.Capacity));
+        }
+    }
+
+    internal int ReplenishSupply(EntityId id, int amount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(amount);
+        if (!TryGetEntity(id, out var source) || !source.Has<MineState>()) return 0;
+        ref int stock = ref source.Get<MineState>().Remaining;
+        int added = Math.Min(amount, TypeOf(source).Supply!.Capacity - stock);
+        stock += added;
+        return added;
+    }
+
+    internal bool TrySpawnSupplySource(int unitType, WorldPosition position, out EntityId created)
+    {
+        ValidateType(unitType);
+        var type = _types[unitType];
+        if (type.Supply?.Role != SupplyRole.Mine || type.Footprint is not null)
+            throw new ArgumentException("A spawned supply source must be a mine without a footprint.", nameof(unitType));
+        created = default;
+        var probe = type.Body.Kind == BodyKind.None ? BodyShape.Circle(16) : type.Body;
+        if (position.X < probe.HalfWidth || position.X > Width - probe.HalfWidth ||
+            position.Y < probe.HalfHeight || position.Y > Depth - probe.HalfHeight || !StopAllowed(unitType, position) ||
+            (_motion ?? _combatIndex) is { } index && !index.ClearPlacement(position, out _, probe)) return false;
+        created = SpawnFromRule(unitType, GroundPosition(position, position.Elevation), 0);
+        return true;
     }
 
     private static SupplyPose ReadSupply(Entity actor, UnitDefinition type, ref uint states)

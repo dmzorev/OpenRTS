@@ -1,5 +1,6 @@
 using OpenRTS.Core.Capture;
 using OpenRTS.Core.Construction;
+using OpenRTS.Core.Orders;
 using OpenRTS.Core.Production;
 using OpenRTS.Core.Transport;
 
@@ -55,13 +56,21 @@ public interface IEndOfTickRule
     void WriteState(BinaryWriter writer);
 }
 
-/// <summary>Read-only access valid during the rule's Advance call.</summary>
+/// <summary>Access valid during the rule's Advance call.</summary>
 public readonly ref struct GameplayTick
 {
     private readonly SimulationWorld _world;
     internal GameplayTick(SimulationWorld world) => _world = world;
     public long Tick => _world.Tick;
+    /// <summary>Read before spawning, since a spawn can invalidate the span.</summary>
+    public ReadOnlySpan<WorldEvent> Events => _world.Events;
     public bool TryGetOwner(EntityId entity, out uint owner) => _world.TryGetGameplayOwner(entity, out owner);
+    public void CopySupplySources(List<SupplySourcePose> destination) => _world.CopySupplySources(destination);
+    public int ReplenishSupply(EntityId source, int amount) => _world.ReplenishSupply(source, amount);
+    public bool TrySpawnSupplySource(int unitType, WorldPosition position, out EntityId created) =>
+        _world.TrySpawnSupplySource(unitType, position, out created);
+    public bool TrySpawnAtExit(EntityId source, int unitType, int radius, out EntityId created) =>
+        _world.TrySpawnAtExit(source, unitType, radius, out created);
 }
 
 public sealed partial class SimulationWorld

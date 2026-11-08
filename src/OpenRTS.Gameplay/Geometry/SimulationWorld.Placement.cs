@@ -1,7 +1,29 @@
+using OpenRTS.Core.Simulation;
+
 namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
+    internal bool TrySpawnAtExit(EntityId source, int unitType, int radius, out EntityId created)
+    {
+        ValidateType(unitType);
+        if (!_types[unitType].Movable) throw new ArgumentException("Exit spawning requires a mobile unit.", nameof(unitType));
+        if (radius is < 1 or > 8192) throw new ArgumentOutOfRangeException(nameof(radius));
+        created = default;
+        if (!TryGetEntity(source, out var actor) || !IsOnMap(actor) || IsConstructing(actor)) return false;
+        uint owner = actor.Get<OwnershipState>().Owner;
+        if (!TryFindExitPlacement(unitType, actor.Get<SpatialState>().Position, radius, out var exit, TypeOf(actor))) return false;
+        created = SpawnFromRule(unitType, exit, owner);
+        return true;
+    }
+
+    private EntityId SpawnFromRule(int unitType, WorldPosition position, uint owner)
+    {
+        var id = Spawn(unitType, position, owner);
+        _events.Add(new(Tick, WorldEventKind.Spawned, id, position, unitType, Owner: owner));
+        return id;
+    }
+
     private bool TryFindExitPlacement(int type, WorldPosition exit, int radius, out WorldPosition point, UnitDefinition? origin = null)
     {
         point = default;

@@ -31,9 +31,10 @@ public sealed record EntityDefinition
         ConstructionRange = constructionRange;
         Supply = supply;
         if (supply is not null && (spatial is null || health is null ||
-            (supply.Role == SupplyRole.Truck ? !spatial.Movable || passenger is not null :
-                spatial.Footprint is null) ||
-            supply.Role == SupplyRole.Mine && (capturable is not null || health.Destruction != DestructionPolicy.Neutralize)))
+            (supply.Role == SupplyRole.Truck ? !spatial.Movable || passenger is not null : spatial.Movable) ||
+            supply.Role == SupplyRole.Depot && spatial.Footprint is null ||
+            supply.Role == SupplyRole.Mine && (capturable is not null ||
+                !supply.RemoveWhenEmpty && (spatial.Footprint is null || health.Destruction != DestructionPolicy.Neutralize))))
             throw new ArgumentException("Invalid spatial, capture or health capability for supply.");
         if (armament?.Abilities.Any(a => a.Kind == AbilityKind.Harvest) == true && supply?.Role != SupplyRole.Truck)
             throw new ArgumentException("Harvest requires a supply truck.");
