@@ -46,6 +46,8 @@ internal sealed class CaptureSystem(ICaptureWorld world, ICaptureMechanic mechan
         return true;
     }
 
+    internal void EndOrders(long tick) => _mechanic.EndOrders(tick);
+
     internal void Advance(Entity entity, long tick)
     {
         var actorId = entity.Get<EntityIdentity>().Id;
@@ -91,7 +93,7 @@ internal sealed class CaptureSystem(ICaptureWorld world, ICaptureMechanic mechan
     {
         if (!order.HasOrder || order.ActiveOrder.Kind != UnitActionKind.Capture ||
             !world.TryGetEntity(order.ActiveOrder.Target, out var target)) return default;
-        return _mechanic.GetProgress(entity, world.TypeOf(target));
+        return _mechanic.GetProgress(entity, ParticipantOf(target));
     }
 
     internal void WriteState(BinaryWriter writer) => _mechanic.WriteState(writer);

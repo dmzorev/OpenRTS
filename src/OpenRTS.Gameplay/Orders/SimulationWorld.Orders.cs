@@ -27,7 +27,7 @@ public sealed partial class SimulationWorld
         ref var entity = ref _entityHandles[index];
         var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityOrders = ref entity.Get<OrderState>();
-        if (queued && entityOrders.HasOrder)
+        if (queued && (entityOrders.HasOrder || entityOrders.PendingOrders is { Count: > 0 }))
         {
             entityOrders.PendingOrders ??= new();
             if (entityOrders.PendingOrders.Count == MaximumQueuedOrders) _events.Add(new(Tick, WorldEventKind.QueueFull, entityIdentity.Id));
@@ -105,7 +105,11 @@ public sealed partial class SimulationWorld
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;
             while (!entityOrders.HasOrder && entityOrders.PendingOrders is { Count: > 0 }) StartOrder(i, entityOrders.PendingOrders.Dequeue());
-            if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0) entityOrders.OrderPhase = OrderPhase.Idle;
+            if (!entityOrders.HasOrder && entityOrders.CombatTarget.Value == 0)
+            {
+                entityOrders.OrderPhase = OrderPhase.Idle;
+                if (entityOrders.AutoBuild && !entityMotion.Moving) _construction!.AddIdleBuilder(entityIdentity.Id);
+            }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { _transport!.UpdateEnter(entity, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { _construction!.UpdateOrder(entity, entityOrders.ActiveOrder); continue; }
@@ -157,6 +161,8 @@ public sealed partial class SimulationWorld
         ref var entityOrders = ref entity.Get<OrderState>();
         writer.Write(entityNavigation.OrderGroup); writer.Write(entityOrders.HasOrder); Write(entityOrders.ActiveOrder); writer.Write((int)entityOrders.OrderPhase); writer.Write(entityOrders.OrderStarted);
         writer.Write(entityOrders.CombatTarget.Value);
+        if (entity.Get<EntityDefinition>().Armament?.Abilities.Any(a => a.Kind == AbilityKind.Build) == true)
+            writer.Write(entityOrders.AutoBuild);
         writer.Write(entityOrders.PendingOrders?.Count ?? 0);
         if (entityOrders.PendingOrders is not null) foreach (var order in entityOrders.PendingOrders) Write(order);
         void Write(UnitOrder order) { writer.Write((int)order.Kind); writer.Write(order.Position.X); writer.Write(order.Position.Y); writer.Write(order.Position.Elevation); writer.Write(order.Target.Value); writer.Write(order.Group); writer.Write(order.Cohort); writer.Write(order.Ability); }

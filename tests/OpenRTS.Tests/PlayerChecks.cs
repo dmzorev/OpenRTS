@@ -133,6 +133,41 @@ internal static class PlayerChecks
             w.Step([new(7, 0, 1, CommandKind.UseAbility, new(1), TargetEntity: new(2), Action: "capture")]); w.Step(); w.Step();
             NavigationChecks.Check(Poses(w).Single(p => p.Id.Value == 2).Presentation.Owner == 1 && Poses(w).Single(p => p.Id.Value == 2).Health == 1, "Recapture healed or lost the object");
         });
+        test("Players: capture work is shared by side, decays and resets on transfer", () =>
+        {
+            UnitDefinition[] types =
+            [
+                new("engineer", 100, abilities: [new("capture", "", Kind: AbilityKind.Capture, Range: 4096)]),
+                Building("deposit", capture: new(8))
+            ];
+            using var world = new SimulationWorld(types, 20000, 16000);
+            var blueA = world.AddInitialUnit(0, new(2048, 2048), 1);
+            var blueB = world.AddInitialUnit(0, new(2048, 3072), 1);
+            var red = world.AddInitialUnit(0, new(4096, 3072), 2);
+            var deposit = world.AddInitialUnit(1, new(4096, 2048));
+            var blue = new EntitySet([blueA, blueB]);
+
+            world.Step([
+                new(1, 0, 1, CommandKind.UseAbility, Recipients: blue, TargetEntity: deposit, Action: "capture"),
+                new(1, 0, 2, CommandKind.CaptureTarget, red, TargetEntity: deposit)]);
+            world.Step();
+            NavigationChecks.Check(Progress(blueA) == 4 && Progress(blueB) == 4 && Progress(red) == 2, "Capture work was not shared by side");
+            world.Step([new(3, 0, 1, CommandKind.Stop, Recipients: blue)]);
+            world.Step();
+            world.Step([new(5, 0, 1, CommandKind.CaptureTarget, Recipients: blue, TargetEntity: deposit)]);
+            NavigationChecks.Check(Progress(blueA) == 4 && Progress(red) == 5, "Interrupted capture did not decay independently");
+            world.Step();
+            world.Step();
+            NavigationChecks.Check(Poses(world).Single(p => p.Id == deposit).Presentation.Owner == 1 && Progress(red) == 0,
+                "First side to finish did not claim the building and clear competing progress");
+            world.Step();
+            NavigationChecks.Check(Progress(red) == 1, "Losing side did not restart from zero");
+            world.Step([new(9, 0, 1, CommandKind.Stop, red)]);
+            world.Step([new(10, 0, 1, CommandKind.CaptureTarget, red, TargetEntity: deposit)]);
+            NavigationChecks.Check(Progress(red) == 1, "Interrupted capture did not decay all the way to zero");
+
+            int Progress(EntityId id) => Poses(world).Single(p => p.Id == id).Order.CaptureProgress;
+        });
         test("Players: invulnerable props reject direct attacks and splash damage", () =>
         {
             using var w = new SimulationWorld([new("prop", 100, destruction: DestructionPolicy.Invulnerable),

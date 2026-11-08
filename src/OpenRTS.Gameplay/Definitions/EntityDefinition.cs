@@ -23,7 +23,8 @@ public sealed record EntityDefinition
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         if (constructionRange is < 0 or > WorldPosition.MaximumExtent ||
             (constructionRange > 0 && spatial is null) ||
-            (constructionRange == 0 && production?.Products.Any(p => p.OnSite) == true))
+            (constructionRange == 0 && (production?.Products.Any(p => p.OnSite) == true ||
+                armament?.Abilities.Any(a => a.Kind == AbilityKind.Build) == true)))
             throw new ArgumentException("On-site construction requires a spatial builder and a positive range.");
         ConstructionRange = constructionRange;
         Economy = economy; Capturable = capturable; Passenger = passenger; Transport = transport;

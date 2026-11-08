@@ -59,6 +59,10 @@ repair:
     Versus: {Living: 0, Mechanical: 100, Building: 100}
 
 
+factory-repair:
+  Inherits: repair
+  Weapon: {Range: 4096, AcquireRange: 4096}
+
 sniper-rifle:
   Weapon:
     Range: 8192

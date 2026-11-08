@@ -77,14 +77,17 @@ tank-mixed:
 
 engineer:
   Inherits: ^unit
+  Builder: {Range: 1536}
   Actions:
     Definitions:
       capture: { Capture: true, Range: 1024 }
-      repair: { Mount: main }
+      repair: { Mount: main, AutoCast: true }
+      build: { Build: true, AutoCast: true }
   ActionPanel:
     Buttons:
       repair: { Label: Ремонт, Cursor: repair, Order: 0 }
       capture: { Label: Захват, Cursor: capture, Order: 1 }
+      build: { Label: Помочь строить, Hotkey: P, Cursor: build, Order: 7 }
   Movement: { Locomotor: amphibious }
   Health: { HP: 220, Armor: Mechanical }
   Armaments:

@@ -150,6 +150,35 @@ internal static class ConstructionChecks
             NavigationChecks.Check(Player(world, 1).Credits == 455, "Income timer did not start after completion");
         });
 
+        test("Construction: idle allies help automatically and manual orders take priority", () =>
+        {
+            AbilityDefinition build = new("build", "", AutoCast: true, Kind: AbilityKind.Build);
+            UnitDefinition[] types =
+            [
+                new("starter", 100, movable: false, constructionRange: 8192,
+                    products: [new("power", "plant", "", OnSite: true)]),
+                new("yard", 100, movable: false, constructionRange: 8192, abilities: [build]),
+                new("engineer", 100, constructionRange: 1536, abilities: [build]),
+                new("plant", 100, movable: false, footprint: Stamp, build: new(10, 0, ProductionKind.PlaceBuilding))
+            ];
+            using var world = new SimulationWorld(types, 24000, 16000);
+            var starter = world.AddInitialUnit(0, new(4096, 4096), 1);
+            var yard = world.AddInitialUnit(1, new(4096, 6144), 1);
+            var engineer = world.AddInitialUnit(2, new(6400, 8192), 1);
+            world.AddInitialUnit(2, new(9984, 8192), 2);
+            world.Step([new(1, 0, 1, CommandKind.PlanConstruction, starter, Site, Action: "power")]);
+            var site = world.Events.ToArray().Single(e => e.Kind == WorldEventKind.ConstructionStarted).Entity;
+            world.Step();
+            NavigationChecks.Check(Pose(world, site).Construction.Work == 6, "Both idle allies should contribute and the enemy should not");
+            world.Step([
+                new(3, 0, 1, CommandKind.HoldPosition, engineer),
+                new(3, 0, 2, CommandKind.SetAutoCast, yard, Action: "build", Enabled: false)]);
+            NavigationChecks.Check(Pose(world, site).Construction.Work == 8 && !Pose(world, yard).AutoBuild,
+                "Hold or disabled autocast did not suspend construction help");
+            world.Step([new(4, 0, 1, CommandKind.UseAbility, yard, TargetEntity: site, Action: "build")]);
+            NavigationChecks.Check(Pose(world, site).Construction.Work == 12, "Manual construction did not work with autocast off");
+        });
+
         test("Construction: multiple queued sites finish in order with worker parity", () =>
         {
             using var sequential = World();
@@ -177,6 +206,26 @@ internal static class ConstructionChecks
             NavigationChecks.Check(completed.SequenceEqual(new uint[] { 3, 4, 5 }) && Projects(sequential).Length == 0,
                 $"Shift queue did not complete in order: {string.Join(", ", completed)}");
             NavigationChecks.Check(sequential.Report() == parallel.Report(), "Construction differs by navigation workers");
+        });
+
+        test("Construction: Shift between orders appends behind earlier yard placements", () =>
+        {
+            using var world = World();
+            var yard = world.AddInitialUnit(2, new(4096, 8192), 1);
+            world.Step([
+                new(1, 0, 1, CommandKind.PlanConstruction, yard, new(7168, 8192), Queued: true, Action: "power"),
+                new(1, 0, 2, CommandKind.PlanConstruction, yard, new(10240, 8192), Queued: true, Action: "power")]);
+            var completed = new List<uint>();
+            for (int tick = 2; tick <= 30; tick++)
+            {
+                world.Step(tick == 9
+                    ? [new(9, 0, 1, CommandKind.PlanConstruction, yard, new(4096, 12288), Queued: true, Action: "power")]
+                    : []);
+                foreach (var e in world.Events)
+                    if (e.Kind == WorldEventKind.ConstructionCompleted) completed.Add(e.Entity.Value);
+            }
+            NavigationChecks.Check(completed.SequenceEqual(new uint[] { 2, 3, 4 }),
+                "The new Shift placement overtook an earlier pending yard order");
         });
 
         test("Construction: friendly and neutral units evacuate, but enemy or immobile obstacles cancel", () =>

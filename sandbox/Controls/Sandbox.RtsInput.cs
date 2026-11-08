@@ -76,6 +76,7 @@ public partial class Sandbox
     private bool AbilityTarget(AbilityDefinition ability, UnitDefinition type, EntityPose target)
     {
         if (ability.Kind == AbilityKind.Capture) return CapturableTarget(target);
+        if (ability.Kind == AbilityKind.Build) return Ally(target) && target.Construction.Active;
         var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
         return weapon.Effect == WeaponEffect.Repair ? Ally(target) && target.Health < _catalog!.Units[target.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[target.UnitType].Armor) > 0 : Enemy(target);
     }
@@ -196,7 +197,7 @@ public partial class Sandbox
         if (!CanIssue(UnitActionKind.Stop)) { _notice = "Выберите свои юниты."; return; }
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
-        if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable)) return;
+        if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable, click.ShiftPressed)) return;
         bool enemy = picked is { } enemyPose && Enemy(enemyPose);
         bool repair = !enemy && picked is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
         if (repair && ContextRepair(picked!.Value)) return;
@@ -326,8 +327,11 @@ public partial class Sandbox
         {
             var binding = _catalog!.Presentations[_activeType].Actions!.First(a => a.Id == custom);
             var ability = _catalog.Units[_activeType].Abilities.First(a => a.Id == custom);
-            var hovered = CommandPoint(_pointer) is { } p ? Pick(p) : null;
-            bool valid = CommandPoint(_pointer) is not null && (ability.GroundTarget || hovered is { } target && AbilityTarget(ability, _catalog.Units[_activeType], target));
+            var customPoint = CommandPoint(_pointer);
+            var hovered = customPoint is { } p ? Pick(p) : null;
+            bool valid = customPoint is { } ground && (ability.GroundTarget ||
+                hovered is { } target && AbilityTarget(ability, _catalog.Units[_activeType], target) ||
+                ability.Kind == AbilityKind.Build && PickProject(ground) is { } project && project.Owner == CommandOwner);
             if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
         }
         if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";

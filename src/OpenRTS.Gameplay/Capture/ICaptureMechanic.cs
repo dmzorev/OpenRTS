@@ -19,7 +19,9 @@ public interface ICaptureMechanic
     CaptureStep Advance(CaptureAttempt attempt);
     void Reset(Entity entity);
     void OwnerChanged(Entity entity, long tick);
-    CaptureProgress GetProgress(Entity actor, UnitDefinition targetType);
+    void EndOrders(long tick) { }
+    CaptureProgress GetProgress(Entity actor, UnitDefinition targetType) => default;
+    CaptureProgress GetProgress(Entity actor, CaptureParticipant target) => GetProgress(actor, target.Type);
     // Report callbacks must only read state and write canonical, self-delimiting data.
     void WriteEntityState(BinaryWriter writer, Entity entity);
     void WriteState(BinaryWriter writer) { }

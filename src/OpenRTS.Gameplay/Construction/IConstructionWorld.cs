@@ -18,6 +18,7 @@ internal interface IConstructionWorld
     bool IsOnMap(Entity entity);
     GameplayConditions ReadConditions(Entity actor);
 
+    bool CanQueueOrder(Entity actor);
     void IssueOrder(EntityId actor, UnitOrder order, bool queued);
     void Halt(EntityId actor);
     bool StopAllowed(int type, WorldPosition position);

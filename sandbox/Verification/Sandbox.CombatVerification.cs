@@ -26,7 +26,13 @@ public partial class Sandbox
             for (int tick = 1; tick <= 40; tick++)
             {
                 WorldCommand[] commands = tick switch {
-                    1 => [new(1, 0, 1, CommandKind.AttackTarget, new(1), TargetEntity: new(2)), new(1, 0, 2, CommandKind.AttackTarget, new(5), TargetEntity: new(4)), new(1, 0, 3, CommandKind.UseAbility, new(6), TargetEntity: new(7), Action: "grenade")],
+                    1 =>
+                    [
+                        new(1, 0, 1, CommandKind.AttackTarget, new(1), TargetEntity: new(2)),
+                        new(1, 0, 2, CommandKind.AttackTarget, new(5), TargetEntity: new(4)),
+                        new(1, 0, 3, CommandKind.UseAbility, new(6), TargetEntity: new(7), Action: "grenade"),
+                        new(1, 0, 4, CommandKind.SetAutoCast, new(3), Action: "repair", Enabled: false)
+                    ],
                     2 => [new(2, 0, 1, CommandKind.Move, new(1), new(12 * 1024, 13 * 1024))],
                     35 => [new(35, 0, 1, CommandKind.RepairTarget, new(3), TargetEntity: new(4))], _ => [] };
                 world.Step(commands);

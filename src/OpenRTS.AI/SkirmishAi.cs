@@ -15,10 +15,12 @@ public sealed class SkirmishAi
     private readonly WorldPosition _rally, _attack;
     private readonly uint _player;
     private readonly Dictionary<long, int> _placementAttempts = [];
+    private readonly Dictionary<int, int> _siteAttempts = [];
     private readonly List<WorldCommand> _commands = [];
     private EntityPose[] _poses = [];
     private PlayerPose[] _players = [];
     private TaskPose[] _tasks = [];
+    private ConstructionProjectPose[] _projects = [];
     private EntityId _engineer, _deposit;
     private WorldPosition _capturePosition;
     private int _captureProgress;
@@ -69,6 +71,8 @@ public sealed class SkirmishAi
             world.CopyPlayers(_players);
             Array.Resize(ref _tasks, world.TaskCount);
             world.CopyTaskPoses(_tasks);
+            Array.Resize(ref _projects, world.ConstructionProjectCount);
+            world.CopyConstructionProjects(_projects);
             PlanProduction(tick, own);
             PlanCapture(tick, own);
         }
@@ -124,22 +128,32 @@ public sealed class SkirmishAi
                 if (plannedQueues.Contains(key)) continue;
                 if (_tasks.Any(t => t.Producer == producer.Id && t.Queue == recipe.Queue)) continue;
                 if (credits < recipe.Cost) continue;
+                if (recipe.OnSite)
+                {
+                    if (producer.Order.Kind == UnitActionKind.Build && producer.Order.Phase != OrderPhase.Idle) continue;
+                    int attempt = _siteAttempts.GetValueOrDefault(recipe.ProductType);
+                    _siteAttempts[recipe.ProductType] = (attempt + 1) % _buildingSites.Length;
+                    _commands.Add(new(0, 0, 0, CommandKind.PlanConstruction, producer.Id,
+                        _buildingSites[attempt], Action: recipe.Action, Queued: true));
+                }
+                else _commands.Add(new(0, 0, 0, CommandKind.EnqueueTask, producer.Id, Action: recipe.Action));
                 credits -= recipe.Cost;
                 plannedQueues.Add(key);
-                _commands.Add(new(0, 0, 0, CommandKind.EnqueueTask, producer.Id, Action: recipe.Action));
                 return true;
             }
             return false;
         }
 
         int Count(int type) => own.Count(p => p.UnitType == type && !p.Construction.Active);
-        int Pending(int type) => _tasks.Count(t => t.UnitType == type && own.Any(p => p.Id == t.Producer));
+        int Pending(int type) => _tasks.Count(t => t.UnitType == type && own.Any(p => p.Id == t.Producer)) +
+            own.Count(p => p.UnitType == type && p.Construction.Active) +
+            _projects.Count(p => p.Owner == _player && p.UnitType == type);
 
         // The opening observes completed buildings. A paid, ready task still needs its placement command.
         var opening = _profile.Opening.FirstOrDefault(type => Count(type) == 0, -1);
         _productionStatus = opening < 0 ? "maintenance" : $"opening: {_types[opening].Id}";
         foreach (var building in _profile.Buildings)
-            if (Pending(building.Recipe.ProductType) > 0)
+            if (!building.Recipe.OnSite && Pending(building.Recipe.ProductType) > 0)
                 PlaceReady(building.Recipe);
         if (opening >= 0)
         {

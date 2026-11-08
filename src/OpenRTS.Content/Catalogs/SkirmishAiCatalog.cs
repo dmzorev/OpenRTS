@@ -33,14 +33,15 @@ public static class SkirmishAiCatalog
             int producer = Type(recipe.Producer, field + ".Producer");
             var definition = catalog.Units[producer];
             var action = definition.Products.FirstOrDefault(a => a.Id == recipe.Action);
-            if (action is null || action.Unit != name || action.OnSite)
-                throw Error(field + ".Action", "Expected a queued recipe producing the declared unit.");
+            if (action is null || action.Unit != name)
+                throw Error(field + ".Action", "Expected a recipe producing the declared unit.");
             int queue = definition.TaskQueues.ToList().FindIndex(q => q.Id == action.Queue);
             var build = action.Override ?? catalog.Units[product].Build;
-            if (queue < 0 || definition.TaskQueues[queue].Payment != PaymentPolicy.Upfront ||
-                build is null || build.Kind != kind || build.Ticks < 2)
-                throw Error(field, "AI0 needs an Upfront recipe of the expected kind with a duration of at least two ticks.");
-            return new(producer, product, queue, action.Id, build.Cost);
+            if (build is null || build.Kind != kind || build.Ticks < 2 ||
+                (action.OnSite ? kind != ProductionKind.PlaceBuilding :
+                    queue < 0 || definition.TaskQueues[queue].Payment != PaymentPolicy.Upfront))
+                throw Error(field, "Expected on-site construction or an Upfront queue of the specified kind, with at least two ticks of work.");
+            return new(producer, product, queue, action.Id, build.Cost, action.OnSite);
         }
 
         if (data.Buildings.Count is < 1 or > 16 || data.Group.Count is < 1 or > 16)

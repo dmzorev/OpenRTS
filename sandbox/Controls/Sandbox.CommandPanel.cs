@@ -142,7 +142,7 @@ public partial class Sandbox
     private WeaponPose? AbilityPose(EntityId id, string action)
     {
         var pose = _selectionPoses[id]; var type = _catalog!.Units[pose.UnitType]; var skill = type.Abilities.First(a => a.Id == action);
-        if (skill.Kind == AbilityKind.Capture) return null;
+        if (skill.Kind != AbilityKind.Weapon) return null;
         int mount = 0; while (mount < type.Weapons.Count && type.Weapons[mount].Id != skill.Mount) mount++;
         int offset = pose.WeaponOffset + mount;
         return offset >= 0 && offset < _displayWeaponCount && _displayWeapons[offset].Entity == id ? _displayWeapons[offset] : null;
@@ -158,7 +158,10 @@ public partial class Sandbox
         {
             if (right && ability.Kind == AbilityKind.Capture) { _notice = "Захват применяется вручную."; return; }
             if (right)
-            { bool enabled = !ids.All(e => AbilityPose(e, id)?.AutoCast == true); _session.Submit(CommandKind.SetAutoCast, recipients: new(ids), action: id, enabled: enabled); }
+            {
+                bool enabled = !ids.All(e => ability.Kind == AbilityKind.Build ? _selectionPoses[e].AutoBuild : AbilityPose(e, id)?.AutoCast == true);
+                _session.Submit(CommandKind.SetAutoCast, recipients: new(ids), action: id, enabled: enabled);
+            }
             else _armedCustom = id;
         }
         else
@@ -199,22 +202,25 @@ public partial class Sandbox
         if (click.ButtonIndex == MouseButton.Right) { _armedCustom = null; return true; }
         if (click.ButtonIndex != MouseButton.Left || ActiveRecipients() is not { Length: > 0 } ids) return true;
         var type = _catalog!.Units[_activeType]; var ability = type.Abilities.First(a => a.Id == action);
-        bool target = picked is { } p && AbilityTarget(ability, type, p);
-        if (!target && !ability.GroundTarget) { _notice = "Выберите допустимую цель способности."; return true; }
-        _session!.Submit(CommandKind.UseAbility, point, recipients: new(ids), targetEntity: target ? picked!.Value.Id : default, action: action);
+        var target = picked is { } p && AbilityTarget(ability, type, p) ? p.Id : default;
+        if (ability.Kind == AbilityKind.Build && PickProject(point) is { } project && project.Owner == CommandOwner)
+            target = project.Id;
+        if (target == default && !ability.GroundTarget) { _notice = "Выберите допустимую цель способности."; return true; }
+        _session!.Submit(CommandKind.UseAbility, point, recipients: new(ids), targetEntity: target, action: action,
+            queued: ability.Kind is AbilityKind.Build or AbilityKind.Capture && click.ShiftPressed);
         _armedCustom = null; return true;
     }
-    private bool ContextCapture(EntityPose target)
+    private bool ContextCapture(EntityPose target, bool queued)
     {
-        foreach (var id in Controlled())
+        var ids = Controlled().Where(id =>
         {
-            var pose = _selectionPoses[id]; if (pose.Presentation.Owner == target.Presentation.Owner) continue;
-            var skill = _catalog!.Units[pose.UnitType].Abilities.FirstOrDefault(a => a.Kind == AbilityKind.Capture);
-            if (skill is null) continue;
-            _session!.Submit(CommandKind.UseAbility, recipients: new([id]), targetEntity: target.Id, action: skill.Id);
-            return true;
-        }
-        return false;
+            var pose = _selectionPoses[id];
+            return pose.Presentation.Owner == CommandOwner && !pose.Construction.Active &&
+                _catalog!.Units[pose.UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture);
+        }).ToArray();
+        if (ids.Length == 0) return false;
+        _session!.Submit(CommandKind.CaptureTarget, recipients: new(ids), targetEntity: target.Id, queued: queued);
+        return true;
     }
     private bool ContextRepair(EntityPose target)
     {
@@ -259,13 +265,22 @@ public partial class Sandbox
                     button.Modulate = _armedCustom == action.Id ? ActiveButtonColor : Colors.White;
                     continue;
                 }
-                var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
-                long remaining = states.Length == 0 ? 0 : states.Min(p => Math.Max(0, p.ReadyTick - frame.Tick)); auto = states.Length > 0 && states.All(p => p.AutoCast);
-                var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
-                progress = 100.0 * remaining / weapon.CooldownTicks;
-                status = remaining > 0 ? $" {remaining / (double)frame.TickRate:0.0}s" : "";
-                if (states.Any(p => p.AutoCast) && !auto) status += " ±авто";
-                button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ/хоткей — выбрать цель. ПКМ — автоприменение. Один исполнитель на приказ.";
+                if (ability.Kind == AbilityKind.Build)
+                {
+                    auto = ids.Length > 0 && ids.All(id => _selectionPoses[id].AutoBuild);
+                    if (!auto && ids.Any(id => _selectionPoses[id].AutoBuild)) status = " ±авто";
+                    button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ — помочь своей стройке. ПКМ — автопомощь стройке в радиусе, пока нет приказов.";
+                }
+                else
+                {
+                    var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
+                    long remaining = states.Length == 0 ? 0 : states.Min(p => Math.Max(0, p.ReadyTick - frame.Tick)); auto = states.Length > 0 && states.All(p => p.AutoCast);
+                    var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
+                    progress = 100.0 * remaining / weapon.CooldownTicks;
+                    status = remaining > 0 ? $" {remaining / (double)frame.TickRate:0.0}s" : "";
+                    if (states.Any(p => p.AutoCast) && !auto) status += " ±авто";
+                    button.TooltipText = $"{action.Label} [{action.Hotkey}]\nЛКМ/хоткей — выбрать цель. ПКМ — автоприменение. Один исполнитель на приказ.";
+                }
             }
             else
             {

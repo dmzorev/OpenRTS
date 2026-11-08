@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for on-site recipes, project state and frame construction progress (catalog10/direct10/nav14).
+    // Rebased for shared capture, construction autocast and the on-site production journal.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "3ACFD3BC7AB782F137488005B36868CF34DB497C156534083FEE71DA4D176E42",
-        ["navigation"] = "BD97DD1596AF8F91F782C18BFABE429C56369F37A5C6E40D8BA9DDFFBDCAF1AB",
-        ["combat"] = "64B114B086E21C89C1AFBC0B739F0E8941FAB94ACB5465976098A706946FAC54",
-        ["buildings"] = "B9FB416479E6115B0A5628238FFBDB6C7C16615FC6B8E025AE7DFBC1EC1F6DE6",
-        ["production"] = "C990050C34DF4938D5538FDAA8A26C5883C67267E38D96A0F0CF9A912B9FBAC0"
+        ["direct"] = "BF2EC3A5339CB132646141C910641750D4CD76DEC2687792A5B888B4362CF698",
+        ["navigation"] = "92F1BFDEBB153A5E345B5E6FD0ED42DCE5721599B52E4ED757F2366E0E7159BC",
+        ["combat"] = "9ABA3AE80C78100ADC1815B8169214B77442275A3B5143E12A12D84909FD0ED2",
+        ["buildings"] = "0D6ED82DB689BA29773C8C3ABFC530792AE97BB31D0C74ADF193037C9696521B",
+        ["production"] = "BE9D4D50DE4BDFD44FFCBC27216CAAD82D07C3E8E31AD9A307FC5CA34A211733"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

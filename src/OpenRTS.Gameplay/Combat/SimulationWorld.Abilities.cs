@@ -9,6 +9,7 @@ public sealed partial class SimulationWorld
     { for (int a = 0; a < _types[type].Abilities.Count; a++) if (_types[type].Abilities[a].Kind == AbilityKind.Weapon && _types[type].Abilities[a].Mount == _types[type].Weapons[mount].Id) return a; return -1; }
     private void ApplyAbility(WorldCommand command)
     {
+        bool issuedOrder = false;
         bool toggling = command.Kind == CommandKind.SetAutoCast;
         foreach (int i in Recipients(command))
         {
@@ -21,9 +22,17 @@ public sealed partial class SimulationWorld
             int ability = AbilityIndex(eIdentity.Type, command.Action);
             if (ability < 0 || eOwnership.Owner == 0 || (ReadLocalConditions(e) & GameplayConditions.Constructing) != 0) continue;
             var action = _types[eIdentity.Type].Abilities[ability];
-            if (action.Kind != AbilityKind.Weapon)
+            if (action.Kind == AbilityKind.Build)
             {
-                if (_capture?.TryApplyAbility(e, action, command) == true) return;
+                if (toggling) { eOrders.AutoBuild = command.Enabled; continue; }
+                if (_construction?.CanBuild(e, command.TargetEntity) != true) continue;
+                IssueOrder(i, new(UnitActionKind.Build, default, command.TargetEntity), command.Queued);
+                issuedOrder = true;
+                continue;
+            }
+            if (action.Kind == AbilityKind.Capture)
+            {
+                issuedOrder |= _capture?.TryApplyAbility(e, action, command) == true;
                 continue;
             }
             int mount = AbilityMount(eIdentity.Type, ability); ref var state = ref eCombat.Weapons[mount];
@@ -35,7 +44,7 @@ public sealed partial class SimulationWorld
             IssueOrder(i, new(UnitActionKind.Ability, command.Position, command.TargetEntity, Ability: ability), command.Queued);
             return;
         }
-        if (!toggling) RejectAction();
+        if (!toggling && !issuedOrder) RejectAction();
     }
     private bool AbilityInRange(int index, UnitOrder order, WeaponDefinition weapon)
     {

@@ -24,6 +24,30 @@ internal static class WeaponChecks
             NavigationChecks.Reject<ContentException>(() => WeaponCatalog.Load([new("w", "w: {Weapon: {Effect: Repair, Projectile: Missile}}") ]));
             NavigationChecks.Reject<ArgumentException>(() => Armed("bad", new(2048, 2048, 10, 2), armor: (ArmorKind)99));
         });
+        test("Weapons: factory repairs automatically beyond engineer range", () =>
+        {
+            var catalog = UnitCatalog.Load([
+                new("units", File.ReadAllText("sandbox/content/units.yaml")),
+                new("buildings", File.ReadAllText("sandbox/content/buildings.yaml"))
+            ], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var factory = catalog.Units.Single(u => u.Id == "factory");
+            var engineer = catalog.Units.Single(u => u.Id == "engineer");
+            var power = catalog.Units.Single(u => u.Id == "power-plant");
+            NavigationChecks.Check(engineer.Abilities.Single(a => a.Id == "repair").AutoCast, "Engineer repair should default to autocast");
+
+            var enemy = Armed("enemy", new(8192, 8192, 60, 1000, 0));
+            var target = new UnitDefinition("vehicle", 100, armor: ArmorKind.Mechanical);
+            using var world = new SimulationWorld([factory, enemy, target, power, .. catalog.Units.Where(u => u != factory && u != power)], 24000, 16000);
+            world.AddInitialUnit(0, new(7680, 8192), 1);
+            world.AddInitialUnit(2, new(1536, 8192), 1);
+            world.AddInitialUnit(1, new(1536, 12288), 2);
+            world.AddInitialUnit(3, new(15872, 4096), 1);
+            world.Step([Attack(world, 3, 2)]);
+            NavigationChecks.Check(Pose(world, 2).Health == 40, "The enemy should damage the vehicle before it gets repaired");
+            for (int tick = 0; tick < 16; tick++) world.Step();
+            NavigationChecks.Check(Pose(world, 2).Health > 40 && Mounts(world).Single(p => p.Entity.Value == 1).AutoCast,
+                "Factory should repair an ally 3.5 cells beyond its footprint without an order");
+        });
         test("Weapons: burst intervals and reload survive interruption without replenishing shots", () =>
         {
             var weapon = new WeaponDefinition(4096, 4096, 1, 10, 0, burst: 3, burstIntervalTicks: 2);

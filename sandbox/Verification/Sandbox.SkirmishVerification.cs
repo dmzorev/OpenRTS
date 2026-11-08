@@ -33,7 +33,8 @@ public partial class Sandbox
             CheckSkirmish(_matchMenu!.Visible && _session!.IsPaused, "Match menu did not pause input and playback");
             ToggleMatchMenu();
             CheckSkirmish(!_matchMenu.Visible && _session!.IsPaused, "Closing menu lost the previous pause state");
-            _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection(); ActivateCustom("power", false, false);
+            _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection(); ActivateCustom("site-power", false, false);
+            HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, new(22016, 12288), null);
             _selection.Change([new(4)], SelectionChange.Replace); RefreshSelection();
             CheckSkirmish(Controlled().Single().Value == 4 && CanIssue(UnitActionKind.Move), "Red player cannot be controlled");
             ActivateCustom("capture", false, false);

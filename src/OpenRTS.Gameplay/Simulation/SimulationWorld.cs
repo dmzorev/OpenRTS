@@ -157,6 +157,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     {
         CapturePreviousFacings();
         UpdateOrders();
+        _capture?.EndOrders(Tick);
         EnsureMotionIndex();
         if (_navigation is not null) UpdateNavigation(cancellationToken);
         else UpdateDirectMovement();
@@ -231,7 +232,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -406,6 +407,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         wreck = _transport?.BeforeRemove(actor, wreck) ?? wreck;
         index = _indices[id];
         _production.BeforeRemove(_entityHandles[index]);
+        _construction?.BeforeRemove(_entityHandles[index]);
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _economy.InvalidatePower();
@@ -462,12 +464,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         var type = _types[unitType];
         var health = new HealthState(initialHealth ?? type.MaxHealth);
         var producer = ProductionSystem.CreateProducer(type);
+        var orders = new OrderState { AutoBuild = type.Abilities.Any(a => a.Kind == AbilityKind.Build && a.AutoCast) };
         lock (StorageGate)
         {
             var storage = Storage;
             state = producer is null
-                ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
-                : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, new OrderState(), new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), producer);
+                ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, orders, new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
+                : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, orders, new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), producer);
             _transport?.Initialize(state, type);
             initialize?.Invoke(state);
             _economy.Initialize(state, type.Economy, owner, Tick);

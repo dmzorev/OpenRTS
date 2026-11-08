@@ -46,7 +46,7 @@ factory:
     Definitions:
       apc: {Unit: apc-mg}
       tank: {Unit: large-tank, Cost: 180, Ticks: 150}
-      repair: {Mount: repair}
+      repair: {Mount: repair, AutoCast: true}
   ActionPanel:
     Buttons:
       apc: {Label: БТР, Order: 0}
@@ -55,7 +55,7 @@ factory:
   Footprint: {Rows: ['#####', '###==', '###==', '###++']}
   Armaments:
     Mounts:
-      repair: {Weapon: repair, Animation: produce}
+      repair: {Weapon: factory-repair, Animation: produce}
   Presentation: {Model: factory, Name: Завод · ремонтная зона}
 
 headquarters:
@@ -69,13 +69,10 @@ construction-yard:
   Builder: {Range: 12288}
   TaskQueues:
     Queues:
-      construction: {Capacity: 12, Payment: Upfront, WorkingState: working}
       vehicles: {Capacity: 5, Payment: OnCompletion, WorkingState: working, ExitAnimation: door, Exit: [1536, 1536]}
   Actions:
     Definitions:
-      power: {Unit: power-plant, Queue: construction}
-      barracks: {Unit: barracks, Queue: construction}
-      factory: {Unit: factory, Queue: construction}
+      build: {Build: true, AutoCast: true}
       engineer: {Unit: construction-engineer, Queue: vehicles}
       site-power: {Unit: power-plant, OnSite: true}
       site-barracks: {Unit: barracks, OnSite: true}
@@ -83,9 +80,7 @@ construction-yard:
       site-turret: {Unit: bunker-cannon, OnSite: true}
   ActionPanel:
     Buttons:
-      power: {Label: Электростанция, Order: 0}
-      barracks: {Label: Бараки, Order: 1}
-      factory: {Label: Завод, Order: 2}
+      build: {Label: Помочь строить, Cursor: build, Order: 0}
       engineer: {Label: Инженер, Order: 3}
       site-power: {Label: Строить электростанцию, Hotkey: T, Order: 4}
       site-barracks: {Label: Строить бараки, Hotkey: Y, Order: 5}
@@ -210,7 +205,6 @@ civilian-community:
 
 construction-engineer:
   Inherits: engineer
-  Builder: {Range: 1536}
   Actions:
     Definitions:
       site-power: {Unit: power-plant, OnSite: true}

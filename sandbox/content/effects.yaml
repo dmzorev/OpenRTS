@@ -13,6 +13,9 @@ repair:
   Effect: {Color: [0.2, 1, 0.65], ImpactColor: [0.1, 1, 0.5], Size: 0.10, ImpactSize: 0.5, DurationTicks: 6, BeamWidth: 0.08}
 
 
+factory-repair:
+  Inherits: repair
+
 sniper-rifle:
   Inherits: rifle
   Effect: {BeamWidth: 0.045}

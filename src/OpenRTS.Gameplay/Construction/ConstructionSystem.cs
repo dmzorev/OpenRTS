@@ -12,11 +12,13 @@ internal sealed class ConstructionSystem
     private readonly List<ConstructionProject> _siteReservations = [];
     private readonly List<Entity> _siteOccupants = [];
     private readonly List<EntityId> _activeBuilders = [];
+    private readonly List<EntityId> _idleBuilders = [];
     private readonly List<EntityId> _siteCandidates = [];
     private readonly List<(WorldPosition Position, BodyShape Body)> _evacuationGoals = [];
     private readonly IConstructionWorld _world;
     private readonly IConstructionMechanic _mechanic;
     private readonly Action<Entity> _clearFoundation;
+    private int _foundationCount;
 
     internal ConstructionSystem(IConstructionWorld world, IConstructionMechanic mechanic)
     {
@@ -27,7 +29,21 @@ internal sealed class ConstructionSystem
 
     internal bool IsFoundation(Entity entity) => _mechanic.IsFoundation(entity);
     internal bool HasReservations => _siteReservations.Count != 0;
-    internal void BeginOrders() => _activeBuilders.Clear();
+    internal void BeginOrders()
+    {
+        _activeBuilders.Clear();
+        _idleBuilders.Clear();
+    }
+
+    internal void AddIdleBuilder(EntityId id)
+    {
+        if (_foundationCount > 0) _idleBuilders.Add(id);
+    }
+
+    internal void BeforeRemove(Entity actor)
+    {
+        if (IsFoundation(actor)) _foundationCount--;
+    }
 
     internal static void Apply(ConstructionSystem? system, IConstructionWorld world, WorldCommand command)
     {
@@ -66,7 +82,7 @@ internal sealed class ConstructionSystem
             var identity = actor.Get<EntityIdentity>();
             var type = _world.TypeOf(identity.Type);
             uint owner = actor.Get<OwnershipState>().Owner;
-            if (owner == 0 || IsFoundation(actor)) continue;
+            if (owner == 0 || IsFoundation(actor) || command.Queued && !_world.CanQueueOrder(actor)) continue;
             if (!_world.TryGetRecipe(identity.Type, command.Action, out int target, out var recipe)) continue;
             if (plan is null)
             {
@@ -183,6 +199,31 @@ internal sealed class ConstructionSystem
             }
             AdvanceConstruction(foundation, conditions);
         }
+        foreach (var id in _idleBuilders)
+        {
+            if (_foundationCount == 0) break;
+            if (!_world.TryGetEntity(id, out var actor) || !_world.IsOnMap(actor)) continue;
+            var orders = actor.Get<OrderState>();
+            uint owner = actor.Get<OwnershipState>().Owner;
+            if (orders.HasOrder || orders.CombatTarget != default || actor.Get<MotionState>().Moving || owner == 0) continue;
+
+            var type = TypeOf(actor);
+            var position = actor.Get<SpatialState>().Position;
+            int radius = type.ConstructionRange + Math.Max(type.Body.HalfWidth, type.Body.HalfHeight);
+            _world.QuerySite(new(position.X - radius, position.Y - radius),
+                new(position.X + radius, position.Y + radius), _siteCandidates);
+            Entity foundation = default;
+            uint bestId = uint.MaxValue;
+            foreach (var candidate in _siteCandidates)
+            {
+                if (candidate.Value > bestId || !_world.TryGetEntity(candidate, out var site) || !IsFoundation(site) ||
+                    site.Get<OwnershipState>().Owner != owner ||
+                    !BuildInRange(actor, site.Get<EntityIdentity>().Type, site.Get<SpatialState>().Position)) continue;
+                foundation = site;
+                bestId = candidate.Value;
+            }
+            if (foundation != default) AdvanceConstruction(foundation, _world.ReadConditions(actor));
+        }
     }
 
     private bool TryStartConstruction(ConstructionProject project, out Entity foundation)
@@ -257,6 +298,7 @@ internal sealed class ConstructionSystem
                 _mechanic.Initialize(entity, start, _world.Tick);
                 if (!_mechanic.IsFoundation(entity)) throw new InvalidOperationException("Construction did not initialize the foundation.");
             });
+        _foundationCount++;
         RemoveProject(project, cancelled: false);
         if (grid is not null) _world.CommitFootprint(grid);
         _world.Emit(new(_world.Tick, WorldEventKind.ConstructionStarted, project.Id, project.Position, project.UnitType, Owner: project.Owner));
@@ -273,6 +315,7 @@ internal sealed class ConstructionSystem
         health = step.Health;
         if (!step.Complete) return;
         _world.CompleteFoundation(actor, _clearFoundation);
+        _foundationCount--;
         var identity = actor.Get<EntityIdentity>();
         _world.Emit(new(_world.Tick, WorldEventKind.ConstructionCompleted, identity.Id, actor.Get<SpatialState>().Position, identity.Type, Owner: actor.Get<OwnershipState>().Owner));
     }

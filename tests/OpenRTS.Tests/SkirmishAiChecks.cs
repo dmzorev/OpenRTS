@@ -17,7 +17,7 @@ internal static class SkirmishAiChecks
         test("AI0 rejects invalid recipes and accepts a changed group size", () =>
         {
             NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(
-                source with { Text = source.Text.Replace("Action: barracks", "Action: factory") }, catalog, profile.Id));
+                source with { Text = source.Text.Replace("Action: site-barracks", "Action: site-factory") }, catalog, profile.Id));
             NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(
                 source with { Text = source.Text.Replace("Target: 5", "Target: 2") }, catalog, profile.Id));
             var smaller = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Target: 5", "Target: 3") }, catalog, profile.Id);
@@ -43,7 +43,7 @@ internal static class SkirmishAiChecks
                     {
                         if (value.Kind == WorldEventKind.OwnerChanged && value.Owner == player) captured = true;
                         if (value.Kind == WorldEventKind.ActionUnavailable && state.AppliedCommands.Length > 0 &&
-                            state.AppliedCommands[0].Kind == CommandKind.PlaceProduced) invalidPlacements++;
+                            state.AppliedCommands[0].Kind == CommandKind.PlanConstruction) invalidPlacements++;
                     }
                     foreach (var command in state.AppliedCommands)
                         if (command.Kind == CommandKind.AttackMove)
@@ -114,7 +114,7 @@ internal static class SkirmishAiChecks
             var report = session.Completion.WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
             var log = session.GetCommandLog();
             NavigationChecks.Check(observations.SequenceEqual(Enumerable.Range(0, ticks).Select(i => (long)i)) &&
-                log.Any(c => c.Kind == CommandKind.PlaceProduced), "The collector missed ticks without published frames.");
+                log.Any(c => c.Kind == CommandKind.PlanConstruction), "The collector missed ticks without published frames.");
             using var replay = map.CreateWorld(1, restrictPlayerCommands: true);
             NavigationChecks.Check(DiagnosticScenario.Run(replay, ticks, log) == report, "Session journal did not replay in direct headless execution.");
         });

@@ -8,8 +8,8 @@ infantry-skirmish:
     rifleman: {Min: 3, Target: 5}
   Capture: {Unit: construction-engineer, Action: capture}
   Recipes:
-    power-plant: {Producer: construction-yard, Action: power}
-    barracks: {Producer: construction-yard, Action: barracks}
+    power-plant: {Producer: construction-yard, Action: site-power}
+    barracks: {Producer: construction-yard, Action: site-barracks}
     rifleman: {Producer: barracks, Action: rifleman}
   CreditReserve: 300
   MacroIntervalTicks: 25

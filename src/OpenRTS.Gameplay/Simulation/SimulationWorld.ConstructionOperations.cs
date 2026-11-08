@@ -29,6 +29,7 @@ public sealed partial class SimulationWorld
 
     bool IConstructionWorld.IsOnMap(Entity entity) => IsOnMap(entity);
     GameplayConditions IConstructionWorld.ReadConditions(Entity actor) => ReadConditions(TypeOf(actor), actor.Get<OwnershipState>().Owner);
+    bool IConstructionWorld.CanQueueOrder(Entity actor) => (actor.Get<OrderState>().PendingOrders?.Count ?? 0) < MaximumQueuedOrders;
     void IConstructionWorld.IssueOrder(EntityId actor, UnitOrder order, bool queued) => IssueOrder(_indices[actor], order, queued);
     void IConstructionWorld.Halt(EntityId actor) => Halt(_indices[actor]);
     bool IConstructionWorld.StopAllowed(int type, WorldPosition position) => StopAllowed(type, position);

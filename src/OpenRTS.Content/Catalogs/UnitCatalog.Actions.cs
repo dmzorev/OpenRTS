@@ -36,6 +36,7 @@ public sealed partial class UnitCatalog
     {
         public string? Mount { get; set; }
         public bool Capture { get; set; }
+        public bool Build { get; set; }
         public bool OnSite { get; set; }
         public int Range { get; set; } = 1024;
         public bool GroundTarget { get; set; }
@@ -75,12 +76,13 @@ public sealed partial class UnitCatalog
         var abilities = new List<AbilityDefinition>(); var products = new List<ProductionDefinition>();
         foreach (var (name, action) in declarations.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            if (string.IsNullOrWhiteSpace(name) || (action.Mount is not null ? 1 : 0) + (action.Unit is not null ? 1 : 0) + (action.Capture ? 1 : 0) != 1) throw new ArgumentException("An action requires exactly one Mount or Unit.");
+            if (string.IsNullOrWhiteSpace(name) || (action.Mount is not null ? 1 : 0) + (action.Unit is not null ? 1 : 0) + (action.Capture ? 1 : 0) + (action.Build ? 1 : 0) != 1) throw new ArgumentException("An action requires exactly one Mount, Unit, Capture or Build.");
             if (action.Unit is null && (action.OnSite || action.InitialHealthPercent is not null)) throw new ArgumentException("OnSite and InitialHealthPercent require a construction product.");
-            if (action.Capture)
+            if (action.Capture || action.Build)
             {
-                if (action.GroundTarget || action.AutoCast || action.Queue is not null || action.Ticks is not null || action.Cost is not null || action.PlacementRadius is not null) throw new ArgumentException("Capture cannot declare weapon/production settings.");
-                abilities.Add(new(name, "", Kind: AbilityKind.Capture, Range: action.Range));
+                if (action.GroundTarget || action.Capture && action.AutoCast || action.Queue is not null || action.Ticks is not null || action.Cost is not null || action.PlacementRadius is not null) throw new ArgumentException("Capture/build cannot declare incompatible weapon or production settings.");
+                abilities.Add(action.Build ? new(name, "", AutoCast: action.AutoCast, Kind: AbilityKind.Build)
+                    : new(name, "", Kind: AbilityKind.Capture, Range: action.Range));
             }
             if (action.Mount is { } mount)
             {

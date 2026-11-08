@@ -9,7 +9,7 @@ using DeclarativeContent;
 
 public partial class Sandbox
 {
-    private int _actionsCheck; private bool _checkingActions; private long _readyTask; private int _beforePlaceCount;
+    private int _actionsCheck; private bool _checkingActions; private EntityId _firstSite, _secondSite;
     private async void VerifyActions(FrameExchange.FrameLease lease)
     {
         if (_checkingActions) return; _checkingActions = true;
@@ -58,40 +58,45 @@ public partial class Sandbox
                 Check(poses.Single(p => p.Id.Value == 2).HasRally, "RMB did not set building rally");
                 await CaptureActions("actions-production-queue.png");
                 ClickStack("rifleman", false, false); ClickStack("rifleman", false, true); ClickStack("rocketeer", true, false);
-                ClickAction("rifleman"); SelectTypes(5); ClickAction("power", shift: true); ClickAction("barracks", right: true); ClickAction("engineer");
+                ClickAction("rifleman"); SelectTypes(5); ClickAction("engineer"); ClickAction("site-power");
+                var shift = new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, ShiftPressed = true };
+                HandleConstructionClick(shift, new(19 * 1024 + 512, 21 * 1024), null);
+                Check(_sitePlacement is not null, "Shift left construction placement mode");
+                HandleConstructionClick(shift, new(9 * 1024 + 512, 24 * 1024), null);
+                Check(_sitePlacement is not null, "Second Shift click left placement mode");
                 _actionsCheck = 3; Steps(1); return;
             }
             if (_actionsCheck == 3 && tick >= 7)
             {
-                Check(tasks.Count(t => t.Producer.Value == 2) == 1 && tasks.Count(t => t.Producer.Value == 5) == 7, "Stack removal or parallel queue enqueue failed");
+                Check(tasks.Count(t => t.Producer.Value == 2) == 1 && tasks.Count(t => t.Producer.Value == 5) == 1,
+                    "Stack removal or engineer queue failed");
+                _firstSite = poses.Single(p => p.Construction.Active).Id;
+                _secondSite = lease.ConstructionProjects.ToArray().Single().Id;
+                Check(_firstSite.Value < _secondSite.Value && poses.Single(p => p.Id.Value == 5).Order.QueuedCount == 1,
+                    "The yard did not keep its second Shift placement in the queue");
                 _actionsCheck = 4; Steps(130); return;
             }
             if (_actionsCheck == 4 && tick >= 137)
             {
-                Check(poses.Length == 29 && poses.Any(p => p.Id.Value > 28 && p.Order.Destination == poses.Single(owner => owner.Id.Value == 2).Rally), $"Unit production/rally failed: count={poses.Length}; new=" + string.Join(";", poses.Where(p => p.Id.Value > 28).Select(p => $"{p.Id.Value}:{_catalog!.Units[p.UnitType].Id}:{p.Order.Destination}")) + "; rally=" + poses.Single(p => p.Id.Value == 2).Rally);
-                Check(tasks.Count(t => t.Producer.Value == 5 && t.Ready) == 1, "Ready construction did not wait in its own queue");
-                ClickAction("power"); Check(_placing && _productionPlacement is not null, "Ready button did not arm placement");
-                _readyTask = _productionPlacement!.Value.Id; _beforePlaceCount = poses.Length;
-                HandlePlacement(new InputEventMouseButton { ButtonIndex = MouseButton.Left }, default);
-                _actionsCheck = 5; Steps(1); return;
+                var rally = poses.Single(p => p.Id.Value == 2).Rally;
+                Check(poses.Any(p => p.Id.Value > 28 && p.Order.Destination == rally), "Unit production/rally failed");
+                Check(!poses.Single(p => p.Id == _firstSite).Construction.Active &&
+                    poses.Single(p => p.Id == _secondSite).Construction.Active, "The second site did not follow the first");
+                await CaptureActions("actions-building-started.png");
+                _actionsCheck = 6; Steps(130); return;
             }
-            if (_actionsCheck == 5 && tick >= 138)
+            if (_actionsCheck == 6 && tick >= 267)
             {
-                Check(tasks.Any(t => t.Id == _readyTask && t.Ready) && _placing && poses.Length == _beforePlaceCount, "Rejected placement consumed the ready building");
-                _pointer = Pixel(new(74 * 1024, 14 * 1024)); UpdateFootprintPreview(); await CaptureActions("actions-building-ready.png");
-                HandlePlacement(new InputEventMouseButton { ButtonIndex = MouseButton.Left }, new(74 * 1024, 14 * 1024));
-                _actionsCheck = 6; Steps(1); return;
-            }
-            if (_actionsCheck == 6 && tick >= 139)
-            {
-                Check(!tasks.Any(t => t.Id == _readyTask) && !_placing && poses.Length == _beforePlaceCount + 1, "Placed building did not consume exactly its task");
-                await CaptureActions("actions-building-placed.png");
+                Check(!poses.Single(p => p.Id == _secondSite).Construction.Active, "The second site did not complete");
+                await CaptureActions("actions-building-complete.png");
                 var commands = _session!.GetCommandLog();
-                Check(commands.Count(c => c.Kind == CommandKind.UseAbility) == 1 && commands.Count(c => c.Kind == CommandKind.PlaceProduced) == 2, "UI actions did not share the command journal");
+                Check(commands.Count(c => c.Kind == CommandKind.UseAbility) == 1 &&
+                    commands.Count(c => c.Kind == CommandKind.PlanConstruction && c.Queued) == 2,
+                    "UI actions did not share the command journal");
                 SpawnTransportFixture();
                 _actionsCheck = 7; Steps(1); return;
             }
-            if (_actionsCheck == 7 && tick >= 140)
+            if (_actionsCheck == 7 && tick >= 268)
             {
                 for (int i = 0; i < 2; i++)
                 {
@@ -105,7 +110,7 @@ public partial class Sandbox
                 }
                 _actionsCheck = 8; Steps(1); return;
             }
-            if (_actionsCheck == 8 && tick >= 141)
+            if (_actionsCheck == 8 && tick >= 269)
             {
                 Check(_storedPoses.Count == 2 && _loadedTransports.Count == 2, "Contextual click did not board both passengers");
                 SelectTypes(_loadedTransports.Select(id => id.Value).ToArray());
@@ -117,7 +122,7 @@ public partial class Sandbox
                 button.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton { Pressed = true, ButtonIndex = MouseButton.Left, DoubleClick = true });
                 _actionsCheck = 9; Steps(1); return;
             }
-            if (_actionsCheck == 9 && tick >= 142)
+            if (_actionsCheck == 9 && tick >= 270)
             {
                 Check(_storedPoses.Count == 0 && _session!.GetCommandLog().Last().Recipients?.Count == 2, "Double click did not unload all selected carriers");
                 GD.Print("OPENRTS_ACTIONS:PASS command panel, production, contextual boarding and multi-transport unload");

@@ -43,8 +43,10 @@ public partial class Sandbox
                 "Inspecting the AI base allowed player commands.");
             _selection.Change([own.Id], SelectionChange.Replace);
             RefreshSelection();
-            ActivateCustom("power", false, false);
-            session.Submit(CommandKind.EnqueueTask, recipients: new([own.Id, enemy.Id]), action: "power");
+            ActivateCustom("site-power", false, false);
+            var site = new WorldPosition(59904, 45056);
+            HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true }, site, null);
+            session.Submit(CommandKind.PlanConstruction, site, recipients: new([enemy.Id]), action: "site-power");
             _aiMatchStage = 1;
             session.StepOnce();
             return;
@@ -54,8 +56,8 @@ public partial class Sandbox
         {
             if (frame.Tick < 1) return;
             CheckSkirmish(frame.Tick == 1 && session.IsPaused &&
-                frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 4500) && frame.Tasks.Length == 2,
-                "The human or AI did not pay for exactly one task on the single step.");
+                frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 4500) && frame.Poses.ToArray().Count(p => p.Construction.Active) == 2,
+                "The human or AI did not pay for exactly one foundation on the single step.");
             var first = session.GetCommandLog();
             CheckSkirmish(first.Length == 4 && first.All(c => c.Tick == 1) &&
                 first.Count(c => c.Issuer == 1) == 2 && first.Count(c => c.Issuer == 2) == 2,
