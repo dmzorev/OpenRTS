@@ -301,7 +301,7 @@ public partial class Sandbox
             string name = _catalog!.Presentations[selected.UnitType].Name;
             int max = _catalog.Units[selected.UnitType].MaxHealth;
             _terminalPortrait!.Texture = UnitIcon(selected.UnitType);
-            _terminalSelection!.Text = $"{name}  ×{_selection.Count}\n{selected.Health}/{max} HP" + ConstructionStatus();
+            _terminalSelection!.Text = $"{name}  ×{_selection.Count}\n{selected.Health}/{max} HP" + ConstructionStatus() + (_catalog.Units[selected.UnitType].Flight is not null ? $"\n{selected.Flight.Phase} · боезапас {selected.Flight.Ammo}/{selected.Flight.Capacity}" : "");
             _terminalSelection.TooltipText = _terminalSelection.Text;
             _terminalHealth!.MaxValue = max;
             _terminalHealth.Value = selected.Health;

@@ -49,7 +49,7 @@ public sealed partial class SimulationWorld
                 ref var spatial = ref position.Value;
                 var type = definition.Value.Presentation!;
                 int dx = spatial.Position.X - spatial.Previous.X, dy = spatial.Position.Y - spatial.Previous.Y;
-                if (dx != 0 || dy != 0) entityPresentation.BodyFacing = new(dx, dy);
+                if (definition.Value.Flight is null && (dx != 0 || dy != 0)) entityPresentation.BodyFacing = new(dx, dy);
                 if (entityPresentation.BodyAnimationOverride && !entityPresentation.BodyAnimation.IsActive(Tick)) entityPresentation.BodyAnimationOverride = false;
                 if (!entityPresentation.BodyAnimationOverride)
                 {

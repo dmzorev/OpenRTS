@@ -50,31 +50,46 @@ public partial class Sandbox
     private EntityPose? Selected() => _selectionPoses.TryGetValue(_activeRecipients.Length > 0 ? _activeRecipients[0] : _selection.Primary, out var pose) ? pose : null;
     private EntityPose? Pick(WorldPosition point)
     {
-        EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false;
+        EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false, selectedAircraft = false;
         for (int i = 0; i < _displayCount; i++)
         {
             var pose = _displayPoses[i];
             if (!_catalog!.Presentations[pose.UnitType].Selectable) continue;
             var type = _catalog.Units[pose.UnitType].WithRotation(pose.QuarterTurns); bool footprint = type.Footprint is not null;
+            if (type.Flight is not null)
+            {
+                var click = _camera!.UnprojectPosition(new(point.X / 1024f, 0, point.Y / 1024f));
+                float pixels = Screen(pose).DistanceSquaredTo(click);
+                if (pixels <= 24 * 24 && (selected is null || !selectedAircraft || pixels < best))
+                { selected = pose; best = (long)pixels; selectedFootprint = false; selectedAircraft = true; }
+                continue;
+            }
             if (footprint)
             {
                 bool inside = type.Footprint!.Cells.Any(c => { var b = type.Footprint.Bounds(c, pose.Current); return point.X >= b.MinX && point.X < b.MaxX && point.Y >= b.MinY && point.Y < b.MaxY; });
                 if (!inside || selected is not null && !selectedFootprint || selectedFootprint && selected!.Value.Id.Value > pose.Id.Value) continue;
                 selected = pose; selectedFootprint = true; continue;
             }
-            if (!ObjectGeometry.WithinRadius(type, pose.Current, point, 600)) continue;
+            if (selectedAircraft || !ObjectGeometry.WithinRadius(type, pose.Current, point, 600)) continue;
             long x = (long)pose.Current.X - point.X, y = (long)pose.Current.Y - point.Y, distance = x * x + y * y;
             if (selectedFootprint || distance < best || distance == best && selected is { } old && pose.Id.Value < old.Id.Value)
             { best = distance; selected = pose; selectedFootprint = false; }
         }
         return selected;
     }
-    private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f));
+    private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, pose.Current.Elevation / 1024f, pose.Current.Y / 1024f));
     private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
     private bool Controls(uint owner) => owner == 1 || _opponentProfile is null && _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
     private uint CommandOwner => _opponentProfile is null ? Selected()?.Presentation.Owner ?? 1 : 1;
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
     private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;
+    private bool CanDamageSelected(EntityPose victim)
+    {
+        var target = _catalog!.Units[victim.UnitType];
+        var categories = target.Flight is { } flight && victim.Flight.Airborne ? flight.Categories : target.TargetCategories;
+        return ActiveRecipients().Any(id => _catalog.Units[_selectionPoses[id].UnitType].Weapons.Any(m =>
+            m.Weapon.Effect == WeaponEffect.Damage && m.Weapon.CanTarget(categories) && m.Weapon.Modifier(target.Armor) > 0));
+    }
     private bool CapturableTarget(EntityPose pose) => pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Capturable is not null;
     private bool AbilityTarget(AbilityDefinition ability, UnitDefinition type, EntityPose target)
     {
@@ -109,6 +124,7 @@ public partial class Sandbox
             }
             _availabilityRevision = _selection.Revision;
         }
+        if (kind is UnitActionKind.Land or UnitActionKind.ReturnToBase) return _canControl && Controlled().Any(id => _catalog.Units[_selectionPoses[id].UnitType].Flight is { } flight && (kind != UnitActionKind.Land || !flight.NeedsRunway));
         if (kind == UnitActionKind.Enter) return Controlled().Any(id => _catalog.Units[_selectionPoses[id].UnitType].Passenger is not null);
         if (kind is UnitActionKind.Unload or UnitActionKind.UnloadAt) return SelectedTransports().Length > 0;
         return _canControl && kind switch { UnitActionKind.Attack => _canAttack, UnitActionKind.AttackMove => _canAttackMove, UnitActionKind.Repair => _canRepair, UnitActionKind.Move => _canMove, _ => true };
@@ -118,7 +134,7 @@ public partial class Sandbox
         ResetPlacementRotation();
         _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null; _sitePlacement = null;
         if (!CanIssue(kind)) { _notice = "Действие недоступно текущему выбору."; return false; }
-        if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter or UnitActionKind.UnloadAt)
+        if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter or UnitActionKind.UnloadAt or UnitActionKind.Land)
         { _armedAction = kind; _queueArmed = queued; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; }
         else IssueAction(kind, default, default, queued);
         UpdateRtsCursor(); return true;
@@ -149,10 +165,14 @@ public partial class Sandbox
                 UnitActionKind.Move => type.Movable && !_selectionPoses[id].Upgrade.Active || type.TaskQueues.Count > 0,
                 UnitActionKind.AttackMove => type.Movable && HasAttackMount(_selectionPoses[id], type),
                 UnitActionKind.Attack => HasAttackMount(_selectionPoses[id], type),
+                UnitActionKind.Land => type.Flight is { NeedsRunway: false }, UnitActionKind.ReturnToBase => type.Flight is not null,
                 UnitActionKind.Repair => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair), _ => true };
         });
         if (kind == UnitActionKind.Attack && (!_selectionPoses.TryGetValue(target, out var attacked) || !Enemy(attacked)))
         { _notice = "Атака: выберите вражеский юнит."; return false; }
+        if (kind == UnitActionKind.Attack && _selectionPoses.TryGetValue(target, out var airTarget) &&
+            _catalog!.Units[airTarget.UnitType].Flight is not null && !CanDamageSelected(airTarget))
+        { _notice = "Выбранное оружие не поражает эту категорию цели."; return false; }
         if (kind == UnitActionKind.Repair && (!_selectionPoses.TryGetValue(target, out var repaired) || !Ally(repaired) || repaired.Health >= _catalog!.Units[repaired.UnitType].MaxHealth || _catalog.Units[repaired.UnitType].Armor == ArmorKind.Living))
         { _notice = "Ремонт: выберите повреждённую союзную технику или здание."; return false; }
         var recipients = ids.Where(id => target.Value == 0 || !_selectionPoses.TryGetValue(target, out var victim) ||
@@ -208,6 +228,8 @@ public partial class Sandbox
         if (!CanIssue(UnitActionKind.Stop)) { _notice = "Выберите свои юниты."; return; }
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
+        if (picked is { } airbase && Ally(airbase) && _catalog!.Units[airbase.UnitType].Airbase is not null && CanIssue(UnitActionKind.ReturnToBase))
+        { IssueAction(UnitActionKind.ReturnToBase, point, airbase.Id, click.ShiftPressed); return; }
         if (!click.CtrlPressed && picked is { } supply && (TryContextUpgrade(supply) || ContextSupply(supply))) return;
         if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable, click.ShiftPressed)) return;
         bool enemy = picked is { } enemyPose && Enemy(enemyPose);
@@ -296,7 +318,7 @@ public partial class Sandbox
                 CenterCamera(new((float)poses.Average(p => p.Current.X) / 1024, (float)poses.Average(p => p.Current.Y) / 1024));
             return true;
         }
-        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.Enter => UnitActionKind.Enter, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
+        var action = code switch { Key.A => CanIssue(UnitActionKind.AttackMove) ? UnitActionKind.AttackMove : UnitActionKind.Attack, Key.M => UnitActionKind.Move, Key.Enter => UnitActionKind.Enter, Key.J => UnitActionKind.ReturnToBase, Key.L => UnitActionKind.Land, Key.S => UnitActionKind.Stop, Key.H => UnitActionKind.HoldPosition, _ => (UnitActionKind?)null };
         return action is { } kind && ActivateAction(kind, key.ShiftPressed);
     }
     private void UpdateRtsCursor()
@@ -320,7 +342,8 @@ public partial class Sandbox
             else if (CanIssue(UnitActionKind.Stop))
             {
                 bool attack = _armedAction is UnitActionKind.AttackMove or UnitActionKind.Attack || _armedAction is null && hovered is { } enemyHover && Enemy(enemyHover) && !Input.IsPhysicalKeyPressed(Key.Ctrl);
-                if (attack) cursor = CanIssue(UnitActionKind.Attack) && (_armedAction != UnitActionKind.Attack || hovered is { } attackHover && Enemy(attackHover)) ? RtsCursor.Attack : RtsCursor.Unavailable;
+                if (attack) cursor = CanIssue(UnitActionKind.Attack) && (_armedAction != UnitActionKind.Attack || hovered is { } attackHover && Enemy(attackHover)) &&
+                    (hovered is not { } air || _catalog!.Units[air.UnitType].Flight is null || CanDamageSelected(air)) ? RtsCursor.Attack : RtsCursor.Unavailable;
                 else if (_armedAction is null && hovered is { } allyHover && Ally(allyHover)) cursor = RtsCursor.Select;
                 else cursor = CanIssue(UnitActionKind.Move) ? RtsCursor.Move : RtsCursor.Unavailable;
                 if (cursor is RtsCursor.Move or RtsCursor.Attack && _displayGrid is { } grid && Selected() is { } primary)
@@ -332,7 +355,7 @@ public partial class Sandbox
                         foreach (var id in _selection.Ids)
                         {
                             var pose = _selectionPoses[id]; var type = _catalog!.Units[pose.UnitType];
-                            if (!type.Movable) continue;
+                            if (!type.Movable || type.Flight is not null) continue;
                             var profile = type.Locomotor;
                             if (!_cursorResolvers.TryGetValue(profile, out var resolver)) { resolver = new(grid, profile, grid.HasGeometry || grid.CellSize < 514 || profile.Body != BodyShape.Default || profile.MaximumStep != int.MaxValue || profile.MaximumSlope != int.MaxValue || profile.MaximumDepth != int.MaxValue); _cursorResolvers.Add(profile, resolver); }
                             if (!_cursorProfiles.Add((profile, resolver.ComponentAt(pose.Current)))) continue;

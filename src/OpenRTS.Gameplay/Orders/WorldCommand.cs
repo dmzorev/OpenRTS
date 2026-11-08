@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace OpenRTS.Core.Orders;
 
-public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, UnblockCell, MoveGroup, PlayAnimation, SetVisualStates, Aim, ClearAim, ToggleVisualState, AttackMove, AttackTarget, Stop, HoldPosition, MoveSelected, RepairTarget, Remove, UseAbility, SetAutoCast, EnqueueTask, CancelTasks, PlaceProduced, SetRally, CaptureTarget, Enter, Unload, UnloadAt, PlanConstruction, BuildSite, CancelConstruction, GrantCondition, RevokeCondition, StartUpgrade, CancelUpgrade, Transform }
+public enum CommandKind { Move, MoveAll, Scatter, Spawn, Destroy, BlockCell, UnblockCell, MoveGroup, PlayAnimation, SetVisualStates, Aim, ClearAim, ToggleVisualState, AttackMove, AttackTarget, Stop, HoldPosition, MoveSelected, RepairTarget, Remove, UseAbility, SetAutoCast, EnqueueTask, CancelTasks, PlaceProduced, SetRally, CaptureTarget, Enter, Unload, UnloadAt, PlanConstruction, BuildSite, CancelConstruction, GrantCondition, RevokeCondition, StartUpgrade, CancelUpgrade, Transform, Land, ReturnToBase }
 
 public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence, CommandKind Kind,
     EntityId Entity = default, WorldPosition Position = default, int UnitType = 0, uint Owner = 0,

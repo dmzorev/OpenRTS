@@ -31,7 +31,7 @@ public sealed partial class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(12); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(13); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -52,6 +52,9 @@ public sealed partial class UnitCatalog
             .Register<PassengerOptions>("Passenger", (_, _, options) => options)
             .Register<TransportOptions>("Transport", (_, _, options) => options)
             .Register<CapturableOptions>("Capturable", (_, _, options) => options)
+            .Register<TargetOptions>("Targetable", (_, _, options) => options)
+            .Register<FlightOptions>("Aircraft", (_, _, options) => options)
+            .Register<AirbaseOptions>("Airbase", (_, _, options) => options)
             .Register<MovementOptions>("Movement", (_, _, options) => options)
             .Register<BodyOptions>("Body", (_, _, options) => options)
             .Register<FootprintOptions>("Footprint", (_, _, options) => options)
@@ -115,7 +118,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)));
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)), targetCategories: new TargetCategories(traits.All<TargetOptions>().SingleOrDefault()?.Categories ?? ["ground"]), flight: traits.All<FlightOptions>().SingleOrDefault()?.Compile(), airbase: traits.All<AirbaseOptions>().SingleOrDefault()?.Compile());
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons), visual?.Selectable ?? true);
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -220,6 +223,40 @@ public sealed partial class UnitCatalog
         public string Animation { get; set; } = "fire";
         public bool FireWhileMoving { get; set; }
         public bool FireFromTransport { get; set; }
+    }
+    private sealed class TargetOptions { public string[] Categories { get; set; } = ["ground"]; }
+    private sealed class FlightOptions
+    {
+        public FlightMode Mode { get; set; }
+        public int Speed { get; set; } = 160;
+        public int MinimumSpeed { get; set; } = 80;
+        public int Acceleration { get; set; } = 16;
+        public int TurnRate { get; set; } = 16;
+        public int CruiseAltitude { get; set; } = 1536;
+        public int VerticalSpeed { get; set; } = 96;
+        public int HalfHeight { get; set; } = 192;
+        public int Ammo { get; set; }
+        public string ServiceType { get; set; } = "aircraft";
+        public string[] Categories { get; set; } = ["air"];
+        public bool NeedsRunway { get; set; }
+        public FlightDefinition Compile() => new(Mode, Speed, MinimumSpeed, Acceleration, TurnRate, CruiseAltitude, VerticalSpeed, HalfHeight, Ammo, ServiceType, new TargetCategories(Categories), NeedsRunway);
+    }
+    private sealed class AirbaseOptions
+    {
+        public int[][] Slots { get; set; } = [];
+        public string[] Accepts { get; set; } = ["aircraft"];
+        public int ReloadTicks { get; set; } = 15;
+        public int RepairPerTick { get; set; } = 2;
+        public bool KeepsParking { get; set; }
+        public int[]? RunwayStart { get; set; }
+        public int[]? RunwayEnd { get; set; }
+        public AirbaseDefinition Compile()
+        {
+            if (Slots.Any(p => p.Length != 2) || RunwayStart is { Length: not 2 } || RunwayEnd is { Length: not 2 })
+                throw new ArgumentException("Airbase positions require [X, Y].");
+            return new(Slots.Select(p => new WorldPosition(p[0], p[1])), Accepts, ReloadTicks, RepairPerTick,
+                RunwayStart is null ? null : new(RunwayStart[0], RunwayStart[1]), RunwayEnd is null ? null : new(RunwayEnd[0], RunwayEnd[1]), KeepsParking);
+        }
     }
     private sealed class MovementOptions { public string Locomotor { get; set; } = ""; public bool Enabled { get; set; } = true; }
 }

@@ -13,7 +13,7 @@ public sealed partial class SimulationWorld
         target = -1;
         if (!_indices.TryGetValue(id, out target) || index == target || !IsOnMap(_entityHandles[target])) return false;
         uint owner = _entityHandles[index].Get<OwnershipState>().Owner;
-        if (owner == 0) return false;
+        if (owner == 0 || !WeaponAccepts(weapon, _entityHandles[target])) return false;
         ref var other = ref _entityHandles[target];
         var otherIdentity = other.Get<EntityIdentity>();
         ref var otherOwnership = ref other.Get<OwnershipState>();
@@ -66,7 +66,10 @@ public sealed partial class SimulationWorld
         ref var source = ref _entityHandles[index];
         ref var other = ref _entityHandles[target];
         distanceSquared = ObjectGeometry.DistanceSquared(TypeOf(source), source.Get<SpatialState>().Position, TypeOf(other), other.Get<SpatialState>().Position, out var from, out var to);
-        return distanceSquared <= (long)range * range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, from, to, 0));
+        bool spatial = IsAircraft(source) || IsAircraft(other);
+        long dz = (long)from.Elevation - to.Elevation;
+        return distanceSquared <= (long)range * range && (!spatial || distanceSquared + dz * dz <= (long)range * range) &&
+            (_baseGrid is null || (spatial ? SpatialTerrainClear(from, to) : TerrainGeometry.Clear(_baseGrid, from, to, 0)));
     }
     private WorldPosition AimPoint(int source, int target) => ObjectGeometry.ClosestPoint(TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, _entityHandles[source].Get<SpatialState>().Position);
 
@@ -80,7 +83,7 @@ public sealed partial class SimulationWorld
         var identity = origin.Get<EntityIdentity>();
         var type = TypeOf(origin);
         int x = type.Footprint?.HalfWidth ?? type.Body.HalfWidth, y = type.Footprint?.HalfHeight ?? type.Body.HalfHeight;
-        (_motion ?? _combatIndex)!.Query(new(position.X - x, position.Y - y), new(position.X + x, position.Y + y), range, _combatCandidates);
+        (_combatIndex ?? _motion)!.Query(new(position.X - x, position.Y - y), new(position.X + x, position.Y + y), range, _combatCandidates);
         var rule = _combatTargetRule;
         var query = new CombatTargetQuery(identity.Id, owner, type, weapon, range);
         int best = -1;
@@ -137,12 +140,14 @@ public sealed partial class SimulationWorld
             ref var entityOwnership = ref entity.Get<OwnershipState>();
             ref var entityOrders = ref carrier.Get<OrderState>();
             ref var entityMotion = ref carrier.Get<MotionState>();
-            bool weaponsDisabled = WeaponsDisabled(entityIdentity.Id) ||
+            bool weaponsDisabled = !FlightCanFire(entity) || WeaponsDisabled(entityIdentity.Id) ||
                 sourceType.DisableWeaponsOnLowPower && ReadConditions(sourceType, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower);
             entityCombat.WeaponReadyTick = 0;
             for (int mountIndex = 0; mountIndex < type.Weapons.Count; mountIndex++)
             {
                 var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
+                if (IsAircraft(entity) && sourceType.Flight!.Ammo > 0 && carrier.Get<FlightState>().Ammo == 0)
+                { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; continue; }
                 if ((enabled & (1 << mountIndex)) == 0 ||
                     stored && (!mount.FireFromTransport || weapon.Effect != WeaponEffect.Damage)) continue;
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
@@ -182,13 +187,18 @@ public sealed partial class SimulationWorld
                 {
                     state.Target = ground ? default : _entityHandles[target].Get<EntityIdentity>().Id;
                     var aim = ground ? point : AimPoint(origin, target); state.Facing = new(aim.X - entitySpatial.Position.X, aim.Y - entitySpatial.Position.Y);
-                    if (Tick >= state.ReadyTick)
+                    if (Tick >= state.ReadyTick && FlightFiringArc(entity, aim))
                     {
                         if (state.FireAtTick == 0 || state.ChargingTarget != state.Target)
                         { state.ChargingTarget = state.Target; state.FireAtTick = Tick + (state.BurstRemaining == 0 ? weapon.WindupTicks : 0); }
                         if (Tick >= state.FireAtTick)
                         {
                             if (state.BurstRemaining == 0) state.BurstRemaining = weapon.Burst;
+                            if (IsAircraft(entity) && sourceType.Flight!.Ammo > 0)
+                            {
+                                var flight = carrier.Get<FlightState>(); flight.Ammo--;
+                                if (flight.Ammo == 0) { flight.ReturnRequested = true; flight.RequestTick = Tick; }
+                            }
                             state.BurstRemaining--; state.ReadyTick = Tick + (state.BurstRemaining > 0 ? weapon.BurstIntervalTicks : weapon.CooldownTicks);
                             state.ChargingTarget = default; state.FireAtTick = 0;
                             state.Animation = new(type.AnimationIndex(mount.Animation), Tick, weapon.AnimationTicks);
@@ -244,7 +254,7 @@ public sealed partial class SimulationWorld
     {
         if (weapon.SplashRadius == 0) { ApplyEffect(target); return; }
         // shortcut: uniform splash ignores cover; add falloff/occlusion when a weapon requires them.
-        (_motion ?? _combatIndex)!.Query(position, position, weapon.SplashRadius, _combatCandidates);
+        (_combatIndex ?? _motion)!.Query(position, position, weapon.SplashRadius, _combatCandidates);
         foreach (var id in _combatCandidates)
             if (_indices.TryGetValue(id, out int i) && ObjectGeometry.WithinRadius(TypeOf(_entityHandles[i]), _entityHandles[i].Get<SpatialState>().Position, position, weapon.SplashRadius)) ApplyEffect(_entityHandles[i].Get<EntityIdentity>().Id);
         void ApplyEffect(EntityId id)
@@ -255,6 +265,9 @@ public sealed partial class SimulationWorld
             ref var entityOwnership = ref entity.Get<OwnershipState>();
             bool repair = weapon.Effect == WeaponEffect.Repair;
             if (repair ? entityOwnership.Owner != owner || id == source : entityOwnership.Owner == 0 || !weapon.FriendlyFire && entityOwnership.Owner == owner) return;
+            if (!WeaponAccepts(weapon, entity)) return;
+            if (weapon.SpatialTrajectory && Math.Abs((long)entity.Get<SpatialState>().Position.Elevation - position.Elevation) >
+                weapon.SplashRadius + (TypeOf(entity).Flight?.HalfHeight ?? 256)) return;
             if (_types[_entityHandles[i].Get<EntityIdentity>().Type].Destruction == DestructionPolicy.Invulnerable) return;
             long value = (long)weapon.Damage * weapon.Modifier(_types[entityIdentity.Type].Armor) / 100;
             if (value > 0)

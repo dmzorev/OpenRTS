@@ -192,3 +192,46 @@ apc-upgradable:
       idle: {Sequence: stand, Parts: [body, turret, rocket, cannon, ports]}
       fire: {Sequence: shoot, Parts: [turret, rocket, cannon], Recoil: 0.06, Flash: 0.35}
       construct: {Sequence: stand, Parts: [body, turret, rocket, cannon, ports], ScaleFrom: 0.85, OpacityFrom: 0.35}
+
+fighter:
+  Inherits: ^sprite
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/fighter.tres
+        Size: [2.4, 2.4]
+        Facing: Body
+    Animations:
+      idle: { Sequence: stand, Parts: [body] }
+      move: { Sequence: travel, Parts: [body] }
+      fire: { Sequence: shoot, Parts: [body], Flash: 0.18 }
+
+tiltrotor:
+  Inherits: fighter
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/tiltrotor.tres
+        Size: [2.6, 2.6]
+      rotor-left:
+        Parent: body
+        Resource: res://resources/units/rotor.tres
+        Size: [0.6, 0.6]
+        Offset: [-0.84, -0.09]
+        Layer: 1
+        VisibleWhen: [airborne]
+        Spin: 720
+      rotor-right:
+        Parent: body
+        Resource: res://resources/units/rotor.tres
+        Size: [0.6, 0.6]
+        Offset: [0.84, -0.09]
+        Layer: 1
+        VisibleWhen: [airborne]
+        Spin: -720
+    Animations:
+      idle: { Sequence: stand, Parts: [body, rotor-left, rotor-right] }
+      move: { Sequence: travel, Parts: [body, rotor-left, rotor-right] }
+      fire: { Sequence: shoot, Parts: [body, rotor-left, rotor-right], Flash: 0.18 }

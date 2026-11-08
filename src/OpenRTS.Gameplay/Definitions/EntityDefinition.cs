@@ -4,6 +4,9 @@ namespace OpenRTS.Core;
 public sealed record EntityDefinition
 {
     public string Id { get; }
+    public TargetCategories TargetCategories { get; }
+    public FlightDefinition? Flight { get; }
+    public AirbaseDefinition? Airbase { get; }
     public HealthDefinition? Health { get; }
     public SpatialDefinition? Spatial { get; }
     public PresentationDefinition? Presentation { get; }
@@ -20,9 +23,20 @@ public sealed record EntityDefinition
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null, IEnumerable<UpgradeDefinition>? upgrades = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null, IEnumerable<UpgradeDefinition>? upgrades = null, TargetCategories? targetCategories = null, FlightDefinition? flight = null, AirbaseDefinition? airbase = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        TargetCategories = targetCategories ?? TargetCategories.Ground; Flight = flight; Airbase = airbase;
+        if (flight is not null && (spatial?.Movable != true || spatial.Footprint is not null || health is null || passenger is not null || airbase is not null || supply is not null || constructionRange != 0))
+            throw new ArgumentException("Aircraft require a mobile body and cannot be passengers, suppliers, builders or airbases.");
+        if (airbase is not null && (spatial?.Movable != false || spatial.Footprint is null || health is null))
+            throw new ArgumentException("Airbases require an immobile footprint and health.");
+        if (airbase is not null)
+        {
+            bool Inside(WorldPosition p) => Math.Abs((long)p.X) < spatial!.Footprint!.HalfWidth && Math.Abs((long)p.Y) < spatial.Footprint.HalfHeight;
+            if (airbase.Slots.Any(p => !Inside(p)) || airbase.RunwayStart is { } start && !Inside(start) || airbase.RunwayEnd is { } end && !Inside(end))
+                throw new ArgumentException("Airbase slots and runway endpoints must lie inside its footprint.");
+        }
         if (constructionRange is < 0 or > WorldPosition.MaximumExtent ||
             (constructionRange > 0 && spatial is null) ||
             (constructionRange == 0 && (production?.Products.Any(p => p.OnSite) == true ||

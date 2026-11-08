@@ -22,3 +22,9 @@ sniper-rifle:
 
 crane-repair:
   Inherits: repair
+
+fighter-missile:
+  Inherits: missile
+
+tiltrotor-missile:
+  Inherits: missile

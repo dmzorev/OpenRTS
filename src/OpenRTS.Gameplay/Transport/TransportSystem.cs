@@ -58,7 +58,7 @@ internal sealed class TransportSystem(ITransportWorld world, ITransportMechanic 
         carrier = default;
         if (_world.TypeOf(actor).Passenger is null || HasPassengers(actor) ||
             !_world.TryGetEntity(id, out carrier) || actor.Get<EntityIdentity>().Id == id) return false;
-        if (IsStored(carrier) || _world.IsUnderConstruction(carrier) || _world.TypeOf(carrier).Transport is null) return false;
+        if (IsStored(carrier) || _world.IsUnderConstruction(carrier) || !_world.CanBoardTransport(carrier) || _world.TypeOf(carrier).Transport is null) return false;
         var passenger = ParticipantOf(actor);
         var host = ParticipantOf(carrier);
         return passenger.Owner != 0 && (passenger.Owner == host.Owner || host.Owner == 0 && !host.Type.Movable) &&
@@ -126,6 +126,7 @@ internal sealed class TransportSystem(ITransportWorld world, ITransportMechanic 
     {
         int distance = _world.TypeOf(carrier).Transport!.UnloadDistance;
         if (!HasPassengers(carrier)) { FinishTransportOrder(carrier); return; }
+        if (!_world.PrepareUnloadLanding(carrier, destination)) return;
         if (distance < 0 || ObjectGeometry.Squared(carrier.Get<SpatialState>().Position, destination) <= (long)distance * distance)
         {
             FinishTransportOrder(carrier);
@@ -141,6 +142,11 @@ internal sealed class TransportSystem(ITransportWorld world, ITransportMechanic 
     private void Unload(Entity carrier, EntityId passenger, WorldPosition? destination = null)
     {
         if (IsStored(carrier) || !HasPassengers(carrier)) return;
+        if (!_world.CanBoardTransport(carrier))
+        {
+            _world.IssueOrder(carrier.Get<EntityIdentity>().Id, new(UnitActionKind.UnloadAt, destination ?? carrier.Get<SpatialState>().Position), false);
+            return;
+        }
         _world.EnsureMotionIndex();
         var position = carrier.Get<SpatialState>().Position;
         var type = _world.TypeOf(carrier);

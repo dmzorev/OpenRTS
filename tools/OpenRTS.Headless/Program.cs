@@ -10,13 +10,14 @@ try
 {
     var path = "sandbox/content/units.yaml";
     string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null;
-    bool skirmishAi = false, ticksSpecified = false;
+    bool skirmishAi = false, ticksSpecified = false, aviation = false;
     uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--skirmish") { skirmish = simulate = true; }
+        if (argument == "--aviation") { aviation = simulate = true; mapPath = AviationScenario.Map; }
+        else if (argument == "--skirmish") { skirmish = simulate = true; }
         else if (argument == "--skirmish-ai") { skirmishAi = simulate = true; }
         else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is >= 1 and <= MapScenario.MaximumPlayers) aiPlayer = player;
         else if (argument.StartsWith("--ai-config=", StringComparison.Ordinal) && argument.Length > 12) aiConfig = argument[12..];
@@ -42,6 +43,7 @@ try
         throw new ArgumentException("Select either the scripted skirmish or the AI skirmish.");
     if (!skirmishAi && (aiConfig is not null || aiPlayer.HasValue || aiProfile is not null))
         throw new ArgumentException("--ai-player, --ai-config and --ai-profile require --skirmish-ai.");
+    if (aviation && !ticksSpecified) ticks = AviationScenario.Ticks;
     if (skirmishAi && !ticksSpecified) ticks = SkirmishAiScenario.DefaultTicks;
     bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
@@ -64,10 +66,10 @@ try
             string fullPath = Path.Combine("sandbox", file);
             return new(file, File.ReadAllText(fullPath));
         }
-        var map = mapRequested ? MapScenario.Load(catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath) : null;
+        var map = aviation ? AviationScenario.Load(catalog, ReadMapSource) : mapRequested ? MapScenario.Load(catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath) : null;
         SimulationWorld Create() => map is not null ? map.CreateWorld(workers) : buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
         using var world = Create();
-        var commands = skirmish && startSetPath is null ? SkirmishScenario.Commands() : map is not null ? [] : production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
+        var commands = skirmish && startSetPath is null ? SkirmishScenario.Commands() : aviation ? AviationScenario.Commands : map is not null ? [] : production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
         SimulationReport report;

@@ -28,6 +28,8 @@ missile:
     Range: 6144
     AcquireRange: 8192
     Projectile: Missile
+    Targets: [ground, air]
+    SpatialTrajectory: true
     Speed: 192
     TravelLimit: 12288
     Damage: 35
@@ -77,3 +79,20 @@ sniper-rifle:
 crane-repair:
   Inherits: repair
   Weapon: {Range: 8192, AcquireRange: 8192, Versus: {Mechanical: 0}}
+
+fighter-missile:
+  Inherits: missile
+  Weapon:
+    Targets: [ground, air]
+    SpatialTrajectory: true
+    Speed: 640
+    Damage: 70
+    ReloadTicks: 8
+    WindupTicks: 0
+    TravelLimit: 24576
+
+tiltrotor-missile:
+  Inherits: fighter-missile
+  Weapon:
+    Damage: 40
+    ReloadTicks: 10

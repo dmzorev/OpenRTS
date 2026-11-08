@@ -20,7 +20,7 @@ public static class NavigationScenario
 
     public static SimulationWorld Create(UnitCatalog catalog, int count, int workers = 4, bool reverseJobs = false)
     {
-        int[] movableTypes = Enumerable.Range(0, catalog.Units.Count).Where(t => catalog.Units[t].Movable).ToArray();
+        int[] movableTypes = Enumerable.Range(0, catalog.Units.Count).Where(t => catalog.Units[t].Movable && catalog.Units[t].Flight is null).ToArray();
         if (movableTypes.Length == 0) throw new ArgumentException("The movement fixture requires a movable unit.", nameof(catalog));
         var grid = Grid(count);
         var world = new SimulationWorld(catalog.Units, grid.Width * 1024, grid.Height * 1024, seed: 12345,

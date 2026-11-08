@@ -14,8 +14,22 @@ internal sealed class MotionIndex(int maximumStep)
     private bool[] _cohort = [];
     private int _entryCount, _stamp, _bodyCount, _generation;
     private readonly Dictionary<EntityId, int> _byId = new();
-    private readonly Dictionary<long, int> _heads = new();
+    // Int64's default hash is X ^ Y for our packed keys, producing long chains on square maps.
+    private readonly Dictionary<long, int> _heads = new(BinKeyComparer.Instance);
     private readonly List<int> _candidates = [];
+
+    private sealed class BinKeyComparer : IEqualityComparer<long>
+    {
+        internal static readonly BinKeyComparer Instance = new();
+        public bool Equals(long x, long y) => x == y;
+        public int GetHashCode(long key)
+        {
+            ulong value = unchecked((ulong)key);
+            value = unchecked((value ^ (value >> 30)) * 0xbf58476d1ce4e5b9UL);
+            value = unchecked((value ^ (value >> 27)) * 0x94d049bb133111ebUL);
+            return unchecked((int)(value ^ (value >> 31)));
+        }
+    }
 
     internal void Clear(int capacity)
     {
@@ -66,7 +80,13 @@ internal sealed class MotionIndex(int maximumStep)
         QuerySlots(from, to, radius, _candidates); result.Clear();
         foreach (int index in _candidates) result.Add(_bodies[index].Id);
     }
-    private void QuerySlots(WorldPosition from, WorldPosition to, int radius, List<int> result)
+    // Only for soft avoidance on an index built in canonical ID order. Exact physical queries remain unlimited.
+    internal void QueryLimited(WorldPosition point, int radius, int limit, List<EntityId> result)
+    {
+        QuerySlots(point, point, radius, _candidates, limit); result.Clear();
+        foreach (int index in _candidates) result.Add(_bodies[index].Id);
+    }
+    private void QuerySlots(WorldPosition from, WorldPosition to, int radius, List<int> result, int limit = int.MaxValue)
     {
         result.Clear(); int padding = radius + maximumStep;
         if (_stamp == int.MaxValue) { Array.Clear(_seen); _stamp = 0; } _stamp++;
@@ -79,6 +99,7 @@ internal sealed class MotionIndex(int maximumStep)
                     int index = _entries[next].Body;
                     if (_seen[index] == _stamp) continue;
                     _seen[index] = _stamp; result.Add(index);
+                    if (result.Count == limit) return;
                 }
             }
     }

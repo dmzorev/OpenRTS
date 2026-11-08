@@ -29,4 +29,6 @@ public readonly record struct EntityPose(EntityId Id, int UnitType, WorldPositio
     public int QuarterTurns { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public TransformationPose Transformation { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public FlightSnapshot Flight { get; init; }
 }

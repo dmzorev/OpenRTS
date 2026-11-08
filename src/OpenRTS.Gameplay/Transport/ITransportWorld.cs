@@ -12,6 +12,8 @@ internal interface ITransportWorld
     UnitDefinition TypeOf(Entity entity);
     TransportDefinition? TransportOf(Entity entity);
     bool IsUnderConstruction(Entity entity);
+    bool CanBoardTransport(Entity carrier);
+    bool PrepareUnloadLanding(Entity carrier, WorldPosition destination);
 
     void IssueOrder(EntityId actor, UnitOrder order, bool queued);
     bool TrySetTarget(EntityId actor, WorldPosition position);

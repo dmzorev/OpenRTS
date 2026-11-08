@@ -24,7 +24,7 @@ public sealed partial class SimulationWorld
             CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.Stop or CommandKind.HoldPosition or
             CommandKind.StartUpgrade or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.UseAbility or CommandKind.SetAutoCast or
             CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally or
-            CommandKind.Enter or CommandKind.Unload or CommandKind.UnloadAt or CommandKind.PlanConstruction or CommandKind.BuildSite))
+            CommandKind.Land or CommandKind.ReturnToBase or CommandKind.Enter or CommandKind.Unload or CommandKind.UnloadAt or CommandKind.PlanConstruction or CommandKind.BuildSite))
             return false;
         if (command.Recipients is not { } recipients) return Owns(command.Entity);
         foreach (var id in recipients.Ids)

@@ -57,10 +57,17 @@ def main():
                 raise RuntimeError("Building art provenance differs: " + item[path_key])
     print("PASS building sources, open-door edits and normalized sprites match SHA-256", flush=True)
 
+    art = json.loads((ROOT / "docs/assets/aviation-art.json").read_text())
+    for item in art["assets"]:
+        for path_key, hash_key in (("source", "source_sha256"), ("asset", "sha256")):
+            if hashlib.sha256((ROOT / item[path_key]).read_bytes()).hexdigest() != item[hash_key]:
+                raise RuntimeError("Aviation art provenance differs: " + item[path_key])
+    print("PASS aviation sources and normalized sprites match SHA-256", flush=True)
+
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 10:
-        raise RuntimeError("Expected ten concrete unit definitions, including the sniper")
+    if expected["DefinitionCount"] != 12:
+        raise RuntimeError("Expected twelve concrete unit definitions, including aviation")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -116,6 +123,13 @@ def main():
     if "ERROR:" in rts.stderr or "OPENRTS_RTS_CONTROLS:PASS" not in rts.stdout:
         raise AssertionError("RTS selection/action/cursor verification failed: " + rts.stdout + rts.stderr)
     print("PASS RTS selection, queue, target modes, cursor feedback and UI/programmatic actions", flush=True)
+
+    aviation = report(run(headless + ["--aviation", "--workers=1"]).stdout, "OPENRTS_SIMULATION:")
+    parallel = report(run(headless + ["--aviation", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")
+    host = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-aviation"])
+    if aviation != parallel or "ERROR:" in host.stderr or "OPENRTS_AVIATION:PASS" not in host.stdout or report(host.stdout, "OPENRTS_SIMULATION:") != aviation:
+        raise RuntimeError("Aviation host/worker/presentation parity failed:\n" + host.stdout + host.stderr)
+    print("PASS aircraft, airbases, anti-air missiles and 600-tick host/worker parity", flush=True)
 
     buildings = report(run(headless + ["--buildings", "--ticks=24", "--workers=1"]).stdout, "OPENRTS_SIMULATION:")
     parallel = report(run(headless + ["--buildings", "--ticks=24", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")

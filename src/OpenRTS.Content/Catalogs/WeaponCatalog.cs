@@ -20,13 +20,17 @@ public sealed class WeaponCatalog
             var o = registry.Compile(id, node).Create(id).Single<WeaponOptions>();
             try { weapons.Add(id, new(o.Range, o.AcquireRange, o.Damage, o.ReloadTicks, o.WindupTicks, id, o.Projectile, o.Effect,
                 o.Speed, o.TravelLimit, o.SplashRadius, o.Burst, o.BurstIntervalTicks, o.AnimationTicks,
-                o.Versus.Living, o.Versus.Mechanical, o.Versus.Building, o.FriendlyFire, o.PassengerDamage, o.PassengerDamageSpill)); }
+                o.Versus.Living, o.Versus.Mechanical, o.Versus.Building, o.FriendlyFire, o.PassengerDamage, o.PassengerDamageSpill, new TargetCategories(o.Targets), o.SpatialTrajectory,
+                o.ExcludedTargets.Length == 0 ? null : new TargetCategories(o.ExcludedTargets))); }
             catch (ArgumentException error) { throw node.Error(id + ".Weapon", error.Message); }
         }
         return new(weapons);
     }
     private sealed class WeaponOptions
     {
+        public string[] Targets { get; set; } = ["ground"];
+        public string[] ExcludedTargets { get; set; } = [];
+        public bool SpatialTrajectory { get; set; }
         public int Range { get; set; } = 4096;
         public int AcquireRange { get; set; } = 8192;
         public int Damage { get; set; } = 10;

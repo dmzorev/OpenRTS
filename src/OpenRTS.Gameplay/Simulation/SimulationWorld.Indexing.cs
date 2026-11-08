@@ -17,6 +17,7 @@ public sealed partial class SimulationWorld
         _motionIndexDirty = false;
         var motion = _motion ?? _combatIndex; if (motion is null) return;
         motion.Clear(Count);
+        if (_motion is not null && _combatIndex is not null) _combatIndex.Clear(Count);
         if (ExistingStorage is null) return;
         bool hasStoredActors = _transport?.HasStoredActors == true;
         lock (StorageGate)
@@ -26,6 +27,10 @@ public sealed partial class SimulationWorld
                 if (hasStoredActors && !IsOnMap(entity)) continue;
                 var type = definition.Value.Spatial!;
                 var footprint = type.Footprint is null ? null : _types[identity.Value.Type].WithRotation(RotationOf(entity)).Footprint;
+                if (_motion is not null && _combatIndex is not null)
+                    _combatIndex.Add(identity.Value.Id, spatial.Value.Position, type.Body,
+                        footprint?.HalfWidth ?? type.Body.HalfWidth, footprint?.HalfHeight ?? type.Body.HalfHeight);
+                if (_motion is not null && !GroundContact(entity)) continue;
                 motion.Add(identity.Value.Id, spatial.Value.Position, type.Body,
                     footprint?.HalfWidth ?? type.Body.HalfWidth, footprint?.HalfHeight ?? type.Body.HalfHeight);
             }

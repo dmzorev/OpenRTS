@@ -57,6 +57,13 @@ public sealed partial class SimulationWorld
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Enter or UnitActionKind.UnloadAt && _transport?.CanStartOrder(entity, order) != true)
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        if (order.Kind is UnitActionKind.Land or UnitActionKind.ReturnToBase)
+        {
+            if (!StartFlightOrder(entity, order)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+            entityOrders.ActiveOrder = order; entityOrders.HasOrder = true; entityOrders.OrderStarted = Tick;
+            entityOrders.CombatTarget = default; CancelWindups(index); entityOrders.OrderPhase = OrderPhase.Approaching;
+            return true;
+        }
         bool repair = order.Kind == UnitActionKind.Repair;
         var weapon = OrderWeapon(index, repair, order.Target);
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.Type].Movable ||
@@ -72,6 +79,7 @@ public sealed partial class SimulationWorld
         else if (order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { if (!_types[entityIdentity.Type].Movable) Halt(index); else if (!SetTarget(index, entity.Get<SpatialState>().Position)) return false; }
         else Halt(index);
+        BeforeFlightOrder(entity);
         CancelTransformation(entityIdentity.Id, stop: false);
         if (entityOrders.CombatTarget.Value != 0 || order.Kind is UnitActionKind.Stop or UnitActionKind.HoldPosition)
         { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; }
@@ -112,6 +120,8 @@ public sealed partial class SimulationWorld
                     _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position);
                 continue;
             }
+            if (IsAircraft(entity) && (entityOrders.ActiveOrder.Kind is UnitActionKind.Land or UnitActionKind.ReturnToBase || entity.Get<FlightState>().ReturnRequested))
+            { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;

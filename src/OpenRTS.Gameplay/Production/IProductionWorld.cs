@@ -19,6 +19,7 @@ internal interface IProductionWorld
     int RotationOf(Entity actor);
     bool TryPlaceBuilding(int type, WorldPosition position, uint owner, int quarterTurns, out EntityId created);
     EntityId SpawnUnit(int type, WorldPosition position, uint owner);
+    bool TryProduceAircraft(Entity producer, int type, out EntityId created);
     void PlayExitAnimation(EntityId actor, int animation, int duration);
     void IssueRallyOrder(EntityId actor, WorldPosition point);
     void Emit(WorldEvent value);

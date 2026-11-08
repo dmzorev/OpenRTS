@@ -82,6 +82,8 @@ public partial class Sandbox
         if (_terminal is not null) Add(UnitActionKind.Attack, "Цель", "Атаковать указанный объект");
         Add(UnitActionKind.Enter, "Enter · Войти", "Enter → войти в транспорт или здание");
         Add(UnitActionKind.Stop, "S · Стоп", "S → остановить и очистить очередь");
+        Add(UnitActionKind.ReturnToBase, "J · На базу", "Вернуться на площадку для обслуживания");
+        Add(UnitActionKind.Land, "L · Посадка", "L → выбрать место посадки VTOL");
         Add(UnitActionKind.HoldPosition, _terminal is null ? "H · Удерживать" : "H · Держать", "H → удерживать позицию");
 
         void Add(UnitActionKind kind, string text, string tooltip)

@@ -536,3 +536,21 @@ bunker-upgradable:
       idle: {Sequence: stand, Parts: [body, expanded, ruins, workfx, cannon, machinegun, missiles]}
       construct: {Sequence: stand, Parts: [body, expanded, cannon, machinegun, missiles], ScaleFrom: 0.86, OpacityFrom: 0.28}
       fire: {Sequence: shoot, Parts: [cannon, machinegun, missiles], Flash: 0.32}
+
+airfield:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/buildings/airfield.tres
+        Size: [11.0, 11.0]
+      ruins: { Size: [8.0, 10.0] }
+
+helipad:
+  Inherits: ^building-model
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/buildings/helipad.tres
+        Size: [4.4, 4.4]
+      ruins: { Size: [4.0, 4.0] }

@@ -27,16 +27,16 @@ internal sealed class TerrainRoutePlanner
         Grid = grid;
         var builtIn = registration is null ? new GridNavigator(grid, workers, budget, cache, reverse) : null;
         int maximum = Math.Max(grid.MaximumTerrain, types.SelectMany(t => t.Footprint?.Cells ?? []).Max(c => (int?)c.Navigation.Terrain) ?? 0);
-        bool useClearance = grid.HasGeometry || grid.CellSize < 514 || types.Any(t => t.Footprint is null &&
+        bool useClearance = grid.HasGeometry || grid.CellSize < 514 || types.Any(t => t.Flight is null && t.Footprint is null &&
             (t.Body != BodyShape.Default || t.Locomotor.MaximumStep != int.MaxValue ||
                 t.Locomotor.MaximumSlope != int.MaxValue || t.Locomotor.MaximumDepth != int.MaxValue));
         foreach (var type in types)
-            if (type.Footprint is null && type.Locomotor.Rules.Count <= maximum)
+            if (type.Flight is null && type.Footprint is null && type.Locomotor.Rules.Count <= maximum)
                 throw new ArgumentException("Unit locomotor does not define every terrain in this grid.");
 
-        if (useClearance || maximum != 0 || grid.HasTerrain || types.Any(t => t.Locomotor.Rules[0] != TerrainRule.Ground))
+        if (useClearance || maximum != 0 || grid.HasTerrain || types.Any(t => t.Flight is null && t.Locomotor.Rules[0] != TerrainRule.Ground))
         {
-            var profiles = types.Where(t => t.Footprint is null).Select(t => t.Locomotor)
+            var profiles = types.Where(t => t.Footprint is null && t.Flight is null).Select(t => t.Locomotor)
                 .GroupBy(p => p.NavigationKey, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal)
                 .Select(g =>
                 {
@@ -50,7 +50,7 @@ internal sealed class TerrainRoutePlanner
             {
                 if (registration is not null)
                     throw new ArgumentException("A registered grid pathfinder requires unweighted point navigation.", nameof(registration));
-                _profileIndices = types.Select(t => Math.Max(0, Array.FindIndex(profiles, p => p.NavigationKey == t.Locomotor.NavigationKey))).ToArray();
+                _profileIndices = types.Select(t => t.Flight is not null ? -1 : Math.Max(0, Array.FindIndex(profiles, p => p.NavigationKey == t.Locomotor.NavigationKey))).ToArray();
                 _weighted = new(grid, profiles, workers, budget, cache, reverse, useClearance);
             }
         }

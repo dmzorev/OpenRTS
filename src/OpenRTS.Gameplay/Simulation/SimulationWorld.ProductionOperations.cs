@@ -46,6 +46,8 @@ public sealed partial class SimulationWorld
 
     EntityId IProductionWorld.SpawnUnit(int type, WorldPosition position, uint owner) => Spawn(type, position, owner);
 
+    bool IProductionWorld.TryProduceAircraft(Entity producer, int type, out EntityId created) => TryProduceAircraft(producer, type, out created);
+
     void IProductionWorld.PlayExitAnimation(EntityId actor, int animation, int duration) =>
         ApplyPresentation(_indices[actor], new(Tick, 0, 1, CommandKind.PlayAnimation, actor,
             Animation: animation, DurationTicks: duration, Track: AnimationTrack.Body));

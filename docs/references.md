@@ -20,3 +20,5 @@
 Переиспользована библиотека из `/Users/dmzorev/projects/games/hyperfleets/libs/DeclarativeContent`. Её README, LICENSE, исходники и тесты перенесены вместе. [Манифест импорта](vendor/declarative-content.json) содержит исходный commit и SHA-256 файлов. Библиотека не предоставляет игровой цикл или готовые RTS правила.
 
 OpenRTSv1 находится в `/Users/dmzorev/projects/games/OpenRTSv1`. Он служит источником опыта разделения систем. Его план совместимости с OpenRA не является планом нового MIT проекта.
+
+[Исследование авиации и вертолётов](research/aviation/README.md) сравнивает OpenRA, Zero Hour, Recoil и Warzone 2100 по закреплённым исходникам. Первая реализация в Gameplay и её ограничения описаны в [решении 032](decisions/032-aviation-and-target-categories.md); исследовательский план включает также последующие этапы.

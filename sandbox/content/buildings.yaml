@@ -138,6 +138,8 @@ supply-truck:
       site-factory: { Unit: factory, OnSite: true }
       site-bunker: { Unit: bunker, OnSite: true }
       site-supply: { Unit: supply-center, OnSite: true }
+      site-airfield: { Unit: airfield, OnSite: true }
+      site-helipad: { Unit: helipad, OnSite: true }
   ActionPanel:
     Buttons:
       site-power: { Label: Электростанция, Hotkey: E, Order: 2 }
@@ -145,6 +147,8 @@ supply-truck:
       site-factory: { Label: Завод, Hotkey: T, Order: 4 }
       site-bunker: { Label: Бункер, Hotkey: U, Order: 6 }
       site-supply: { Label: Центр снабжения, Hotkey: I, Order: 7 }
+      site-airfield: { Label: Аэродром, Order: 10 }
+      site-helipad: { Label: Вертолётная площадка, Order: 11 }
 
 crane:
   Inherits: ^building
@@ -320,3 +324,51 @@ construction-engineer:
     Buttons:
       site-crane: { Label: Кран, Hotkey: O, Order: 9 }
   Presentation: { Name: Инженер }
+
+airfield:
+  Inherits: ^building
+  Health: { HP: 1800 }
+  Buildable: { Ticks: 200, Cost: 1800 }
+  Economy: { Energy: -20 }
+  Footprint:
+    Rows: ["########", "########", "########", "########", "########", "########", "########", "########", "########", "########"]
+  Airbase:
+    Slots: [[-2048, -512], [2048, -512], [-2048, 2048], [2048, 2048]]
+    Accepts: [fighter]
+    RunwayStart: [0, 3072]
+    RunwayEnd: [0, -1536]
+    KeepsParking: true
+    ReloadTicks: 12
+    RepairPerTick: 2
+  TaskQueues:
+    Queues:
+      aircraft: { Capacity: 8, Payment: Upfront, WorkingState: working }
+  Actions:
+    Definitions:
+      fighter: { Unit: fighter }
+  ActionPanel:
+    Buttons:
+      fighter: { Label: Истребитель, Icon: "res://assets/units/fighter.png" }
+  Presentation: { Model: airfield, Name: Аэродром · 4 самолёта }
+
+helipad:
+  Inherits: ^building
+  Health: { HP: 900 }
+  Buildable: { Ticks: 125, Cost: 800 }
+  Economy: { Energy: -10 }
+  Footprint: { Rows: ["####", "####", "####", "####"] }
+  Airbase:
+    Slots: [[0, 0]]
+    Accepts: [rotorcraft]
+    ReloadTicks: 10
+    RepairPerTick: 2
+  TaskQueues:
+    Queues:
+      rotorcraft: { Capacity: 8, Payment: Upfront, WorkingState: working }
+  Actions:
+    Definitions:
+      tiltrotor: { Unit: tiltrotor }
+  ActionPanel:
+    Buttons:
+      tiltrotor: { Label: Конвертоплан, Icon: "res://assets/units/tiltrotor.png" }
+  Presentation: { Model: helipad, Name: Вертолётная площадка }

@@ -167,3 +167,43 @@ sniper:
     Mounts:
       main: { Weapon: sniper-rifle, FireFromTransport: true }
   Presentation: { Model: infantry-rifle, Name: Снайпер }
+
+fighter:
+  Inherits: ^unit
+  Movement: { Locomotor: tracked }
+  Health: { HP: 280, Armor: Mechanical }
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 150, Cost: 1200 }
+  Aircraft:
+    Mode: ForwardFlight
+    Speed: 256
+    MinimumSpeed: 160
+    TurnRate: 12
+    CruiseAltitude: 2048
+    Ammo: 6
+    ServiceType: fighter
+    Categories: [air, airplane]
+    NeedsRunway: true
+  Armaments:
+    Mounts:
+      main: { Weapon: fighter-missile, FireWhileMoving: true }
+  Presentation: { Model: fighter, Name: Истребитель }
+
+tiltrotor:
+  Inherits: ^unit
+  Movement: { Locomotor: tracked }
+  Health: { HP: 350, Armor: Mechanical }
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 125, Cost: 1000 }
+  Aircraft:
+    Mode: Hover
+    Speed: 192
+    CruiseAltitude: 1536
+    Ammo: 8
+    ServiceType: rotorcraft
+    Categories: [air, helicopter, tiltrotor]
+  Armaments:
+    Mounts:
+      main: { Weapon: tiltrotor-missile, FireWhileMoving: true }
+  Transport: { Accepts: [infantry], Slots: 4, UnloadDistance: 768 }
+  Presentation: { Model: tiltrotor, Name: Конвертоплан, States: [damaged, airborne] }

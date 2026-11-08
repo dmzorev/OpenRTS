@@ -246,8 +246,13 @@ public sealed class SpriteWorldView
                 var team = _ownerColor(view.Owner);
                 team.A = Math.Max(stateFlash, Math.Max(pulse * (float)effect.Flash, extraFlash));
                 var directions = runtime.Sequences[animation]!;
-                directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate)
-                    .Add(new(center.X, elevation + 0.035f + depth + part.Layer * layerStep, center.Y), drawAngle, size, partTint, team);
+                var frame = directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate);
+                if (model.Unit.Flight is not null && part.Parent < 0 && elevation > 0.25f && !ghost)
+                {
+                    frame.Add(new(center.X + 0.15f, 0.025f, center.Y + 0.15f), drawAngle, size * 0.9f, new(0, 0, 0, 0.3f), Colors.Transparent);
+                    SpriteCount++;
+                }
+                frame.Add(new(center.X, elevation + 0.035f + depth + part.Layer * layerStep, center.Y), drawAngle, size, partTint, team);
                 SpriteCount++;
             }
         }

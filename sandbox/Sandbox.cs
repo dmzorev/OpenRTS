@@ -49,6 +49,8 @@ public partial class Sandbox : Node3D
             foreach (string arg in OS.GetCmdlineUserArgs())
             {
                 if (arg == "--verify") continue;
+                if (arg == "--aviation") { mapPath = AviationScenario.Map; continue; }
+                if (arg == "--verify-aviation") { _verifyAviation = _verifySimulation = true; mapPath = AviationScenario.Map; _ticks = AviationScenario.Ticks; continue; }
                 if (arg == "--verify-actions") { _verifyActions = _buildings = _showcase = _paused = true; continue; }
                 if (arg == "--verify-production") { _productionScenario = _buildings = _showcase = _verifySimulation = true; _ticks = 160; continue; }
                 if (arg.StartsWith("--map=", StringComparison.Ordinal) && arg.Length > 6) { mapPath = arg[6..]; continue; }
@@ -110,8 +112,8 @@ public partial class Sandbox : Node3D
             }
             if (_skirmish || mapPath is not null)
             {
-                _mapMatch = MapScenario.Load(_catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath);
-                _skirmish = _mapMatch.Map.IsSkirmish;
+                _mapMatch = mapPath == AviationScenario.Map ? AviationScenario.Load(_catalog, ReadMapSource) : MapScenario.Load(_catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath);
+                _skirmish = _mapMatch.Map.IsSkirmish || mapPath == AviationScenario.Map;
             }
             if (_showcase) _count = _mapMatch?.UnitCount ?? (_buildings ? BuildingScenario.UnitCount : ShowcaseScenario.UnitCount);
             if (verify)
@@ -193,7 +195,7 @@ public partial class Sandbox : Node3D
         var map = _mapMatch;
         var opponent = _opponent = _opponentProfile is { } profile ? SkirmishAiScenario.Create(catalog, profile, map!.Map, 2, _opponentStarts) : null;
         _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers, restrictPlayerCommands: opponent is not null) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+            _verifyAviation ? AviationScenario.Commands.Where(c => c.Tick <= _ticks).ToArray() : map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -297,6 +299,7 @@ public partial class Sandbox : Node3D
                     throw new InvalidOperationException("Final production snapshot was incomplete.");
                 _verificationDone = true; GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(production)); GetTree().Quit(); return;
             }
+            if (_verifyAviation && completed) { VerifyAviation(frame); return; }
             if (_verifyBuildings && completed) { VerifyBuildings(frame); return; }
             if (_verifyPresentation && completed)
             {

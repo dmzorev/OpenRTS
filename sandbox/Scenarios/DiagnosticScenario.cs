@@ -14,7 +14,7 @@ public static class DiagnosticScenario
 
     public static SimulationWorld Create(UnitCatalog catalog, int count)
     {
-        int[] movableTypes = Enumerable.Range(0, catalog.Units.Count).Where(t => catalog.Units[t].Movable).ToArray();
+        int[] movableTypes = Enumerable.Range(0, catalog.Units.Count).Where(t => catalog.Units[t].Movable && catalog.Units[t].Flight is null).ToArray();
         if (movableTypes.Length == 0) throw new ArgumentException("The movement fixture requires a movable unit.", nameof(catalog));
         if (count < 1 || count > 1000000) throw new ArgumentOutOfRangeException(nameof(count));
         int columns = (int)Math.Ceiling(Math.Sqrt(count));

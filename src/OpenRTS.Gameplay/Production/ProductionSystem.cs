@@ -266,13 +266,26 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
                     _ => (settings.Exit.X, settings.Exit.Y)
                 };
                 var exit = new WorldPosition(Math.Clamp(from.X + x, 0, world.Width), Math.Clamp(from.Y + y, 0, world.Depth));
-                if (!world.TryFindExitPlacement(recipe.UnitType, exit, settings.ExitSearchRadius, out var position))
+                EntityId spawned;
+                if (types[recipe.UnitType].Flight is not null)
                 {
-                    if (!task.Blocked) world.Emit(new(world.Tick, WorldEventKind.ProductionBlocked, id));
-                    task.Blocked = true;
-                    continue;
+                    if (!world.TryProduceAircraft(actor, recipe.UnitType, out spawned))
+                    {
+                        if (!task.Blocked) world.Emit(new(world.Tick, WorldEventKind.ProductionBlocked, id));
+                        task.Blocked = true;
+                        continue;
+                    }
                 }
-                var spawned = world.SpawnUnit(recipe.UnitType, position, actor.Get<OwnershipState>().Owner);
+                else
+                {
+                    if (!world.TryFindExitPlacement(recipe.UnitType, exit, settings.ExitSearchRadius, out var position))
+                    {
+                        if (!task.Blocked) world.Emit(new(world.Tick, WorldEventKind.ProductionBlocked, id));
+                        task.Blocked = true;
+                        continue;
+                    }
+                    spawned = world.SpawnUnit(recipe.UnitType, position, actor.Get<OwnershipState>().Owner);
+                }
                 completed++;
                 if (settings.ExitAnimation is { } animation)
                     world.PlayExitAnimation(id, type.AnimationIndex(animation), settings.ExitAnimationTicks);

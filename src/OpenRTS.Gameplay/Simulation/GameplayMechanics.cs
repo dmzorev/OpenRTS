@@ -82,7 +82,7 @@ public sealed partial class SimulationWorld
     private void WriteMechanics(BinaryWriter writer)
     {
         WriteTransformations(writer);
-        writer.Write(27); // Includes footprint orientation.
+        writer.Write(28); // Includes named target categories, spatial weapons and flight state.
         if (_capture is not null && ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture))
         {
             writer.Write(24);

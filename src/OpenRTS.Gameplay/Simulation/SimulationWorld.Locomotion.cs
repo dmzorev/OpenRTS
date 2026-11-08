@@ -16,7 +16,7 @@ public sealed partial class SimulationWorld
         TerrainGeometry.Clear(_navigation!.Grid, from, to, type.Body, _navigation.UsesWeightedRoutes ? type.Locomotor : null) &&
         _construction?.SiteMovementClear(from, to, type.Body) != false;
     private bool StopAllowed(int unitType, WorldPosition position) =>
-        _construction?.SiteStopClear(position, _types[unitType].Body) != false &&
+        _types[unitType].Flight is not null || _construction?.SiteStopClear(position, _types[unitType].Body) != false &&
         (_navigation is null ? _types[unitType].Locomotor.Rules[0].CanStop :
             TerrainGeometry.CanStop(_navigation.Grid, position, _types[unitType].Body, _types[unitType].Locomotor));
 

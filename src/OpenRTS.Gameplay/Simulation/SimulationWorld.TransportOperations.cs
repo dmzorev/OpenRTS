@@ -15,6 +15,15 @@ public sealed partial class SimulationWorld
     UnitDefinition ITransportWorld.TypeOf(Entity entity) => TypeOf(entity);
     TransportDefinition? ITransportWorld.TransportOf(Entity entity) => TypeOf(entity).TransportFor(CompletedUpgrade(entity));
     bool ITransportWorld.IsUnderConstruction(Entity entity) => (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0;
+    bool ITransportWorld.CanBoardTransport(Entity carrier) => !IsAircraft(carrier) || carrier.Get<FlightState>().Phase == FlightPhase.Landed;
+    bool ITransportWorld.PrepareUnloadLanding(Entity carrier, WorldPosition destination)
+    {
+        if (!IsAircraft(carrier) || carrier.Get<FlightState>().Phase == FlightPhase.Landed) return true;
+        var f = carrier.Get<FlightState>();
+        f.LandRequested = true; f.LandingPoint = GroundPosition(destination, 0);
+        carrier.Get<MotionState>().Moving = true;
+        return false;
+    }
 
     void ITransportWorld.IssueOrder(EntityId actor, UnitOrder order, bool queued) => IssueOrder(_indices[actor], order, queued);
     bool ITransportWorld.TrySetTarget(EntityId actor, WorldPosition position) => SetTarget(_indices[actor], position);

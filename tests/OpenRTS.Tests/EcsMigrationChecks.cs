@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Includes capture target progress in entity poses and payment balances in task poses.
+    // Format 28/catalog 13: named categories and aviation definitions. Ground behavior was compared to 3ae082f separately.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "E81239F11465DDDD4761811B74E15ACB710C785E311580DB6C92C2E8DAA2A502",
-        ["navigation"] = "AEA202EF9AA610F038BC9B474BE32F45B03261C8F728FD7E1D087720DEE46D8E",
-        ["combat"] = "81A03F1D4D8195F6CA070A6A0ECC80502E05184CFE970A6968450790CD41D31C",
-        ["buildings"] = "860AFD62CB47F3F3F9BF835497A1060A1B354979ED3A166C36F95EBD7744F47F",
-        ["production"] = "21318D6BAF7D3A58D39ABF1171C5D9C3A12689627313B8581B9A66F20753BB93"
+        ["direct"] = "64632FC41A8B55C4B091AC9CC3FB6829F4EEC88A199F2870170F713376A9F45A",
+        ["navigation"] = "11477F6A028375EDF3C0BFDD79BF174CB7EDE742BACA123789ACCE9371B209A1",
+        ["combat"] = "6265F012EEBA23D7D4CE0276975F57C3045C82896F2036128E0642AA827154E9",
+        ["buildings"] = "F11C17D8F62038263447DD61FF7215871688291DCBF267F099354CCBD070E49B",
+        ["production"] = "73FFC62DEABE3F90CB83161D092E8A19C2DDD7B294573338AE046662E226FF39"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

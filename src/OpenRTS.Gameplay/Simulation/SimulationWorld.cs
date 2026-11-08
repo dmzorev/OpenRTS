@@ -25,7 +25,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     private readonly IEndOfTickRule? _endOfTick;
     private readonly TerrainRoutePlanner? _navigation;
     private readonly MotionIndex? _motion;
-    private readonly MotionIndex? _combatIndex;
+    private MotionIndex? _combatIndex;
     private long _orderGroupSequence;
     private int[] _movementOrder = [], _navigationGoals = [];
     private bool _orderDirty = true;
@@ -99,7 +99,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _motion = new(speedPerTick);
             _motion.Clear(initialCapacity);
         }
-        if (_motion is null && (_transformationRecipes.Count != 0 || _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null))) _combatIndex = new(speedPerTick);
+        if (_combatIndex is null && _motion is null && (_transformationRecipes.Count != 0 || _types.Any(t => t.Weapon is not null || t.Footprint is not null || t.TaskQueues.Count > 0 || t.Transport is not null))) _combatIndex = new(_types.Any(t => t.Flight is not null) ? Math.Max(1024, speedPerTick) : speedPerTick);
         if (mechanics.Capture is { } capture && (usesCapture || !ReferenceEquals(capture, GameplayMechanics.BuiltInCapture)))
             _capture = new(this, capture.Create());
         if (mechanics.Transport is { } transport && (usesTransport || !ReferenceEquals(transport, GameplayMechanics.BuiltInTransport)))
@@ -123,6 +123,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         ValidatePosition(position);
         ValidateType(unitType);
         var type = _types[unitType];
+        if (type.Flight is not null && !FlightPlacementAllowed(type, position, owner))
+            throw new ArgumentException("Initial aircraft placement is occupied or has no compatible landing surface.", nameof(position));
         if (type.Footprint is { } footprint)
         {
             if (isStart && _baseGrid is { } basis && (!FootprintFits(footprint, position) || !footprint.AllowsConstruction(basis, position, type.Locomotor)))
@@ -133,7 +135,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         else if (!StopAllowed(unitType, position))
             throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
         if (!PrepareFootprint(type, position, out var footprintGrid)) throw new ArgumentException("Footprint placement is out of bounds, misaligned or would trap an existing body.", nameof(position));
-        if (_navigation is not null && type.Footprint is null)
+        if (_navigation is not null && type.Footprint is null && type.Flight is null)
         {
             if (!_motion!.ClearPlacement(position, out _, _types[unitType].Body))
                 throw new ArgumentException("Initial navigation placement is blocked or occupied.", nameof(position));
@@ -162,9 +164,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         UpdateOrders();
         _capture?.EndOrders(Tick);
         EnsureMotionIndex();
+        SuspendAirMovement();
         if (_navigation is not null) UpdateNavigation(cancellationToken);
         else UpdateDirectMovement();
+        UpdateFlights();
         UpdateWeapons();
+        AdvanceAirService();
         AdvanceTransformations();
         _construction?.Advance();
         AdvanceSupply();
@@ -187,7 +192,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         const string batchArgument = "commands";
         if (!Enum.IsDefined(command.Kind))
             throw new ArgumentException("Commands must have a known kind.", batchArgument);
-        if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
+        if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction or CommandKind.Land)
             ValidatePosition(command.Position);
         if (command.Kind == CommandKind.Transform)
         {
@@ -244,6 +249,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             int health = entity.Get<HealthState>().Current;
             var type = _types[entityIdentity.Type];
             uint states = entityPresentation.VisualStates;
+            if (IsAircraft(entity) && type.States.Contains("airborne"))
+                states = Airborne(entity) ? states | type.StateMask("airborne") : states & ~type.StateMask("airborne");
             var carrier = TransportSystem.Project(_transport, entity, type, ref states, out var spatial);
             var construction = _construction?.Project(entity, type, ref states) ?? default;
             if (!construction.Active && type.LowPowerVisualMask != 0 && ReadConditions(type, entityOwnership.Owner).HasFlag(GameplayConditions.LowPower))
@@ -262,7 +269,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
                 new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Build or UnitActionKind.UpgradeSupport ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply, upgrade, captureTarget)
-                { QuarterTurns = type.Footprint is not null ? RotationOf(entity) : 0, Transformation = transformation };
+                { QuarterTurns = type.Footprint is not null ? RotationOf(entity) : 0, Transformation = transformation,
+                    Flight = IsAircraft(entity) ? new(entity.Get<FlightState>().Phase, entity.Get<FlightState>().Ammo, type.Flight!.Ammo, entity.Get<FlightState>().Base, entity.Get<FlightState>().Slot, Airborne(entity)) : default };
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -310,6 +318,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 ConstructionSystem.WriteFoundation(_construction, writer, entity);
                 WriteSupply(writer, entity);
                 WriteUpgrade(writer, entity);
+                if (IsAircraft(entity)) entity.Get<FlightState>().Write(writer);
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -371,14 +380,30 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             TransportSystem.Apply(_transport, this, command);
             return;
         }
-        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.Stop or CommandKind.HoldPosition)
+        if (command.Kind is CommandKind.Move or CommandKind.MoveGroup or CommandKind.MoveSelected or CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.Stop or CommandKind.HoldPosition or CommandKind.Land or CommandKind.ReturnToBase)
         {
             var members = Recipients(command);
             if (command.Kind is CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup)
                 members = Array.FindAll(members, index => !_production.TryHandleMoveAsRally(_entityHandles[index], command.Position));
             if (members.Length == 0) return;
             var action = command.Kind switch { CommandKind.AttackMove => UnitActionKind.AttackMove, CommandKind.AttackTarget => UnitActionKind.Attack, CommandKind.RepairTarget => UnitActionKind.Repair, CommandKind.CaptureTarget => UnitActionKind.Capture,
-                CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
+                CommandKind.Land => UnitActionKind.Land, CommandKind.ReturnToBase => UnitActionKind.ReturnToBase, CommandKind.Stop => UnitActionKind.Stop, CommandKind.HoldPosition => UnitActionKind.HoldPosition, _ => UnitActionKind.Move };
+            if (_aircraft.Count > 0)
+            {
+                var flying = members.Where(i => IsAircraft(_entityHandles[i])).ToArray();
+                int columns = Math.Max(1, (int)SquareRoot((ulong)flying.Length));
+                if (columns * columns < flying.Length) columns++;
+                for (int f = 0; f < flying.Length; f++)
+                {
+                    var target = command.Position;
+                    if (flying.Length > 1 && action is UnitActionKind.Move or UnitActionKind.AttackMove)
+                        target = target with { X = Math.Clamp(target.X + (f % columns - columns / 2) * 1280, 1024, Width - 1024),
+                            Y = Math.Clamp(target.Y + (f / columns - columns / 2) * 1280, 1024, Depth - 1024) };
+                    IssueOrder(flying[f], new(action, target, command.TargetEntity), command.Queued);
+                }
+                members = members.Where(i => !IsAircraft(_entityHandles[i])).ToArray();
+            }
+            if (members.Length == 0) return;
             if (_navigation is not null && (command.Kind is CommandKind.MoveGroup or CommandKind.MoveSelected || command.Kind == CommandKind.AttackMove && members.Length > 1))
                 SetGroupTarget(command.Position, members, action, command.Queued);
             else foreach (int member in members) IssueOrder(member, new(action, command.Position, command.TargetEntity), command.Queued);
@@ -394,7 +419,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             var type = _types[command.UnitType].WithRotation(command.QuarterTurns);
             bool footprint = type.Footprint is not null;
             bool terrain = footprint || StopAllowed(command.UnitType, command.Position);
-            bool free = footprint || _motion is null || _motion.ClearPlacement(command.Position, out _, _types[command.UnitType].Body);
+            bool free = type.Flight is not null ? FlightPlacementAllowed(type, command.Position, command.Owner) : footprint || _motion is null || _motion.ClearPlacement(command.Position, out _, _types[command.UnitType].Body);
             bool stamp = PrepareFootprint(type, command.Position, out var footprintGrid);
             terrain &= stamp;
             if (!terrain || !free)
@@ -449,6 +474,9 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     {
         var actor = _entityHandles[index];
         var id = actor.Get<EntityIdentity>().Id;
+        if (IsAircraft(actor)) ReleaseAirAssignment(id, actor.Get<FlightState>(), true);
+        if (_airbases.Contains(id)) DetachAirbase(id);
+        _aircraft.Remove(id); _flightOrder = null; _airbases.Remove(id);
         if (!replacing) CancelTransformation(id);
         wreck = _transport?.BeforeRemove(actor, wreck) ?? wreck;
         index = _indices[id];
@@ -474,6 +502,14 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         ref var entityMotion = ref entity.Get<MotionState>();
         if ((!_types[entityIdentity.Type].Movable || UpgradeImmobilizes(entity)) && position != entitySpatial.Position)
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        if (IsAircraft(entity))
+        {
+            var body = _types[entityIdentity.Type].Body;
+            entityMotion.Target = new(Math.Clamp(position.X, body.HalfWidth, Width - body.HalfWidth), Math.Clamp(position.Y, body.HalfHeight, Depth - body.HalfHeight), entitySpatial.Position.Elevation);
+            entityMotion.Moving = position.X != entitySpatial.Position.X || position.Y != entitySpatial.Position.Y;
+            entityNavigation.GroupMember = false; entityNavigation.TerrainStranded = false;
+            return true;
+        }
         if (_navigation is not null)
         {
             if (!Resolver(entityIdentity.Type).Resolve(entitySpatial.Position, position, out var resolved, StepCancellation))
@@ -507,9 +543,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
         EntityId id = default, int? initialHealth = null, Action<Frent.Entity>? initialize = null, int quarterTurns = 0)
     {
+        if (_types[unitType].Flight is not null) ValidateFlightSurface();
         if (id.Value == 0) id = AllocateEntityId();
         Frent.Entity state;
         var type = _types[unitType].WithRotation(quarterTurns);
+        if (type.Flight is not null && _combatIndex is null)
+        { _combatIndex = new(Math.Max(1024, SpeedPerTick)); RebuildMotionIndex(); }
         var health = new HealthState(initialHealth ?? type.MaxHealth);
         var producer = ProductionSystem.CreateProducer(type);
         var orders = new OrderState { AutoBuild = type.Abilities.Any(a => a.Kind == AbilityKind.Build && a.AutoCast) };
@@ -529,6 +568,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 foreach (ref var mount in state.Get<CombatState>().Weapons.AsSpan())
                     mount.Facing = mount.PreviousFacing = facing;
             }
+            InitializeFlight(state, type, id);
             _transport?.Initialize(state, type);
             initialize?.Invoke(state);
             _economy.Initialize(state, type.Economy, owner, Tick);
@@ -537,7 +577,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (type.Upgrades.Count > 0) state.Add(new UpgradeState());
         }
         _economy.InvalidatePower();
-        (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+        if (GroundContact(state)) (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+        if (_motion is not null && _combatIndex is not null || !GroundContact(state)) _combatIndex?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
         if (type.Footprint is not null) _footprints.Add(id);
         TrackEntity(state);
         if (producer is not null) _production.InvalidateProducerOrder();

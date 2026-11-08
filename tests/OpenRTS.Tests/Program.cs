@@ -50,6 +50,7 @@ PresentationChecks.Run(Test);
 LocomotionChecks.Run(Test);
 OrderChecks.Run(Test);
 WeaponChecks.Run(Test);
+AviationChecks.Run(Test);
 CombatTargetRuleChecks.Run(Test);
 ConditionGrantChecks.Run(Test);
 FootprintChecks.Run(Test);

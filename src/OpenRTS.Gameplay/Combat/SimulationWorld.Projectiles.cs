@@ -41,21 +41,21 @@ public sealed partial class SimulationWorld
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
                 if (!_indices.TryGetValue(shot.Target, out int target) || !IsOnMap(_entityHandles[target])) { Expire(shot); continue; }
-                shot.Destination = ObjectGeometry.ClosestPoint(TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, shot.Position);
+                shot.Destination = ObjectGeometry.ClosestPoint(TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, shot.Position) with { Elevation = _entityHandles[target].Get<SpatialState>().Position.Elevation };
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
-            var next = StepTowards(shot.Position, shot.Destination, budget);
-            int travel = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(shot.Position, next)));
+            var next = weapon.SpatialTrajectory ? SpatialStep(shot.Position, shot.Destination, budget) : StepTowards(shot.Position, shot.Destination, budget);
+            int travel = Math.Max(1, (int)SquareRoot((ulong)ProjectileDistanceSquared(shot.Position, next, weapon.SpatialTrajectory)));
             // Round distance upwards so rounding cannot extend a missile's fuel budget.
-            if ((long)travel * travel < DistanceSquared(shot.Position, next)) travel++;
+            if ((long)travel * travel < ProjectileDistanceSquared(shot.Position, next, weapon.SpatialTrajectory)) travel++;
             shot.Remaining -= travel;
             // shortcut: wall effects use the segment start; calculate exact entry when impact placement matters.
-            if (_baseGrid is not null && !TerrainGeometry.Clear(_baseGrid, shot.Position, next, 0))
+            if (_baseGrid is not null && !(weapon.SpatialTrajectory ? SpatialTerrainClear(shot.Position, next) : TerrainGeometry.Clear(_baseGrid, shot.Position, next, 0)))
             { Hit(shot, default, shot.Position); continue; }
             EntityId hit = default; int fraction = 65537;
             if (weapon.Projectile != ProjectileKind.Grenade)
             {
-                (_motion ?? _combatIndex)!.Query(shot.Position, next, 0, _combatCandidates);
+                (_combatIndex ?? _motion)!.Query(shot.Position, next, 0, _combatCandidates);
                 foreach (var candidateId in _combatCandidates)
                 {
                     if (!_indices.TryGetValue(candidateId, out int i)) continue;
@@ -63,10 +63,11 @@ public sealed partial class SimulationWorld
                     ref var bodySpatial = ref body.Get<SpatialState>();
                     var bodyIdentity = body.Get<EntityIdentity>();
                     ref var bodyOwnership = ref body.Get<OwnershipState>();
-                    if (bodyIdentity.Id == shot.Source || !weapon.FriendlyFire && bodyOwnership.Owner == shot.Owner) continue;
+                    if (!WeaponAccepts(weapon, body) || bodyIdentity.Id == shot.Source || !weapon.FriendlyFire && bodyOwnership.Owner == shot.Owner) continue;
                     int t;
                     var type = TypeOf(body);
-                    if (type.Footprint is { } footprint)
+                    if (weapon.SpatialTrajectory) t = SpatialHitFraction(shot.Position, next, bodySpatial.Previous, bodySpatial.Position, type);
+                    else if (type.Footprint is { } footprint)
                     {
                         t = 65537;
                         for (int f = 0; f < footprint.TargetBounds.Count; f++) t = Math.Min(t, BodyGeometry.HitBoxFraction(shot.Position, next, footprint.TargetBounds[f].Translate(bodySpatial.Position)));
@@ -78,7 +79,7 @@ public sealed partial class SimulationWorld
                 }
             }
             if (hit.Value != 0 && fraction <= 65536)
-            { Hit(shot, hit, Interpolate(shot.Position, next, fraction)); continue; }
+            { Hit(shot, hit, weapon.SpatialTrajectory ? SpatialInterpolate(shot.Position, next, fraction) : Interpolate(shot.Position, next, fraction)); continue; }
             shot.Position = next;
             if (shot.Position == shot.Destination) { Hit(shot, default, shot.Position); continue; }
             if (shot.Remaining <= 0) { Expire(shot); continue; }

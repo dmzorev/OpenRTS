@@ -63,6 +63,13 @@ public sealed partial class SimulationWorld
             var entityIdentity = entity.Get<EntityIdentity>();
             ref var entityMotion = ref entity.Get<MotionState>();
             var type = _types[entityIdentity.Type]; if (entityIdentity.Id == exclude || type.Footprint is not null || !IsOnMap(entity)) continue;
+            if (IsAircraft(entity))
+            {
+                if (GroundContact(entity) && !TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor) &&
+                    TerrainGeometry.Clear(_navigation!.Grid, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor) &&
+                    (occupant.Value == 0 || entityIdentity.Id.Value < occupant.Value)) occupant = entityIdentity.Id;
+                continue;
+            }
             bool clear = TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             bool newNoStop = !TerrainGeometry.CanStop(candidate, entitySpatial.Position, type.Body, type.Locomotor) &&
                 TerrainGeometry.CanStop(_navigation!.Grid, entitySpatial.Position, type.Body, type.Locomotor) && !entityMotion.Moving;
@@ -95,7 +102,7 @@ public sealed partial class SimulationWorld
             ref var entityOrders = ref entity.Get<OrderState>();
             entityNavigation.PathLength = entityNavigation.PathCursor = 0;
             entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0;
-            var type = _types[entityIdentity.Type]; if (type.Footprint is not null || !IsOnMap(entity)) continue;
+            var type = _types[entityIdentity.Type]; if (type.Footprint is not null || !IsOnMap(entity) || IsAircraft(entity)) continue;
             bool wasStranded = entityNavigation.TerrainStranded;
             entityNavigation.TerrainStranded = !TerrainGeometry.Clear(candidate, entitySpatial.Position, entitySpatial.Position, type.Body, type.Locomotor);
             if (entityNavigation.TerrainStranded)

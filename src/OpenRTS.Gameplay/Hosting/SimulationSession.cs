@@ -38,6 +38,8 @@ public sealed class SimulationSession : SimulationSession<SimulationWorld, World
         ArgumentNullException.ThrowIfNull(action.Recipients);
         CommandKind kind = action.Kind switch
         {
+            UnitActionKind.Land => CommandKind.Land,
+            UnitActionKind.ReturnToBase => CommandKind.ReturnToBase,
             UnitActionKind.Move => action.Recipients.Count == 1 ? CommandKind.Move : CommandKind.MoveSelected,
             UnitActionKind.AttackMove => CommandKind.AttackMove,
             UnitActionKind.Attack => CommandKind.AttackTarget,

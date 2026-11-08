@@ -1,0 +1,50 @@
+{
+  "tool": "built-in imagegen",
+  "assets": [
+    {
+      "name": "airfield",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game OpenRTS. A military airfield for FOUR fighter aircraft, inspired by the USA airfield in Command and Conquer Generals. A long vertical north-south dark asphalt runway centered, FOUR empty clearly separated parking aprons arranged two on left and two on right, compact olive maintenance hangar at the far north edge, control tower, concrete rectangular foundation. NO aircraft or vehicles. Keep the runway and four parking bays clear. Aspect ratio square. Style: crisp hand-painted industrial RTS sprite matching weathered olive metal, gray concrete and yellow hazard markings, strict orthographic view directly overhead, NO isometric perspective. Single object centered with margin, readable at small game scale, genuine alpha transparency, no surrounding terrain, no logos, no watermark, no labels. Do not include a checkerboard pattern.",
+      "source": "docs/assets/sources/aviation-airfield-source.png",
+      "asset": "sandbox/assets/buildings/airfield.png",
+      "source_sha256": "aea6751e695749856c3b1bcec5185e202ba5d88b6863f4c7dc9afab5d5db9b7d",
+      "sha256": "cfd50dc6c9aac96babd2828d5550576acd2bb1c002783ffe7c21a990dcd339b4",
+      "normalization": "alpha>128 bounds, aspect fit928 centered1024, preserve alpha"
+    },
+    {
+      "name": "helipad",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game OpenRTS. A compact military helicopter landing pad. Large empty circular landing surface in the center of a square concrete foundation, yellow landing ring without lettering, olive service equipment along north edge only. Vivid magenta team-color plates along foundation edges. No helicopter, no people. Style: crisp hand-painted industrial RTS sprite matching weathered olive metal, gray concrete and yellow hazard markings, strict orthographic view directly overhead, NO isometric perspective. Single object centered with margin, readable at small game scale, genuine alpha transparency, no surrounding terrain, no logos, no watermark, no labels. Do not include a checkerboard pattern.",
+      "source": "docs/assets/sources/aviation-helipad-source.png",
+      "asset": "sandbox/assets/buildings/helipad.png",
+      "source_sha256": "1e091bd3bcdd206695a098dd357d84c655e55a02543ad6f1df54f02a625ca322",
+      "sha256": "17aebf15937cd1635dda1cd7a20aac2db477abee13106b39cf18af6a98e48049",
+      "normalization": "alpha>128 bounds, aspect fit928 centered1024, preserve alpha"
+    },
+    {
+      "name": "fighter",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game OpenRTS. A single complete futuristic air-superiority fighter jet, strict directly overhead top-down, nose points UP. Twin engines, swept wings, twin tail fins, silver-gray and olive armored surfaces, small vivid flat magenta team-color panels on the wings. Compact readable silhouette, no underwing smoke, no ground shadow, no exhaust plume, no text. Transparent background. Style: crisp hand-painted industrial RTS sprite matching weathered olive metal, gray concrete and yellow hazard markings, strict orthographic view directly overhead, NO isometric perspective. Single object centered with margin, readable at small game scale, genuine alpha transparency, no surrounding terrain, no logos, no watermark, no labels. Do not include a checkerboard pattern.",
+      "source": "docs/assets/sources/aviation-fighter-source.png",
+      "asset": "sandbox/assets/units/fighter.png",
+      "source_sha256": "121173dec50c5b1d00890f9a08e5d2260685823db099260ed5f90802fadcdec6",
+      "sha256": "bb88de52c42063c3bc870efef3c30f6a3b92fa950cca781f3f00b80ce4111ff8",
+      "normalization": "alpha>128 bounds, aspect fit928 centered1024, preserve alpha"
+    },
+    {
+      "name": "tiltrotor",
+      "prompt": "Use case: stylized-concept. Asset type: production sprite for a top-down RTS game OpenRTS. A single futuristic military VTOL tiltrotor gunship, design inspired by GDI Orca and Avatar twin-rotor aircraft, strict directly overhead top-down, nose points UP. Compact armored olive-gray central fuselage, short side wings with two large horizontal ducted rotors, dark blue cockpit, twin engine pods, small vivid flat magenta team-color panels. Both rotor discs visible as neat concentric mechanical circles, rotors stay within silhouette. No ground shadow, no exhaust, no text. Transparent background. Style: crisp hand-painted industrial RTS sprite matching weathered olive metal, gray concrete and yellow hazard markings, strict orthographic view directly overhead, NO isometric perspective. Single object centered with margin, readable at small game scale, genuine alpha transparency, no surrounding terrain, no logos, no watermark, no labels. Do not include a checkerboard pattern.",
+      "source": "docs/assets/sources/aviation-tiltrotor-source.png",
+      "asset": "sandbox/assets/units/tiltrotor.png",
+      "source_sha256": "dadd6955e9903f7750e4c0f8c8acd943d66fce29cc2efbb5b547921220bf8ec5",
+      "sha256": "b726aa1e59c4805f0b4389cc74c770fc666d20748886bd3e836339e3bec6d511",
+      "normalization": "alpha>128 bounds, aspect fit928 centered1024, preserve alpha"
+    },
+    {
+      "name": "rotor",
+      "prompt": "Use case: stylized-concept. Asset type: transparent top-down RTS animation overlay. Create ONE isolated spinning aircraft rotor blade assembly seen from directly overhead, centered on a truly transparent square canvas. Five broad narrow brushed gray metal blades around a compact dark mechanical hub, the blades have a subtle translucent circular motion blur between them. It must fit INSIDE a ducted fan with no outer casing. Strict flat orthographic overhead view, weathered industrial RTS sprite style. No outer duct ring, no craft, no background or checkerboard, no ground shadow, no text or magenta colors. Keep useful empty transparent margin. This is a separately rotating overlay placed over the static ducted fans of a military tiltrotor.",
+      "source": "docs/assets/sources/aviation-rotor-source.png",
+      "asset": "sandbox/assets/units/rotor.png",
+      "source_sha256": "39dd350fb08e99a46ea2adaad83f1447f6bdadc65a0e1acaab2e480922e84872",
+      "sha256": "bdabd27173bdfd86819e075fb2b517cf25633720a0bdd971220acf5eaea6f115",
+      "normalization": "alpha>128 bounds, aspect fit928 centered1024, preserve alpha"
+    }
+  ]
+}
