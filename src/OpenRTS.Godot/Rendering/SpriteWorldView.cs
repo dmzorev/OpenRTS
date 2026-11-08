@@ -34,9 +34,10 @@ public sealed class SpriteWorldView
     {
         if (value.Kind == WorldEventKind.Removed) { _wrecks.Remove(value.Entity); return; }
         if (value.Kind != WorldEventKind.Destroyed || value.UnitType < 0 || _models[value.UnitType].Destroyed == 0) return;
-        var model = _models[value.UnitType]; var north = FacingDirection.North;
+        var model = _models[value.UnitType]; var facing = FacingDirection.FromQuarterTurns(value.QuarterTurns);
         _wrecks[value.Entity] = new(value.Entity, value.UnitType, value.Position, value.Position,
-            new(value.Owner, north, north, north, north, new(model.Unit.IdleAnimation, value.Tick, 0), AnimationPlayback.None, model.Destroyed));
+            new(value.Owner, facing, facing, facing, facing, new(model.Unit.IdleAnimation, value.Tick, 0), AnimationPlayback.None, model.Destroyed))
+        { QuarterTurns = value.QuarterTurns };
     }
     private readonly List<SpriteBatch> _batches = [];
     private readonly Dictionary<(ulong, Rect2), SpriteBatch> _textures = new();
@@ -137,16 +138,14 @@ public sealed class SpriteWorldView
             var type = _models[project.UnitType].Unit;
             var id = project.Id;
             uint states = 0;
-            if (project.Upgrade is { } variant)
-            {
-                states = type.StateMask(variant);
+            if (project.Upgrade is { } variant) states = type.StateMask(variant);
+            if (project.Upgrade is not null || id == default)
                 do { id = new(ghostId--); } while (!_liveIds.Add(id));
-            }
             _ghostIds.Add(id);
-            var facing = project.Facing == default ? FacingDirection.North : project.Facing;
+            var facing = project.Facing == default ? FacingDirection.FromQuarterTurns(project.QuarterTurns) : project.Facing;
             var presentation = new EntityPresentation(project.Owner, facing, facing, facing, facing,
                 new(type.IdleAnimation, tick, 0), AnimationPlayback.None, states);
-            _ordered[at++] = new(id, project.UnitType, project.Position, project.Position, presentation);
+            _ordered[at++] = new(id, project.UnitType, project.Position, project.Position, presentation) { QuarterTurns = project.QuarterTurns };
         }
         count = at;
         bool sorted = true; for (int i = 1; i < count; i++) if (_ordered[i - 1].Id.Value > _ordered[i].Id.Value) { sorted = false; break; }
@@ -232,12 +231,12 @@ public sealed class SpriteWorldView
     {
         ulong signature = 14695981039346656037;
         foreach (var pose in poses) if (_models[pose.UnitType].Unit.Footprint is not null)
-        { signature = (signature ^ pose.Id.Value) * 1099511628211; signature = (signature ^ (uint)pose.Current.X) * 1099511628211; signature = (signature ^ (uint)pose.Current.Y) * 1099511628211; }
+        { signature = (signature ^ pose.Id.Value) * 1099511628211; signature = (signature ^ (uint)pose.Current.X) * 1099511628211; signature = (signature ^ (uint)pose.Current.Y) * 1099511628211; signature = (signature ^ (uint)pose.QuarterTurns) * 1099511628211; }
         if (signature == _depthSignature) return; _depthSignature = signature; _depthRanks.Clear(); _depthRegions.Clear();
         int rank = 0;
         foreach (var pose in poses)
         {
-            var footprint = _models[pose.UnitType].Unit.Footprint; if (footprint is null) continue;
+            var footprint = _models[pose.UnitType].Unit.WithRotation(pose.QuarterTurns).Footprint; if (footprint is null) continue;
             float depth = ++rank * 0.001f; _depthRanks.Add(pose.Id, depth);
             foreach (var cell in footprint.Cells)
             {

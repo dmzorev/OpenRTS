@@ -205,9 +205,9 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
                 if (!task.Ready || command.TaskId != task.Id || type.Products[task.Product].Id != command.Action) continue;
                 var recipe = recipes[identity.Type, task.Product];
                 if (recipe.Build.Kind != ProductionKind.PlaceBuilding ||
-                    ObjectGeometry.DistanceSquared(type, actor.Get<SpatialState>().Position, types[recipe.UnitType], command.Position, out _, out _) >
+                    ObjectGeometry.DistanceSquared(world.TypeOf(actor), actor.Get<SpatialState>().Position, types[recipe.UnitType].WithRotation(command.QuarterTurns), command.Position, out _, out _) >
                     (long)recipe.Build.PlacementRadius * recipe.Build.PlacementRadius ||
-                    !world.TryPlaceBuilding(recipe.UnitType, command.Position, actor.Get<OwnershipState>().Owner, out var created))
+                    !world.TryPlaceBuilding(recipe.UnitType, command.Position, actor.Get<OwnershipState>().Owner, command.QuarterTurns, out var created))
                 {
                     RejectAction(identity.Id);
                     return;
@@ -258,8 +258,14 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
                     rebuilt = true;
                 }
                 var from = actor.Get<SpatialState>().Position;
-                var exit = new WorldPosition(Math.Clamp(from.X + settings.Exit.X, 0, world.Width),
-                    Math.Clamp(from.Y + settings.Exit.Y, 0, world.Depth));
+                var (x, y) = world.RotationOf(actor) switch
+                {
+                    1 => (-settings.Exit.Y, settings.Exit.X),
+                    2 => (-settings.Exit.X, -settings.Exit.Y),
+                    3 => (settings.Exit.Y, -settings.Exit.X),
+                    _ => (settings.Exit.X, settings.Exit.Y)
+                };
+                var exit = new WorldPosition(Math.Clamp(from.X + x, 0, world.Width), Math.Clamp(from.Y + y, 0, world.Depth));
                 if (!world.TryFindExitPlacement(recipe.UnitType, exit, settings.ExitSearchRadius, out var position))
                 {
                     if (!task.Blocked) world.Emit(new(world.Tick, WorldEventKind.ProductionBlocked, id));

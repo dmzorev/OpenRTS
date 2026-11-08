@@ -64,12 +64,11 @@ public sealed partial class SimulationWorld
     private bool InWeaponRange(int index, int target, int range, out long distanceSquared)
     {
         ref var source = ref _entityHandles[index];
-        var sourceIdentity = source.Get<EntityIdentity>(); ref var other = ref _entityHandles[target];
-        var otherIdentity = other.Get<EntityIdentity>();
-        distanceSquared = ObjectGeometry.DistanceSquared(_types[sourceIdentity.Type], source.Get<SpatialState>().Position, _types[otherIdentity.Type], other.Get<SpatialState>().Position, out var from, out var to);
+        ref var other = ref _entityHandles[target];
+        distanceSquared = ObjectGeometry.DistanceSquared(TypeOf(source), source.Get<SpatialState>().Position, TypeOf(other), other.Get<SpatialState>().Position, out var from, out var to);
         return distanceSquared <= (long)range * range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, from, to, 0));
     }
-    private WorldPosition AimPoint(int source, int target) => ObjectGeometry.ClosestPoint(_types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, _entityHandles[source].Get<SpatialState>().Position);
+    private WorldPosition AimPoint(int source, int target) => ObjectGeometry.ClosestPoint(TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, _entityHandles[source].Get<SpatialState>().Position);
 
     private int AcquireWeaponTarget(int index, WeaponDefinition weapon, int range = -1)
     {
@@ -79,7 +78,7 @@ public sealed partial class SimulationWorld
         if (range < 0) range = weapon.Range;
         var position = origin.Get<SpatialState>().Position;
         var identity = origin.Get<EntityIdentity>();
-        var type = _types[identity.Type];
+        var type = TypeOf(origin);
         int x = type.Footprint?.HalfWidth ?? type.Body.HalfWidth, y = type.Footprint?.HalfHeight ?? type.Body.HalfHeight;
         (_motion ?? _combatIndex)!.Query(new(position.X - x, position.Y - y), new(position.X + x, position.Y + y), range, _combatCandidates);
         var rule = _combatTargetRule;
@@ -123,7 +122,7 @@ public sealed partial class SimulationWorld
             StepCancellation.ThrowIfCancellationRequested();
             int i = _movementOrder[orderIndex]; ref var entity = ref _entityHandles[i];
             var entityIdentity = entity.Get<EntityIdentity>();
-            var type = _types[entityIdentity.Type];
+            var type = TypeOf(entity);
             if (type.Weapons.Count == 0 || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
             var carrierId = _transport?.CarrierOf(entity) ?? default;
             int origin = carrierId.Value == 0 ? i : _indices[carrierId];
@@ -196,7 +195,7 @@ public sealed partial class SimulationWorld
                             entityPresentation.WeaponAnimation = state.Animation;
                             WorldPosition muzzle, impactPoint;
                             if (ground) { impactPoint = point; muzzle = ObjectGeometry.ClosestPoint(sourceType, entitySpatial.Position, point); }
-                            else ObjectGeometry.DistanceSquared(sourceType, entitySpatial.Position, _types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, out muzzle, out impactPoint);
+                            else ObjectGeometry.DistanceSquared(sourceType, entitySpatial.Position, TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, out muzzle, out impactPoint);
                             _events.Add(new(Tick, WorldEventKind.WeaponFired, entityIdentity.Id, impactPoint, entityIdentity.Type,
                                 state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle));
                             if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entityOwnership.Owner, state.Target, impactPoint, entityIdentity.Id, entityIdentity.Type, mountIndex);
@@ -247,7 +246,7 @@ public sealed partial class SimulationWorld
         // shortcut: uniform splash ignores cover; add falloff/occlusion when a weapon requires them.
         (_motion ?? _combatIndex)!.Query(position, position, weapon.SplashRadius, _combatCandidates);
         foreach (var id in _combatCandidates)
-            if (_indices.TryGetValue(id, out int i) && ObjectGeometry.WithinRadius(_types[_entityHandles[i].Get<EntityIdentity>().Type], _entityHandles[i].Get<SpatialState>().Position, position, weapon.SplashRadius)) ApplyEffect(_entityHandles[i].Get<EntityIdentity>().Id);
+            if (_indices.TryGetValue(id, out int i) && ObjectGeometry.WithinRadius(TypeOf(_entityHandles[i]), _entityHandles[i].Get<SpatialState>().Position, position, weapon.SplashRadius)) ApplyEffect(_entityHandles[i].Get<EntityIdentity>().Id);
         void ApplyEffect(EntityId id)
         {
             if (!_indices.TryGetValue(id, out int i)) return;

@@ -320,7 +320,7 @@ public partial class Sandbox
                 break;
             }
         _terminalNotice!.Text = _paused ? "Пауза" : _notice.Length > 0 ? _notice
-            : _sitePlacement is not null || _placing ? "Выберите место строительства · Esc отмена"
+            : _sitePlacement is not null || _placing ? "Выберите площадку · [ / ] повернуть · Esc отмена"
             : HasTargetingMode() && !_pointerDown ? "Укажите цель · Esc отмена" : _opponent is not null ? "Соперник: ИИ" : "";
         _terminalNotice.TooltipText = _terminalNotice.Text;
 
@@ -356,7 +356,7 @@ public partial class Sandbox
         for (int i = 0; i < _displayCount; i++)
         {
             var pose = _displayPoses[i];
-            var type = _catalog!.Units[pose.UnitType];
+            var type = _catalog!.Units[pose.UnitType].WithRotation(pose.QuarterTurns);
             bool selected = _selection.Contains(pose.Id);
             bool showHealth = selected || _allHealth || pose.Health < type.MaxHealth;
             bool showCapture = pose.Capture is { Progress: > 0, Duration: > 0 };

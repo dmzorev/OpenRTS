@@ -57,7 +57,7 @@ public sealed partial class SimulationWorld
     {
         if (order.Target.Value != 0) return _indices.TryGetValue(order.Target, out int target) && IsOnMap(_entityHandles[target]) && InWeaponRange(index, target, weapon.Range);
         var e = _entityHandles[index];
-        var eIdentity = e.Get<EntityIdentity>(); var closest = ObjectGeometry.ClosestPoint(_types[eIdentity.Type], e.Get<SpatialState>().Position, order.Position);
+        var closest = ObjectGeometry.ClosestPoint(TypeOf(e), e.Get<SpatialState>().Position, order.Position);
         return DistanceSquared(closest, order.Position) <= (long)weapon.Range * weapon.Range && (_baseGrid is null || TerrainGeometry.Clear(_baseGrid, closest, order.Position, 0));
     }
     private void UpdateAbilityOrder(int i)

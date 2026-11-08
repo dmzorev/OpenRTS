@@ -32,11 +32,14 @@ public sealed partial class SimulationWorld
     bool IProductionWorld.TryFindExitPlacement(int type, WorldPosition origin, int radius, out WorldPosition exit) =>
         TryFindExitPlacement(type, origin, radius, out exit);
 
-    bool IProductionWorld.TryPlaceBuilding(int type, WorldPosition position, uint owner, out EntityId created)
+    UnitDefinition IProductionWorld.TypeOf(Entity actor) => TypeOf(actor);
+    int IProductionWorld.RotationOf(Entity actor) => RotationOf(actor);
+
+    bool IProductionWorld.TryPlaceBuilding(int type, WorldPosition position, uint owner, int quarterTurns, out EntityId created)
     {
         created = default;
-        if (!PrepareFootprint(type, position, out var grid)) return false;
-        created = Spawn(type, position, owner);
+        if (!PrepareFootprint(_types[type].WithRotation(quarterTurns), position, out var grid)) return false;
+        created = Spawn(type, position, owner, quarterTurns: quarterTurns);
         if (grid is not null) CommitGrid(grid);
         return true;
     }

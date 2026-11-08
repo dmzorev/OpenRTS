@@ -186,6 +186,7 @@ public partial class Sandbox : Node3D
         if (_showcase) { _selection.Reset(); _selected = _skirmish ? default : new(1); _armedAction = null; _armedCustom = null; _productionPlacement = null; _placing = false; _panelRevision = -1; _panelTick = -1; _panelDirty = true; _pointerDown = false; }
         _notice = "";
         _focusStartingBase = _terminal is not null;
+        ResetPlacementRotation();
         _sitePlacement = null; _selectedProject = default; _visibleProjects = []; _visibleProjectsTick = -1; _constructionViewer = 1;
         var catalog = _catalog ?? throw new InvalidOperationException("Контент не загружен.");
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
@@ -275,7 +276,7 @@ public partial class Sandbox : Node3D
                     _ => _notice
                 };
             }
-            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects, UpgradePreview());
+            _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects, BuildingPreview() ?? UpgradePreview());
             _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
             UpdateTerminal(frame, alpha);
             if (_verifyAiMatch) { VerifyAiMatch(frame); return; }

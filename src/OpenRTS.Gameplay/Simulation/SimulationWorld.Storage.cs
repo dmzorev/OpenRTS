@@ -5,7 +5,16 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
-    private UnitDefinition TypeOf(Frent.Entity actor) => _types[actor.Get<EntityIdentity>().Type];
+    private readonly record struct FootprintOrientation(int QuarterTurns);
+
+    private static int RotationOf(Frent.Entity actor) =>
+        actor.Has<FootprintOrientation>() ? actor.Get<FootprintOrientation>().QuarterTurns : 0;
+
+    private UnitDefinition TypeOf(Frent.Entity actor)
+    {
+        var type = _types[actor.Get<EntityIdentity>().Type];
+        return type.Footprint is null ? type : type.WithRotation(RotationOf(actor));
+    }
 
     private void CapturePreviousFacings()
     {

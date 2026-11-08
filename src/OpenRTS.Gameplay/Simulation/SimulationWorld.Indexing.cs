@@ -21,11 +21,13 @@ public sealed partial class SimulationWorld
         bool hasStoredActors = _transport?.HasStoredActors == true;
         lock (StorageGate)
         {
-            foreach (var (identity, spatial, definition) in ExistingStorage.Query<EntityIdentity, SpatialState, EntityDefinition>())
+            foreach (var (entity, identity, spatial, definition) in ExistingStorage.Query<EntityIdentity, SpatialState, EntityDefinition>().WithEntities())
             {
-                if (hasStoredActors && !IsOnMap(_entityHandles[_indices[identity.Value.Id]])) continue;
+                if (hasStoredActors && !IsOnMap(entity)) continue;
                 var type = definition.Value.Spatial!;
-                motion.Add(identity.Value.Id, spatial.Value.Position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);
+                var footprint = type.Footprint is null ? null : _types[identity.Value.Type].WithRotation(RotationOf(entity)).Footprint;
+                motion.Add(identity.Value.Id, spatial.Value.Position, type.Body,
+                    footprint?.HalfWidth ?? type.Body.HalfWidth, footprint?.HalfHeight ?? type.Body.HalfHeight);
             }
         }
     }

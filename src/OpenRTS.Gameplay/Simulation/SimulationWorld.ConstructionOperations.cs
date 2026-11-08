@@ -12,6 +12,8 @@ public sealed partial class SimulationWorld
     bool IConstructionWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
     UnitDefinition IConstructionWorld.TypeOf(int type) => _types[type];
 
+    UnitDefinition IConstructionWorld.TypeOf(Entity entity) => TypeOf(entity);
+
     bool IConstructionWorld.TryGetRecipe(Entity builder, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe)
     {
         int builderType = builder.Get<EntityIdentity>().Type;
@@ -61,9 +63,8 @@ public sealed partial class SimulationWorld
 
     WorldPosition IConstructionWorld.GroundPosition(WorldPosition position) => GroundPosition(position, position.Elevation);
 
-    bool IConstructionWorld.SiteTerrainAllows(int typeIndex, WorldPosition position)
+    bool IConstructionWorld.SiteTerrainAllows(UnitDefinition type, WorldPosition position)
     {
-        var type = _types[typeIndex];
         var footprint = type.Footprint!;
         if (!FootprintFits(footprint, position)) return false;
         return _baseGrid is { } grid ? footprint.AllowsConstruction(grid, position, type.Locomotor) : type.Locomotor.Rules[0].CanStop;
@@ -71,16 +72,16 @@ public sealed partial class SimulationWorld
 
     void IConstructionWorld.QuerySite(WorldPosition from, WorldPosition to, List<EntityId> occupants) =>
         (_motion ?? _combatIndex)!.Query(from, to, 0, occupants);
-    bool IConstructionWorld.PrepareFootprint(int type, WorldPosition position, out NavigationGrid? candidate) => PrepareFootprint(type, position, out candidate);
+    bool IConstructionWorld.PrepareFootprint(UnitDefinition type, WorldPosition position, out NavigationGrid? candidate) => PrepareFootprint(type, position, out candidate);
     void IConstructionWorld.CommitFootprint(NavigationGrid candidate) => CommitGrid(candidate);
     EntityId IConstructionWorld.ReserveEntityId() => AllocateEntityId();
     void IConstructionWorld.ReleaseEntityId(EntityId id) => ReleaseEntityId(id);
     bool IConstructionWorld.CanAfford(uint owner, long cost) => _economy.CanAfford(owner, cost);
     bool IConstructionWorld.Spend(uint owner, long cost) => _economy.Spend(owner, cost);
 
-    Entity IConstructionWorld.SpawnFoundation(EntityId id, int type, WorldPosition position, uint owner, int health, Action<Entity> initialize)
+    Entity IConstructionWorld.SpawnFoundation(EntityId id, int type, WorldPosition position, uint owner, int health, int quarterTurns, Action<Entity> initialize)
     {
-        Spawn(type, position, owner, id: id, initialHealth: health, initialize: initialize);
+        Spawn(type, position, owner, id: id, initialHealth: health, initialize: initialize, quarterTurns: quarterTurns);
         return _entityHandles[_indices[id]];
     }
 

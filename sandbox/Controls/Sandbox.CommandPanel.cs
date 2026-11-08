@@ -89,6 +89,7 @@ public partial class Sandbox
     {
         if (_typeRow is null || _customRow is null) return;
         _sitePlacement = null;
+        ResetPlacementRotation();
         _panelDirty = true; _activeRecipients = Controlled().Where(id => _selectionPoses[id].UnitType == _activeType).ToArray();
         ClearChildren(_typeRow); ClearChildren(_customRow); if (_tasksRow is not null) ClearChildren(_tasksRow); if (_taskScroll is not null) _taskScroll.Visible = false; _customButtons.Clear(); _upgradeButtons.Clear(); _cooldowns.Clear(); _taskSignature = "";
         foreach (int type in _panelTypes)
@@ -154,6 +155,7 @@ public partial class Sandbox
         var ids = ActiveRecipients().Where(id => !_selectionPoses[id].Construction.Active).ToArray();
         if (ids.Length == 0 || _session is null) return;
         var type = _catalog!.Units[_activeType]; var ability = type.Abilities.FirstOrDefault(a => a.Id == id);
+        ResetPlacementRotation();
         _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _sitePlacement = null; _pointerDown = false;
         if (ability is not null)
         {
@@ -254,7 +256,7 @@ public partial class Sandbox
         frame.Tasks.CopyTo(_displayTasks); _displayTaskCount = frame.Tasks.Length;
         if (_productionPlacement is { } placement)
         { bool present = false; foreach (var task in frame.Tasks) if (task.Id == placement.Id) { present = true; break; }
-            if (!present) { _productionPlacement = null; _placing = false; } }
+            if (!present) { _productionPlacement = null; _placing = false; ResetPlacementRotation(); } }
         if (_activeType < 0 || _tasksRow is null || _catalog is null) return;
         var ids = ActiveRecipients(); var type = _catalog.Units[_activeType];
         UpdateUpgradeButtons(type, ids);
@@ -303,7 +305,7 @@ public partial class Sandbox
                 status = _terminal is not null && product.OnSite ? " · Проект"
                     : ready ? (_terminal is null ? " ГОТОВО" : " ✓") : $" · {build.Ticks / (double)frame.TickRate:0.#} с";
                 button.TooltipText = product.OnSite
-                    ? $"{action.Label} [{action.Hotkey}] · {build.Cost:N0} кр. · {build.Ticks / (double)frame.TickRate:0.#} с\nЛКМ → разместить проект. Shift — добавить в очередь и продолжить размещение."
+                    ? $"{action.Label} [{action.Hotkey}] · {build.Cost:N0} кр. · {build.Ticks / (double)frame.TickRate:0.#} с\nЛКМ → разместить проект. Shift — продолжить размещение. [ / ] — повернуть."
                     : $"{action.Label} [{action.Hotkey}] · {build.Cost:N0} кр. · {build.Ticks / (double)frame.TickRate:0.#} с\nShift — 5; ПКМ — повтор; готовое здание: ЛКМ → разместить.";
             }
             button.Text = (_terminal is null ? $"{action.Hotkey} · {action.Label}" : action.Hotkey) + status + (auto ? " ↻" : "");

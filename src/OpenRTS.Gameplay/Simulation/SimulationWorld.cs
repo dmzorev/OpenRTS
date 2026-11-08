@@ -131,7 +131,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         else if (!StopAllowed(unitType, position))
             throw new ArgumentException("Initial terrain does not permit stopping.", nameof(position));
-        if (!PrepareFootprint(unitType, position, out var footprintGrid)) throw new ArgumentException("Footprint placement is out of bounds, misaligned or would trap an existing body.", nameof(position));
+        if (!PrepareFootprint(type, position, out var footprintGrid)) throw new ArgumentException("Footprint placement is out of bounds, misaligned or would trap an existing body.", nameof(position));
         if (_navigation is not null && type.Footprint is null)
         {
             if (!_motion!.ClearPlacement(position, out _, _types[unitType].Body))
@@ -192,7 +192,15 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", batchArgument);
         if (command.Kind == CommandKind.Scatter && (command.Position.X == 0 || command.Position.Y == 0))
             throw new ArgumentException("Scatter area must have positive extents.", batchArgument);
-        if (command.Kind == CommandKind.Spawn) ValidateType(command.UnitType);
+        if ((uint)command.QuarterTurns > 3 ||
+            command.QuarterTurns != 0 && command.Kind is not (CommandKind.Spawn or CommandKind.PlanConstruction or CommandKind.PlaceProduced))
+            throw new ArgumentException("A building orientation requires 0 to 3 quarter turns.", batchArgument);
+        if (command.Kind == CommandKind.Spawn)
+        {
+            ValidateType(command.UnitType);
+            if (command.QuarterTurns != 0 && _types[command.UnitType].Footprint is null)
+                throw new ArgumentException("Only footprints can be rotated.", batchArgument);
+        }
         if (command.Kind == CommandKind.PlayAnimation && (command.Animation < 0 || command.DurationTicks < 1 ||
             command.DurationTicks > 1000000 || !Enum.IsDefined(command.Track)))
             throw new ArgumentException("Animation commands require a valid track, nonnegative ID and duration in 1..1000000 ticks.", batchArgument);
@@ -239,7 +247,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Build or UnitActionKind.UpgradeSupport ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply, upgrade, captureTarget);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Build or UnitActionKind.UpgradeSupport ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply, upgrade, captureTarget)
+                { QuarterTurns = type.Footprint is not null ? RotationOf(entity) : 0 };
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -277,6 +286,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 ref var entityNavigation = ref entity.Get<NavigationAgentState>();
                 var position = entity.Get<SpatialState>().Position;
                 writer.Write(entityIdentity.Id.Value); writer.Write(entityIdentity.Type); writer.Write(entity.Get<HealthState>().Current);
+                writer.Write(RotationOf(entity));
                 writer.Write(position.X); writer.Write(position.Y); writer.Write(position.Elevation);
                 writer.Write(entityMotion.Target.X); writer.Write(entityMotion.Target.Y); writer.Write(entityMotion.Target.Elevation);
                 writer.Write(entityMotion.Moving); writer.Write(entityNavigation.TerrainStranded);
@@ -361,10 +371,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         if (command.Kind == CommandKind.Spawn)
         {
-            bool footprint = _types[command.UnitType].Footprint is not null;
+            var type = _types[command.UnitType].WithRotation(command.QuarterTurns);
+            bool footprint = type.Footprint is not null;
             bool terrain = footprint || StopAllowed(command.UnitType, command.Position);
             bool free = footprint || _motion is null || _motion.ClearPlacement(command.Position, out _, _types[command.UnitType].Body);
-            bool stamp = PrepareFootprint(command.UnitType, command.Position, out var footprintGrid);
+            bool stamp = PrepareFootprint(type, command.Position, out var footprintGrid);
             terrain &= stamp;
             if (!terrain || !free)
             {
@@ -374,9 +385,9 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             }
             if ((command.States & ~_types[command.UnitType].AllowedStateMask) != 0)
             { _events.Add(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
-            var id = Spawn(command.UnitType, command.Position, command.Owner, command.States);
+            var id = Spawn(command.UnitType, command.Position, command.Owner, command.States, quarterTurns: command.QuarterTurns);
             if (footprintGrid is not null) CommitGrid(footprintGrid);
-            _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType));
+            _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType) { QuarterTurns = command.QuarterTurns });
             return;
         }
         if (command.Kind is CommandKind.MoveAll or CommandKind.Scatter)
@@ -421,7 +432,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         RemoveSupply(_entityHandles[index], actor.Get<EntityIdentity>());
         CancelUpgrade(actor, restoreNeutral: false);
         bool stamped = _footprints.Remove(id);
-        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
+        _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
         _economy.InvalidatePower();
         _conditionGrants?.RemoveEntity(id);
         DeleteEntity(index);
@@ -469,11 +480,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     void ICaptureWorld.ChangeOwner(EntityId target, uint owner) => ChangeOwner(_indices[target], owner);
 
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
-        EntityId id = default, int? initialHealth = null, Action<Frent.Entity>? initialize = null)
+        EntityId id = default, int? initialHealth = null, Action<Frent.Entity>? initialize = null, int quarterTurns = 0)
     {
         if (id.Value == 0) id = AllocateEntityId();
         Frent.Entity state;
-        var type = _types[unitType];
+        var type = _types[unitType].WithRotation(quarterTurns);
         var health = new HealthState(initialHealth ?? type.MaxHealth);
         var producer = ProductionSystem.CreateProducer(type);
         var orders = new OrderState { AutoBuild = type.Abilities.Any(a => a.Kind == AbilityKind.Build && a.AutoCast) };
@@ -483,6 +494,16 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             state = producer is null
                 ? storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, orders, new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner))
                 : storage.Create(new EntityIdentity(id, unitType), type.Definition, new SpatialState(position), health, orders, new MotionState(position), new NavigationAgentState(_navigation?.Grid.CellAt(position) ?? -1, _navigation is not null), new CombatState(type), new PresentationState(type.IdleAnimation, Tick, states), new OwnershipState(owner), producer);
+            if (quarterTurns != 0)
+            {
+                state.Add(new FootprintOrientation(quarterTurns));
+                var facing = FacingDirection.FromQuarterTurns(quarterTurns);
+                ref var presentation = ref state.Get<PresentationState>();
+                presentation.BodyFacing = presentation.PreviousBodyFacing = facing;
+                presentation.WeaponFacing = presentation.PreviousWeaponFacing = facing;
+                foreach (ref var mount in state.Get<CombatState>().Weapons.AsSpan())
+                    mount.Facing = mount.PreviousFacing = facing;
+            }
             _transport?.Initialize(state, type);
             initialize?.Invoke(state);
             _economy.Initialize(state, type.Economy, owner, Tick);

@@ -46,6 +46,46 @@ internal static class ConstructionChecks
 
     public static void Run(Action<string, Action> test)
     {
+        test("Construction: rotated blueprint, sparse foundation and removal share the same grid cells", () =>
+        {
+            var footprint = new FootprintDefinition(3, 2,
+                [new(0, 0, new(false)), new(2, 0, new(true, false), false), new(1, 1, new(false))]);
+            var types = new[]
+            {
+                new UnitDefinition("builder", 100, movable: false, constructionRange: 8192,
+                    products: [new("build", "site", "", OnSite: true)]),
+                new UnitDefinition("site", 100, movable: false, footprint: footprint,
+                    build: new(2, kind: ProductionKind.PlaceBuilding)),
+                new UnitDefinition("unit", 100)
+            };
+            using var world = new SimulationWorld(types, 20480, 16384, navigationGrid: new(20, 16));
+            var builder = world.AddInitialUnit(0, new(4096, 8192), 1);
+            world.AddInitialUnit(2, new(7680, 7680), 2); // Inside the bounding box but outside the rotated cells.
+            var center = new WorldPosition(8192, 8704);
+            world.Step([
+                new(1, 0, 1, CommandKind.HoldPosition, builder),
+                new WorldCommand(1, 0, 2, CommandKind.PlanConstruction, builder, center, Action: "build", Queued: true) { QuarterTurns = 1 }]);
+            var project = Projects(world).Single();
+            NavigationChecks.Check(project.QuarterTurns == 1 && project.Position == center, "Queued blueprint lost rotation or alignment");
+            world.Step([new(2, 0, 1, CommandKind.BuildSite, builder, TargetEntity: project.Id)]);
+            var foundation = Pose(world, project.Id);
+            NavigationChecks.Check(foundation.QuarterTurns == 1 && foundation.Presentation.BodyFacing == new FacingDirection(1, 0),
+                "The foundation did not keep the blueprint orientation");
+
+            var grid = world.NavigationGrid!;
+            int blocked = grid.Index(new(8, 7)), ramp = grid.Index(new(8, 9));
+            NavigationChecks.Check(grid.IsBlocked(blocked) && grid.IsBlocked(grid.Index(new(7, 8))) &&
+                !grid.IsBlocked(grid.Index(new(7, 7))) && !grid.IsBlocked(ramp) && !grid.CanStop(ramp),
+                "The sparse footprint or its ramp did not rotate");
+            world.Step(); world.Step();
+            NavigationChecks.Check(!Pose(world, project.Id).Construction.Active && Pose(world, project.Id).QuarterTurns == 1,
+                "Completion reset rotation");
+            world.Step([new(5, 0, 1, CommandKind.Destroy, project.Id)]);
+            NavigationChecks.Check(world.Events.ToArray().Single(e => e.Kind == WorldEventKind.Destroyed).QuarterTurns == 1 &&
+                !world.NavigationGrid!.IsBlocked(blocked) && world.NavigationGrid.CanStop(ramp) && grid.IsBlocked(blocked),
+                "Removal or the wreck lost the rotated footprint");
+        });
+
         test("Construction: readiness controls weapons, production and boarding independently of visual states", () =>
         {
             var factory = new UnitDefinition("factory", 100, ["idle", "fire"], ["constructing", "lowpower"], movable: false,

@@ -74,11 +74,34 @@ public partial class Sandbox
                 ToggleTerminalLayout();
                 CheckSkirmish(_sitePlacement == placement, "Layout switch reset construction placement");
                 ToggleTerminalLayout();
-                foreach (var site in sites)
+                for (int i = 0; i < sites.Length; i++)
                 {
-                    HandleConstructionClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, ShiftPressed = true }, site, null);
-                    CheckSkirmish(_sitePlacement is not null, "Shift did not keep construction placement armed");
+                    var site = sites[i];
+                    CenterCamera(new Vector2(site.X, site.Y) / WorldPosition.UnitsPerCell);
+                    var start = Pixel(site);
+                    _pointer = start;
+                    if (builder == 2 && i == 0)
+                        CheckSkirmish(HandleRtsKey(new InputEventKey(), Key.Bracketright) && BuildingPreview()?.QuarterTurns == 1,
+                            "The bracket key did not rotate the preview");
+                    HandleShowcaseClick(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = start });
+                    CheckSkirmish(_placementDrag is not null, "Mouse down did not pin the placement anchor");
+                    var end = start;
+                    if (builder == 2 && i == 1)
+                    {
+                        var east = Pixel(site with { X = site.X + 3072 });
+                        _Input(new InputEventMouseMotion { Position = east, ButtonMask = MouseButtonMask.Left });
+                        CheckSkirmish(BuildingPreview() is { QuarterTurns: 3 }, "Dragging east did not turn the exit east");
+                        end = Pixel(site with { Y = site.Y + 3072 });
+                        _Input(new InputEventMouseMotion { Position = end, ButtonMask = MouseButtonMask.Left });
+                        CheckSkirmish(BuildingPreview() is { QuarterTurns: 0 } drag && drag.Position == PlacementPoint(site, placement!.Value.Type),
+                            "Dragging south did not point the exit south at the pinned anchor");
+                    }
+                    _Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = end, ShiftPressed = true });
+                    CheckSkirmish(_sitePlacement is not null && _placementDrag is null, "Shift did not keep construction placement armed");
                 }
+
+                Vector2 Pixel(WorldPosition point) => _camera!.UnprojectPosition(
+                    new(point.X / 1024f, 0, point.Y / 1024f));
             }
             Place(2, Key.E, new(24 * 1024 + 512, 25 * 1024), new(27 * 1024 + 512, 30 * 1024));
             Place(5, Key.T, new WorldPosition(55 * 1024 + 512, 37 * 1024));
@@ -93,6 +116,8 @@ public partial class Sandbox
             _selection.Change([new(1)], SelectionChange.Replace); RefreshSelection();
             UpdateConstructionView(frame);
             CheckSkirmish(_visibleProjects.Length == 2 && _visibleProjects.All(p => p.Owner == 1), "Blue can see an enemy project");
+            CheckSkirmish(_visibleProjects.Select(p => p.QuarterTurns).SequenceEqual([1, 0]),
+                "The keyboard and drag rotations did not reach the authoritative blueprints");
             UpdateFootprintPreview();
             CheckSkirmish(!_footprintView!.Node.GetNode<MeshInstance3D>("ConstructionRange").Visible, "Supply Center still has a construction radius");
             var project = _visibleProjects[0];

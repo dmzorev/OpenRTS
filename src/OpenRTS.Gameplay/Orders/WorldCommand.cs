@@ -15,6 +15,8 @@ public readonly record struct WorldCommand(long Tick, uint Issuer, long Sequence
     /// <summary>Token of the grant to revoke on this entity.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public long ConditionGrantId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int QuarterTurns { get; init; }
 
     public WorldCommand WithStamp(long tick, uint issuer, long sequence) => this with { Tick = tick, Issuer = issuer, Sequence = sequence };
 }
@@ -28,5 +30,7 @@ public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityI
     public GameplayConditions Condition { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public long ConditionGrantId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int QuarterTurns { get; init; }
 }
 

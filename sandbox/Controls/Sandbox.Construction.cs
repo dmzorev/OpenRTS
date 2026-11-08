@@ -50,7 +50,7 @@ public partial class Sandbox
     {
         foreach (var project in _visibleProjects)
         {
-            var type = _catalog!.Units[project.UnitType];
+            var type = _catalog!.Units[project.UnitType].WithRotation(project.QuarterTurns);
             if (type.Footprint is not { } footprint)
             {
                 if (ObjectGeometry.WithinRadius(type, project.Position, point, 600)) return project;
@@ -86,7 +86,7 @@ public partial class Sandbox
 
     private bool CanPlanSite(int type, WorldPosition point)
     {
-        var target = _catalog!.Units[type];
+        var target = _catalog!.Units[type].WithRotation(_placementTurns);
         if (_displayBaseGrid is { } grid && !target.Footprint!.AllowsConstruction(grid, point, target.Locomotor)) return false;
         foreach (var id in ActiveRecipients())
         {
@@ -127,7 +127,7 @@ public partial class Sandbox
             uint owner = Selected()?.Presentation.Owner ?? _constructionViewer;
             var ids = ActiveRecipients().Where(id => _selectionPoses[id].Presentation.Owner == owner).ToArray();
             if (ids.Length == 0) return true;
-            _session!.Submit(CommandKind.PlanConstruction, position, recipients: new(ids), queued: click.ShiftPressed, action: placement.Action);
+            _session!.Submit(CommandKind.PlanConstruction, position, recipients: new(ids), queued: click.ShiftPressed, action: placement.Action, quarterTurns: _placementTurns);
             _notice = "";
             if (!click.ShiftPressed) { _sitePlacement = null; _panelDirty = true; }
             return true;

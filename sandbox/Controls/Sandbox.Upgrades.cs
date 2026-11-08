@@ -27,10 +27,10 @@ public partial class Sandbox
 
     private bool CanSupportUpgrade(EntityPose actor, EntityPose target)
     {
-        var type = _catalog!.Units[actor.UnitType];
+        var type = _catalog!.Units[actor.UnitType].WithRotation(actor.QuarterTurns);
         if (actor.Id == target.Id || type.ConstructionRange <= 0 || actor.Construction.Active ||
             actor.Upgrade.Active || actor.TerrainStranded) return false;
-        return type.Movable || ObjectGeometry.DistanceSquared(type, actor.Current, _catalog.Units[target.UnitType],
+        return type.Movable || ObjectGeometry.DistanceSquared(type, actor.Current, _catalog.Units[target.UnitType].WithRotation(target.QuarterTurns),
             target.Current, out _, out _) <= (long)type.ConstructionRange * type.ConstructionRange;
     }
 
@@ -66,8 +66,8 @@ public partial class Sandbox
             }
             var supporter = _displayPoses.Take(_displayCount).Where(p => p.Presentation.Owner == owner &&
                     p.Order.Phase == OpenRTS.Core.Orders.OrderPhase.Idle && CanSupportUpgrade(p, target))
-                .OrderBy(p => ObjectGeometry.DistanceSquared(_catalog!.Units[p.UnitType], p.Current,
-                    _catalog.Units[target.UnitType], target.Current, out _, out _)).ThenBy(p => p.Id.Value).FirstOrDefault();
+                .OrderBy(p => ObjectGeometry.DistanceSquared(_catalog!.Units[p.UnitType].WithRotation(p.QuarterTurns), p.Current,
+                    _catalog.Units[target.UnitType].WithRotation(target.QuarterTurns), target.Current, out _, out _)).ThenBy(p => p.Id.Value).FirstOrDefault();
             if (supporter.Id != default)
             {
                 SubmitUpgrade(supporter.Id, target.Id, variant.Id);
@@ -128,5 +128,6 @@ public partial class Sandbox
     }
 
     private static ConstructionProjectPose UpgradeGhost(EntityPose target, string variant, uint owner) =>
-        new(target.Id, owner, target.UnitType, target.Current, false, variant, target.Presentation.BodyFacing);
+        new(target.Id, owner, target.UnitType, target.Current, false, variant, target.Presentation.BodyFacing)
+        { QuarterTurns = target.QuarterTurns };
 }

@@ -34,8 +34,7 @@ public sealed partial class SimulationWorld
         foreach (var id in _footprints)
         {
             ref var entity = ref _entityHandles[_indices[id]];
-            var entityIdentity = entity.Get<EntityIdentity>();
-            Stamp(_types[entityIdentity.Type].Footprint!, entity.Get<SpatialState>().Position);
+            Stamp(TypeOf(entity).Footprint!, entity.Get<SpatialState>().Position);
         }
         if (extra is not null) Stamp(extra, position);
         return basis.Compose(_cellOverrides, _navigation!.Grid);
@@ -70,9 +69,9 @@ public sealed partial class SimulationWorld
         }
         return occupant.Value == 0;
     }
-    private bool PrepareFootprint(int unitType, WorldPosition position, out NavigationGrid? candidate)
+    private bool PrepareFootprint(UnitDefinition type, WorldPosition position, out NavigationGrid? candidate)
     {
-        candidate = null; var footprint = _types[unitType].Footprint;
+        candidate = null; var footprint = type.Footprint;
         if (footprint is null) return true;
         if (!FootprintFits(footprint, position)) return false;
         if (_baseGrid is null) return true;

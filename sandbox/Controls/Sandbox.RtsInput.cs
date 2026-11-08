@@ -53,7 +53,7 @@ public partial class Sandbox
         EntityPose? selected = null; long best = 1100L * 1100; bool selectedFootprint = false;
         for (int i = 0; i < _displayCount; i++)
         {
-            var pose = _displayPoses[i]; var type = _catalog!.Units[pose.UnitType]; bool footprint = type.Footprint is not null;
+            var pose = _displayPoses[i]; var type = _catalog!.Units[pose.UnitType].WithRotation(pose.QuarterTurns); bool footprint = type.Footprint is not null;
             if (footprint)
             {
                 bool inside = type.Footprint!.Cells.Any(c => { var b = type.Footprint.Bounds(c, pose.Current); return point.X >= b.MinX && point.X < b.MaxX && point.Y >= b.MinY && point.Y < b.MaxY; });
@@ -113,6 +113,7 @@ public partial class Sandbox
     }
     public bool ActivateAction(UnitActionKind kind, bool queued = false)
     {
+        ResetPlacementRotation();
         _armedCustom = null; _panelDirty = true; _placing = false; _productionPlacement = null; _sitePlacement = null;
         if (!CanIssue(kind)) { _notice = "Действие недоступно текущему выбору."; return false; }
         if (kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Attack or UnitActionKind.Repair or UnitActionKind.Enter or UnitActionKind.UnloadAt)
@@ -169,12 +170,17 @@ public partial class Sandbox
         if (OverRtsPanel(click.Position)) return;
         if (!click.Pressed)
         { if (click.ButtonIndex == MouseButton.Left && _pointerDown) FinishSelection(click.Position); return; }
-        if (_sitePlacement is not null && click.ButtonIndex == MouseButton.Right) { _sitePlacement = null; _panelDirty = true; return; }
-        if (_buildings && _placing && click.ButtonIndex == MouseButton.Right) { _placing = false; return; }
+        if (_sitePlacement is not null && click.ButtonIndex == MouseButton.Right) { ResetPlacementRotation(); _sitePlacement = null; _panelDirty = true; return; }
+        if (_placing && click.ButtonIndex == MouseButton.Right) { ResetPlacementRotation(); _placing = false; _productionPlacement = null; return; }
         if (click.ButtonIndex == MouseButton.Right && (_armedAction is not null || _armedCustom is not null || _pointerDown))
         { _armedAction = null; _armedCustom = null; _panelDirty = true; _pointerDown = false; if (_rtsOverlay is not null) _rtsOverlay.Marquee = null; UpdateRtsCursor(); return; }
         if (CommandPoint(click.Position) is not { } point) { _notice = "Точка вне карты."; return; }
-        if (HandlePlacement(click, point)) return;
+        if (IsPlacingBuilding)
+        {
+            if (click.ButtonIndex == MouseButton.Left)
+                _placementDrag = (point, click.Position, _placementTurns);
+            return;
+        }
         var picked = Pick(point);
         if (HandleConstructionClick(click, point, picked)) return;
         if (HandleCustomTarget(click, point, picked)) return;
@@ -213,6 +219,16 @@ public partial class Sandbox
         if (input is InputEventMouseMotion pointer) _pointer = pointer.Position;
         else if (input is InputEventMouseButton button) _pointer = button.Position;
         if (_rtsOverlay is not null) _rtsOverlay.Pointer = _pointer;
+        if (_placementDrag is not null)
+        {
+            if (input is InputEventMouseMotion drag) UpdatePlacementDrag(drag.Position);
+            else if (input is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left } place)
+            {
+                FinishPlacementDrag(place);
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
         if (!_pointerDown) return;
         if (input is InputEventMouseMotion move)
         {
@@ -251,9 +267,10 @@ public partial class Sandbox
 
     private bool HandleRtsKey(InputEventKey key, Key code)
     {
+        if (RotatePlacement(code)) return true;
         if (code is Key.Delete or Key.Backspace && _selectedProject.Value != 0) { CancelProject(); return true; }
-        if (code == Key.Escape && _sitePlacement is not null) { _sitePlacement = null; _panelDirty = true; return true; }
-        if (code == Key.Escape && _placing) { _placing = false; _productionPlacement = null; _panelDirty = true; return true; }
+        if (code == Key.Escape && _sitePlacement is not null) { ResetPlacementRotation(); _sitePlacement = null; _panelDirty = true; return true; }
+        if (code == Key.Escape && _placing) { ResetPlacementRotation(); _placing = false; _productionPlacement = null; _panelDirty = true; return true; }
         if (code == Key.Escape && _selectedProject.Value != 0) { _selectedProject = default; RefreshProjectButton(); return true; }
         if (HandleCustomKey(key, code)) return true;
         if (code == Key.Tab) return CycleCommandType(key.ShiftPressed);
@@ -341,7 +358,7 @@ public partial class Sandbox
         if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
         if (_sitePlacement is { } placement)
         {
-            if (CommandPoint(_pointer) is { } buildPoint && CanPlanSite(placement.Type, PlacementPoint(buildPoint, placement.Type)))
+            if ((_placementDrag?.Anchor ?? CommandPoint(_pointer)) is { } buildPoint && CanPlanSite(placement.Type, PlacementPoint(buildPoint, placement.Type)))
                 _rtsOverlay.CustomCursor = "build";
             else cursor = RtsCursor.Unavailable;
         }
@@ -374,7 +391,7 @@ public partial class Sandbox
         for (int i = 0; i < _displayCount; i++) if (_selection.Contains(_displayPoses[i].Id))
         {
             var p = _displayPoses[i]; int at = ring++ * 16;
-            var type = _catalog!.Units[p.UnitType];
+            var type = _catalog!.Units[p.UnitType].WithRotation(p.QuarterTurns);
             _ringBuffer[at] = ((type.Footprint?.HalfWidth ?? type.Body.HalfWidth) / 1024f + 0.2f) / 0.88f;
             _ringBuffer[at + 10] = ((type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f + 0.2f) / 0.88f; _ringBuffer[at + 5] = 1;
             _ringBuffer[at + 3] = (p.Previous.X + ((long)p.Current.X - p.Previous.X) * alpha) / 1024;

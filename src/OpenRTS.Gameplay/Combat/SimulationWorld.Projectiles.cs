@@ -22,8 +22,8 @@ public sealed partial class SimulationWorld
         var actorIdentity = actor.Get<EntityIdentity>();
         ref var actorOwnership = ref actor.Get<OwnershipState>();
         WorldPosition muzzle, destination;
-        if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(_types[actorIdentity.Type], actorSpatial.Position, p); }
-        else ObjectGeometry.DistanceSquared(_types[actorIdentity.Type], actorSpatial.Position, _types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
+        if (point is { } p) { destination = p; muzzle = ObjectGeometry.ClosestPoint(TypeOf(actor), actorSpatial.Position, p); }
+        else ObjectGeometry.DistanceSquared(TypeOf(actor), actorSpatial.Position, TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actorIdentity.Id, Target = target < 0 ? default : _entityHandles[target].Get<EntityIdentity>().Id,
             Owner = actorOwnership.Owner, UnitType = weaponUnitType < 0 ? actorIdentity.Type : weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
@@ -41,7 +41,7 @@ public sealed partial class SimulationWorld
             {
                 // shortcut: steering is instantaneous; add turn limits when missiles need inertia.
                 if (!_indices.TryGetValue(shot.Target, out int target) || !IsOnMap(_entityHandles[target])) { Expire(shot); continue; }
-                shot.Destination = ObjectGeometry.ClosestPoint(_types[_entityHandles[target].Get<EntityIdentity>().Type], _entityHandles[target].Get<SpatialState>().Position, shot.Position);
+                shot.Destination = ObjectGeometry.ClosestPoint(TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, shot.Position);
             }
             int budget = Math.Min(shot.Remaining, weapon.ProjectileSpeed);
             var next = StepTowards(shot.Position, shot.Destination, budget);
@@ -65,7 +65,7 @@ public sealed partial class SimulationWorld
                     ref var bodyOwnership = ref body.Get<OwnershipState>();
                     if (bodyIdentity.Id == shot.Source || !weapon.FriendlyFire && bodyOwnership.Owner == shot.Owner) continue;
                     int t;
-                    var type = _types[bodyIdentity.Type];
+                    var type = TypeOf(body);
                     if (type.Footprint is { } footprint)
                     {
                         t = 65537;

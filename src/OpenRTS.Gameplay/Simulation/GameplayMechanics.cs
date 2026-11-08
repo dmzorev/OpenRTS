@@ -68,7 +68,7 @@ public sealed partial class SimulationWorld
 {
     private void WriteMechanics(BinaryWriter writer)
     {
-        writer.Write(26); // Unit definitions include upgrades and supply.
+        writer.Write(27); // Includes footprint orientation.
         if (_capture is not null && ReferenceEquals(_mechanics.Capture, GameplayMechanics.BuiltInCapture))
         {
             writer.Write(24);

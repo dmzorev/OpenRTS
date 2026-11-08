@@ -57,6 +57,9 @@ public sealed class FootprintDefinition
         }
         return true;
     }
+    internal FootprintDefinition TurnClockwise() => new(Height, Width,
+        Cells.Select(cell => cell with { X = Height - 1 - cell.Y, Y = cell.X }), CellSize);
+
     internal void WriteState(BinaryWriter writer)
     {
         writer.Write(Width); writer.Write(Height); writer.Write(CellSize); writer.Write(Cells.Count);

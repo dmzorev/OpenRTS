@@ -16,7 +16,16 @@ public sealed record UnitDefinition
     public Locomotor Locomotor => Definition.Spatial!.Locomotor;
     public bool Movable => Definition.Spatial!.Movable;
     public BodyShape Body => Definition.Spatial!.Body;
-    public FootprintDefinition? Footprint => Definition.Spatial!.Footprint;
+    public FootprintDefinition? Footprint { get; private init; }
+    private readonly Lazy<UnitDefinition[]>? _orientations;
+    private int QuarterTurns { get; init; }
+
+    public UnitDefinition WithRotation(int quarterTurns)
+    {
+        if ((uint)quarterTurns > 3 || quarterTurns != 0 && _orientations is null)
+            throw new ArgumentOutOfRangeException(nameof(quarterTurns));
+        return quarterTurns == QuarterTurns ? this : _orientations!.Value[quarterTurns];
+    }
     public ReadOnlyCollection<WeaponMountDefinition> Weapons => (Definition.Armament ?? ArmamentDefinition.Empty).Weapons;
     public WeaponDefinition? Weapon => Weapons.Count == 0 ? null : Weapons[0].Weapon;
     public ReadOnlyCollection<AbilityDefinition> Abilities => (Definition.Armament ?? ArmamentDefinition.Empty).Abilities;
@@ -47,6 +56,19 @@ public sealed record UnitDefinition
         if (definition.Health is null || definition.Spatial is null || definition.Presentation is null)
             throw new ArgumentException("The current unit simulation requires health, spatial and semantic presentation capabilities.", nameof(definition));
         Definition = definition;
+        Footprint = definition.Spatial.Footprint;
+        if (Footprint is { } footprint)
+            _orientations = new(() =>
+            {
+                var variants = new UnitDefinition[4];
+                variants[0] = this;
+                for (int turn = 1; turn < variants.Length; turn++)
+                {
+                    footprint = footprint.TurnClockwise();
+                    variants[turn] = this with { Footprint = footprint, QuarterTurns = turn };
+                }
+                return variants;
+            });
         DefaultUpgrade = Upgrades.FirstOrDefault(u => u.Default) ?? (Upgrades.Count == 1 ? Upgrades[0] : null);
         _baseMounts = (1 << Weapons.Count) - 1;
         _baseProducts = Products.Count == 64 ? ulong.MaxValue : (1ul << Products.Count) - 1;

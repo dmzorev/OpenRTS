@@ -122,8 +122,20 @@ internal static class ActionProductionChecks
             NavigationChecks.Check(w.Count == 2 && Tasks(w) is [{ Ready: true, UnitType: 2 }], "Queues did not work in parallel or building spawned before placement");
             var task = Tasks(w)[0]; w.Step([new(4, 0, 1, CommandKind.PlaceProduced, new(1), new(1, 1), Action: "b", TaskId: task.Id)]);
             NavigationChecks.Check(w.TaskCount == 1 && w.Count == 2, "Invalid placement consumed the ready task");
-            w.Step([new(5, 0, 1, CommandKind.PlaceProduced, new(1), new(12288, 12288), Action: "b", TaskId: task.Id)]);
-            NavigationChecks.Check(w.Count == 3 && w.TaskCount == 0 && w.NavigationGrid!.IsBlocked(w.NavigationGrid.CellAt(new(12288, 12288))), "Ready building was not committed");
+            w.Step([new WorldCommand(5, 0, 1, CommandKind.PlaceProduced, new(1), new(12288, 12288), Action: "b", TaskId: task.Id)
+                { QuarterTurns = 2 }]);
+            NavigationChecks.Check(w.Count == 3 && w.TaskCount == 0 &&
+                w.NavigationGrid!.IsBlocked(w.NavigationGrid.CellAt(new(12288, 12288))) &&
+                Poses(w).Single(p => p.Id.Value == 3).QuarterTurns == 2, "Ready building lost its placement or rotation");
+        });
+        test("Production: rotated factory spawns units at its rotated exit", () =>
+        {
+            using var world = Factory(search: 0, duration: 1);
+            world.Step([
+                new WorldCommand(1, 0, 1, CommandKind.Spawn, Position: new(12288, 8192), UnitType: 0, Owner: 1) { QuarterTurns = 1 },
+                new(1, 0, 2, CommandKind.EnqueueTask, new(2), Action: "u")]);
+            NavigationChecks.Check(Poses(world).Single(p => p.Id.Value == 3).Current == new WorldPosition(10240, 8192),
+                "Factory exit was not rotated from south to west");
         });
         test("Production: repeated tasks renew at the tail and stack cancellation is bounded", () =>
         {
