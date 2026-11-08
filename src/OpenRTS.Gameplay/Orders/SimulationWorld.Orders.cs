@@ -45,6 +45,7 @@ public sealed partial class SimulationWorld
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityOrders = ref entity.Get<OrderState>();
         ref var entityMotion = ref entity.Get<MotionState>();
+        if (UpgradeImmobilizes(entity) && order.Kind is not (UnitActionKind.UnloadAt or UnitActionKind.Stop)) return false;
         if ((ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0 ||
             order.Kind == UnitActionKind.Build && _construction?.CanBuild(entity, order.Target) != true)
         {
@@ -102,6 +103,12 @@ public sealed partial class SimulationWorld
             ref var entityOrders = ref entity.Get<OrderState>();
             ref var entityMotion = ref entity.Get<MotionState>();
             if (!IsOnMap(entity) || (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0) continue;
+            if (UpgradeImmobilizes(entity))
+            {
+                if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt)
+                    _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position);
+                continue;
+            }
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)
                 entityOrders.HasOrder = false;
@@ -116,7 +123,7 @@ public sealed partial class SimulationWorld
                 UpdateSupplyOrder(i);
                 if (!entityOrders.HasOrder) continue;
             }
-            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.ClaimMine) { UpdateMineProject(i); continue; }
+            if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UpgradeSupport) { UpdateUpgradeSupport(i); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Enter) { _transport!.UpdateEnter(entity, entityOrders.ActiveOrder); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.UnloadAt) { _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position); continue; }
             if (entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build) { _construction!.UpdateOrder(entity, entityOrders.ActiveOrder); continue; }

@@ -19,6 +19,13 @@
       "source_sha256": "c9ca2a9a64822668fdcc67fc3ffffe39b7fa8d7911e5a36bebfda63fda2dbd49",
       "sha256": "26d4f58776cbc4bbe062cd9a7c9806ddc934693f6c49f9597b7c5afdf493e7a1",
       "subject": "Owned military ore loading station, steel hopper and screening machinery over a shallow rock cut, truck ramp toward bottom."
+    },
+    {
+      "asset": "sandbox/assets/units/supply-truck-empty.png",
+      "source_sha256": "112549ae9d21bf4fd5dcc9eaff938ff9c7a97e1703c1ef9d4a76c378414060dd",
+      "sha256": "5bc3f1d648c61a5fe1dffaad9e07231330b59d12df1a2791e41d0fb5aab4e148",
+      "subject": "Empty variant of the existing logistics truck.",
+      "prompt": "Remove only the blue-gray rocks from the cargo bin and reveal the empty dark worn olive steel bed with a ridged floor. Keep geometry, orientation, wheels, cab, magenta panels, scale, lighting and transparent background unchanged."
     }
   ]
 }

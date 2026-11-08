@@ -14,11 +14,11 @@ internal sealed class TransportSystem(ITransportWorld world, ITransportMechanic 
     internal bool IsStored(Entity actor) => CarrierOf(actor).Value != 0;
     internal bool HasPassengers(Entity actor) => !Passengers(actor).IsEmpty;
     internal ReadOnlySpan<EntityId> Passengers(Entity actor) => HasStoredActors ? _mechanic.Passengers(actor) : [];
-    internal static bool AllowsPassengerFire(UnitDefinition type) => type.Transport is { FireFromInside: true };
-    internal ReadOnlySpan<EntityId> FiringPassengers(Entity carrier) => HasStoredActors && AllowsPassengerFire(_world.TypeOf(carrier)) ? Passengers(carrier) : [];
+    internal bool AllowsPassengerFire(Entity carrier) => _world.TransportOf(carrier) is { FireFromInside: true };
+    internal ReadOnlySpan<EntityId> FiringPassengers(Entity carrier) => HasStoredActors && AllowsPassengerFire(carrier) ? Passengers(carrier) : [];
 
     private TransportParticipant ParticipantOf(Entity entity)
-        => new(entity, entity.Get<EntityIdentity>().Id, _world.TypeOf(entity), entity.Get<OwnershipState>().Owner);
+        => new(entity, entity.Get<EntityIdentity>().Id, _world.TypeOf(entity), entity.Get<OwnershipState>().Owner, _world.TransportOf(entity));
 
     internal void Initialize(Entity actor, UnitDefinition type) => _mechanic.Initialize(actor, type);
 

@@ -14,7 +14,7 @@ internal interface IConstructionWorld
     IEnumerable<Entity> Recipients(WorldCommand command);
     bool TryGetEntity(EntityId id, out Entity entity);
     UnitDefinition TypeOf(int type);
-    bool TryGetRecipe(int builderType, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe);
+    bool TryGetRecipe(Entity builder, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe);
     bool IsOnMap(Entity entity);
     GameplayConditions ReadConditions(Entity actor);
 

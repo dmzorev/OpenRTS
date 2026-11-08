@@ -2,7 +2,10 @@ using Frent;
 
 namespace OpenRTS.Core.Transport;
 
-public readonly record struct TransportParticipant(Entity Entity, EntityId Id, UnitDefinition Type, uint Owner);
+public readonly record struct TransportParticipant(Entity Entity, EntityId Id, UnitDefinition Type, uint Owner, TransportDefinition? EffectiveTransport = null)
+{
+    public TransportDefinition? Transport => EffectiveTransport ?? Type.Transport;
+}
 
 /// <summary>World-local boarding policy and cargo storage. The host owns movement, placement, and ownership.</summary>
 public interface ITransportMechanic

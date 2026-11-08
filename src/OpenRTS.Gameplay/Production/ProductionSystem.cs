@@ -128,7 +128,7 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
                 uint owner = actor.Get<OwnershipState>().Owner;
                 var type = types[typeIndex];
                 int p = recipes.FindProduct(typeIndex, command.Action);
-                if (p < 0 || type.Products[p].OnSite || owner == 0 ||
+                if (p < 0 || type.Products[p].OnSite || !world.ProductEnabled(actor, p) || owner == 0 ||
                     world.IsConstructing(actor) || !TryGetProducer(actor, out var state)) continue;
                 int q = QueueIndex(type, type.Products[p].Queue);
                 int size = state.Queues[q].Count;
@@ -195,7 +195,7 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
     {
         foreach (var actor in recipients)
         {
-            if (!TryGetProducer(actor, out var producer)) continue;
+            if (world.IsUpgrading(actor) || !TryGetProducer(actor, out var producer)) continue;
             var identity = actor.Get<EntityIdentity>();
             var type = types[identity.Type];
             foreach (var tasks in producer.Queues)
@@ -237,7 +237,7 @@ internal sealed class ProductionSystem(IProductionWorld world, UnitDefinition[] 
         foreach (var id in ProducerOrder(storage))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!world.TryGetEntity(id, out var actor) || world.IsConstructing(actor)) continue;
+            if (!world.TryGetEntity(id, out var actor) || world.IsConstructing(actor) || world.IsUpgrading(actor)) continue;
             int typeIndex = actor.Get<EntityIdentity>().Type;
             var type = types[typeIndex];
             var producer = actor.Get<ProducerState>();

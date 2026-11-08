@@ -166,7 +166,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
 
     private string[] AssignedSlots() => _starts.Select(row => CurrentMap.Slots[row.Selected]).ToArray();
 
-    private bool CanUseOpponent => CurrentMap.Id == "sandbox-skirmish" && _modeChoices[_modes.Selected].Set.Id == "construction" && PlayerCount == 2;
+    private bool CanUseOpponent => CurrentMap.Id == "sandbox-skirmish" && _modeChoices[_modes.Selected].Set.Id == "supply" && PlayerCount == 2;
 
     private void UpdateOpponent()
     {

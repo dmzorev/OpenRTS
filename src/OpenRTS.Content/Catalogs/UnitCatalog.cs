@@ -31,7 +31,7 @@ public sealed partial class UnitCatalog
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write(11); // Canonical definition format version, independent of YAML formatting.
+            writer.Write(12); // Canonical definition format version, independent of YAML formatting.
             writer.Write(locomotion?.Terrains.Count ?? 0);
             if (locomotion is not null) foreach (var terrain in locomotion.Terrains) writer.Write(terrain);
             writer.Write(units.Length);
@@ -57,6 +57,7 @@ public sealed partial class UnitCatalog
             .Register<FootprintOptions>("Footprint", (_, _, options) => options)
             .Register<ArmamentOptions>("Armaments", (_, _, options) => options)
             .Register<BuildOptions>("Buildable", (_, _, options) => options)
+            .Register<UpgradesOptions>("Upgrades", (_, _, options) => options)
             .Register<SupplyOptions>("Supply", (_, _, options) => options)
             .Register<BuilderOptions>("Builder", (_, _, options) => options)
             .Register<QueueOptions>("TaskQueues", (_, _, options) => options)
@@ -108,7 +109,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile());
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)));
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons));
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -148,6 +149,25 @@ public sealed partial class UnitCatalog
         public string LowPowerState { get; set; } = "lowpower";
         public bool DisableWeapons { get; set; } = true;
         public EconomyDefinition Compile() => new(Energy, Income, Interval, LowPowerState, DisableWeapons);
+    }
+    private sealed class UpgradesOptions
+    {
+        public Dictionary<string, UpgradeOptions> Variants { get; set; } = new();
+    }
+    private sealed class UpgradeOptions
+    {
+        public int Cost { get; set; }
+        public int Ticks { get; set; }
+        public bool Support { get; set; }
+        public bool Default { get; set; }
+        public bool ClaimNeutral { get; set; }
+        public bool ReplaceWeapons { get; set; }
+        public string[] Mounts { get; set; } = [];
+        public string[] Products { get; set; } = [];
+        public int? Seats { get; set; }
+        public bool? PassengerFire { get; set; }
+        public UpgradeDefinition Compile(string id) => new(id, Cost, Ticks, Support, Default, ClaimNeutral,
+            ReplaceWeapons, Mounts, Products, Seats, PassengerFire);
     }
     private sealed class SupplyOptions
     {

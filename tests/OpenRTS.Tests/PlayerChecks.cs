@@ -226,8 +226,8 @@ internal static class PlayerChecks
                 if (tick % 100 == 0) NavigationChecks.Check(a.Report() == b.Report(), "Skirmish differs by workers");
             }
             var poses = Poses(a);
-            NavigationChecks.Check(poses.Single(p => p.Id.Value == 7).Presentation.Owner == 1 && poses.Single(p => p.Id.Value == 8).Presentation.Owner == 2, "Engineers did not reach and capture distant resources");
-            NavigationChecks.Check(a.Count == 14 && Player(a, 1).Credits > 4000 && Player(a, 2).Credits > 5000 && Player(a, 1).Energy == 80, "Skirmish production/income/power did not complete");
+            NavigationChecks.Check(poses.Single(p => p.Id.Value == 9).Presentation.Owner == 1 && poses.Single(p => p.Id.Value == 10).Presentation.Owner == 2, "Engineers did not reach and capture distant resources");
+            NavigationChecks.Check(a.Count == 16 && Player(a, 1).Credits > 4000 && Player(a, 2).Credits > 5000 && Player(a, 1).Energy == 80, "Skirmish production/income/power did not complete");
         });
         test("Players: content rejects invalid capture, economy and neutralization definitions", () =>
         {

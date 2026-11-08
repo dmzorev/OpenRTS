@@ -2,6 +2,6 @@ version: 1
 id: infantry
 credits: 5000
 units:
-  - { type: crane, offset: [0, 0] }
+  - { type: crane, offset: [0, 512] }
   - { type: rifleman, offset: [3584, 3072] }
   - { type: rocketeer, offset: [4608, 3072] }

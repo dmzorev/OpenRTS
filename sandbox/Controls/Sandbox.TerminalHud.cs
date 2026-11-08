@@ -349,12 +349,15 @@ public partial class Sandbox
     {
         var bars = _rtsOverlay!.HealthBars;
         bars.Clear();
+        var upgrades = _rtsOverlay.UpgradeBars;
+        upgrades.Clear();
         for (int i = 0; i < _displayCount; i++)
         {
             var pose = _displayPoses[i];
             var type = _catalog!.Units[pose.UnitType];
             bool selected = _selection.Contains(pose.Id);
-            if (!selected && !_allHealth && pose.Health >= type.MaxHealth) continue;
+            bool showHealth = selected || _allHealth || pose.Health < type.MaxHealth;
+            if (!showHealth && !pose.Upgrade.Active) continue;
             float x = Mathf.Lerp(pose.Previous.X, pose.Current.X, alpha) / 1024;
             float z = Mathf.Lerp(pose.Previous.Y, pose.Current.Y, alpha) / 1024;
             float y = Mathf.Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha) / 1024;
@@ -362,7 +365,10 @@ public partial class Sandbox
             var point = _camera!.UnprojectPosition(new(x, y, z - depth));
             float width = type.Footprint is null ? 26 : 44;
             var rect = new Rect2(point.X - width / 2, point.Y - 10, width, 5);
-            if (field.Encloses(rect)) bars.Add((rect, Mathf.Clamp(pose.Health / (float)type.MaxHealth, 0, 1)));
+            if (showHealth && field.Encloses(rect)) bars.Add((rect, Mathf.Clamp(pose.Health / (float)type.MaxHealth, 0, 1)));
+            if (!pose.Upgrade.Active) continue;
+            if (showHealth) rect.Position += new Vector2(0, -6);
+            if (field.Encloses(rect)) upgrades.Add((rect, pose.Upgrade.Work / (float)pose.Upgrade.Required));
         }
     }
 }

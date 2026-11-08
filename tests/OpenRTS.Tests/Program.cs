@@ -64,6 +64,7 @@ CombatPresentationChecks.Run(Test);
 EcsNavigationIntegrationChecks.Run(Test);
 PlayerChecks.Run(Test);
 SupplyChecks.Run(Test);
+UpgradeChecks.Run(Test);
 MapChecks.Run(Test);
 SkirmishAiChecks.Run(Test);
 CaptureMechanicChecks.Run(Test);

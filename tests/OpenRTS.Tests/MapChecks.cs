@@ -31,7 +31,7 @@ internal static class MapChecks
             using var first = map.Prepare(players, standard).CreateWorld();
             using var second = map.Prepare(players, alternate).CreateWorld(4);
             using var third = map.Prepare(players.Reverse().ToDictionary(), alternate).CreateWorld(1);
-            NavigationChecks.Check(first.Count == 12 && second.Count == 14 && second.Report() == third.Report(), "Starting set or dictionary order changed match setup");
+            NavigationChecks.Check(first.Count == 14 && second.Count == 14 && Poses(first).Count(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck) == 2 && second.Report() == third.Report(), "Starting set or dictionary order changed match setup");
             var poses = Poses(second).OrderBy(p => p.Id.Value).ToArray();
             NavigationChecks.Check(poses[0].Presentation.Owner == 17 && poses[3].Presentation.Owner == 23 &&
                 poses[4].Current == new WorldPosition(64512, 41984), "Slots or reversed offsets were resolved incorrectly");
@@ -44,7 +44,7 @@ internal static class MapChecks
                 CheckCityStarts(map);
                 using var solo = MapScenario.Prepare(map, StartingSet.Load(Read(MapScenario.DefaultStartSet)), [map.Slots[^1]]).CreateWorld();
                 var poses = Poses(solo);
-                NavigationChecks.Check(solo.PlayerCount == 2 && poses.Count(p => p.Presentation.Owner == 1) == 2 &&
+                NavigationChecks.Check(solo.PlayerCount == 2 && poses.Count(p => p.Presentation.Owner == 1) == 3 &&
                     poses.Any(p => p.Presentation.Owner == 1 && p.Current == map.StartPosition(map.Slots[^1])),
                     "An unassigned start spawned a player or the assigned start moved.");
                 NavigationChecks.Check(poses.Any(p => p.Presentation.Owner == 0 && catalog.Units[p.UnitType].Id.StartsWith("civilian-", StringComparison.Ordinal)),

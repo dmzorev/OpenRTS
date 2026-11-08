@@ -34,35 +34,48 @@ rocketeer:
       main: { Weapon: missile }
   Presentation: { Model: infantry-rocket, Name: Пехотинец с ракетницей }
 
-apc-mg:
+^apc:
   Inherits: ^unit
-  Transport: {Accepts: [infantry], Slots: 6, FireFromInside: true, UnloadDistance: 768}
+  Transport: {Accepts: [infantry], Slots: 6, UnloadDistance: 768}
+  Movement: {Locomotor: amphibious}
+  Health: {HP: 250, Armor: Mechanical}
+  Presentation: {States: [damaged, swimming]}
+
+apc-mg:
+  Inherits: ^apc
   Armaments:
     Mounts:
-      main: { Weapon: rifle, FireWhileMoving: true }
-  Movement: { Locomotor: amphibious }
-  Health: { HP: 250, Armor: Mechanical }
+      main: {Weapon: rifle, FireWhileMoving: true}
+      option-rocket: {Weapon: missile, FireWhileMoving: true}
+      option-cannon: {Weapon: cannon}
+  Upgrades:
+    Variants:
+      rockets: {Cost: 200, Ticks: 90, Support: true, ReplaceWeapons: true, Mounts: [option-rocket]}
+      cannon: {Cost: 250, Ticks: 110, Support: true, ReplaceWeapons: true, Mounts: [option-cannon]}
+      firing-ports: {Cost: 125, Ticks: 75, Support: true, PassengerFire: true}
   Presentation:
-    Model: apc-machinegun
-    States: [damaged, swimming]
+    Model: apc-upgradable
+    Animations: [idle, move, fire, construct]
+    States: [damaged, swimming, rockets, cannon, firing-ports]
     Name: БТР · пулемёт
 
 apc-rocket:
-  Inherits: apc-mg
+  Inherits: ^apc
+  Transport: {FireFromInside: true}
   Armaments:
     Mounts:
-      main: { Weapon: missile }
-  Presentation: { Model: apc-missiles, Name: БТР · ракеты }
+      main: {Weapon: missile}
+  Presentation: {Model: apc-missiles, Name: БТР · ракеты}
 
 tank:
-  Inherits: apc-mg
+  Inherits: ^apc
   -Transport:
   Armaments:
     Mounts:
-      main: { Weapon: cannon }
-  Movement: { Locomotor: tracked }
-  Health: { HP: 400 }
-  Presentation: { Model: tank, Name: Танк }
+      main: {Weapon: cannon}
+  Movement: {Locomotor: tracked}
+  Health: {HP: 400}
+  Presentation: {Model: tank, Name: Танк}
 
 tank-mixed:
   Inherits: tank

@@ -24,6 +24,8 @@ public sealed partial class SimulationWorld
     bool IProductionWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
     Entity IProductionWorld.GetEntity(EntityId id) => _entityHandles[_indices[id]];
     bool IProductionWorld.IsConstructing(Entity actor) => IsConstructing(actor);
+    bool IProductionWorld.IsUpgrading(Entity actor) => IsUpgrading(actor);
+    bool IProductionWorld.ProductEnabled(Entity actor, int product) => TypeOf(actor).ProductEnabled(product, CompletedUpgrade(actor));
     GameplayConditions IProductionWorld.ReadConditions(UnitDefinition type, uint owner) => ReadConditions(type, owner);
     void IProductionWorld.RebuildMotionIndex() => RebuildMotionIndex();
 

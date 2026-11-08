@@ -60,18 +60,28 @@ factory:
   Actions:
     Definitions:
       apc: { Unit: apc-mg }
-      tank: { Unit: large-tank, Cost: 180, Ticks: 150 }
+      engineer: {Unit: construction-engineer}
+      tank: {Unit: tank, Cost: 180, Ticks: 150}
+      mixed-tank: {Unit: tank-mixed, Cost: 260, Ticks: 175}
       repair: { Mount: repair, AutoCast: true }
   ActionPanel:
     Buttons:
       apc: { Label: БТР, Order: 0 }
-      tank: { Label: Танк, Order: 1 }
-      repair: { Label: Ремонт, Cursor: repair, Order: 2 }
+      engineer: {Label: Инженер, Order: 1}
+      tank: {Label: Танк, Order: 2}
+      mixed-tank: {Label: Пушечно-ракетный танк, Order: 3}
+      repair: {Label: Ремонт, Cursor: repair, Order: 4}
   Footprint: { Rows: ["#####", "###==", "###==", "###++"] }
   Armaments:
     Mounts:
       repair: { Weapon: factory-repair, Animation: produce }
-  Presentation: { Model: factory, Name: Завод · ремонтная зона }
+  Upgrades:
+    Variants:
+      heavy: {Cost: 600, Ticks: 175, Products: [tank, mixed-tank]}
+  Presentation:
+    Model: upgradable-factory
+    Name: Завод · ремонтная зона
+    States: [damaged, working, destroyed, lowpower, constructing, heavy]
 
 headquarters:
   Inherits: ^building
@@ -118,7 +128,7 @@ supply-truck:
     Buttons:
       harvest: { Label: Добыча, Cursor: harvest }
   Presentation:
-    { Model: supply-truck, Name: Грузовик снабжения, Animations: [idle, move] }
+    { Model: supply-truck, Name: Грузовик снабжения, Animations: [idle, move], States: [damaged, loaded] }
 
 ^structure-recipes:
   Actions:
@@ -126,16 +136,14 @@ supply-truck:
       site-power: { Unit: power-plant, OnSite: true }
       site-barracks: { Unit: barracks, OnSite: true }
       site-factory: { Unit: factory, OnSite: true }
-      site-turret: { Unit: bunker-cannon, OnSite: true }
-      site-mixed: { Unit: bunker-mixed, OnSite: true }
+      site-bunker: { Unit: bunker, OnSite: true }
       site-supply: { Unit: supply-center, OnSite: true }
   ActionPanel:
     Buttons:
       site-power: { Label: Электростанция, Hotkey: E, Order: 2 }
       site-barracks: { Label: Бараки, Hotkey: R, Order: 3 }
       site-factory: { Label: Завод, Hotkey: T, Order: 4 }
-      site-turret: { Label: Пушечная турель, Hotkey: Y, Order: 5 }
-      site-mixed: { Label: Смешанная турель, Hotkey: U, Order: 6 }
+      site-bunker: { Label: Бункер, Hotkey: U, Order: 6 }
       site-supply: { Label: Центр снабжения, Hotkey: I, Order: 7 }
 
 crane:
@@ -162,6 +170,9 @@ mine:
   -Buildable:
   -Capturable:
   Supply: { Role: Mine, Capacity: 300000 }
+  Upgrades:
+    Variants:
+      owned: {Cost: 900, Ticks: 150, Support: true, Default: true, ClaimNeutral: true}
   Health: { Destruction: Neutralize }
   Economy: { Energy: 0 }
   Footprint: { Rows: ["###", "###", "#+#", "#+#"] }
@@ -171,6 +182,28 @@ mine:
       Name: Шахта,
       States: [damaged, working, destroyed, lowpower, constructing, owned],
     }
+
+bunker:
+  Inherits: ^building
+  Buildable: {Ticks: 100, Cost: 400}
+  Economy: {Energy: 0}
+  Transport: {Accepts: [infantry], Slots: 4, FireFromInside: true}
+  Armaments:
+    Mounts:
+      cannon: {Weapon: cannon}
+      machinegun: {Weapon: rifle}
+      missiles: {Weapon: missile}
+  Upgrades:
+    Variants:
+      expanded: {Cost: 250, Ticks: 100, Support: true, Default: true, Seats: 8}
+      cannon: {Cost: 350, Ticks: 125, Support: true, Mounts: [cannon]}
+      mixed: {Cost: 400, Ticks: 140, Support: true, Mounts: [machinegun, missiles]}
+  Footprint: {Rows: ['##', '##']}
+  Presentation:
+    Model: bunker-upgradable
+    Name: Бункер
+    Animations: [idle, construct, produce, fire]
+    States: [damaged, working, destroyed, lowpower, constructing, expanded, cannon, mixed, garrisoned]
 
 oil-derrick:
   Inherits: ^building
@@ -283,10 +316,7 @@ construction-engineer:
   Actions:
     Definitions:
       site-crane: { Unit: crane, OnSite: true }
-      claim-mine: { ClaimMine: true }
   ActionPanel:
     Buttons:
       site-crane: { Label: Кран, Hotkey: O, Order: 9 }
-      claim-mine:
-        { Label: Оборудовать шахту, Hotkey: M, Cursor: build, Order: 10 }
   Presentation: { Name: Инженер }

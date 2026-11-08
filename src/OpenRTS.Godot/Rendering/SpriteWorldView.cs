@@ -137,13 +137,13 @@ public sealed class SpriteWorldView
             var type = _models[project.UnitType].Unit;
             var id = project.Id;
             uint states = 0;
-            if (type.Supply?.Role == SupplyRole.Mine && type.States.Contains("owned"))
+            if (project.Upgrade is { } variant)
             {
-                states = type.StateMask("owned");
+                states = type.StateMask(variant);
                 do { id = new(ghostId--); } while (!_liveIds.Add(id));
             }
             _ghostIds.Add(id);
-            var facing = FacingDirection.North;
+            var facing = project.Facing == default ? FacingDirection.North : project.Facing;
             var presentation = new EntityPresentation(project.Owner, facing, facing, facing, facing,
                 new(type.IdleAnimation, tick, 0), AnimationPlayback.None, states);
             _ordered[at++] = new(id, project.UnitType, project.Position, project.Position, presentation);
@@ -163,6 +163,8 @@ public sealed class SpriteWorldView
             float elevation = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha);
             float body = Angle(view.PreviousBodyFacing, view.BodyFacing, alpha), weapon = Angle(view.PreviousWeaponFacing, view.WeaponFacing, alpha);
             bool ghost = _ghostIds.Contains(pose.Id);
+            if (ghost && model.Unit.Footprint is null) depth += 0.015f;
+            int construct = pose.Upgrade.Active ? model.Unit.AnimationIndex("construct") : -1;
             Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : Colors.White;
             float scale = 1, stateFlash = 0;
             for (int state = 0; state < model.States.Length; state++) if ((view.States & (1u << state)) != 0)
@@ -183,18 +185,18 @@ public sealed class SpriteWorldView
                 Vector2 mount = part.Parent < 0 ? origin : pivots[part.Parent];
                 mount += Rotate(new((float)part.OffsetX * scale, (float)part.OffsetY * scale), part.Parent < 0 ? body : angles[part.Parent]);
                 angles[p] = angle;
-                var playback = view.Body;
+                var playback = construct >= 0 ? new AnimationPlayback(construct, tick - pose.Upgrade.Work + 1, pose.Upgrade.Required) : view.Body;
                 int animation = playback.Animation;
                 if (animation < 0 || animation >= runtime.Sequences.Length || runtime.Sequences[animation] is null)
                 { animation = model.Unit.IdleAnimation; playback = new(animation, 0, 0); }
                 if (runtime.LoopAnimation >= 0 && (view.States & runtime.LoopWhen) != 0 && runtime.Sequences[runtime.LoopAnimation] is not null && (animation == model.Unit.IdleAnimation || animation == model.Unit.MoveAnimation))
                 { animation = runtime.LoopAnimation; playback = new(animation, 0, 0); }
-                if (view.Weapon.Animation >= 0 && view.Weapon.Animation < runtime.Sequences.Length &&
+                if (construct < 0 && view.Weapon.Animation >= 0 && view.Weapon.Animation < runtime.Sequences.Length &&
                     view.Weapon.IsActive(tick) && runtime.Sequences[view.Weapon.Animation] is not null)
                 { playback = view.Weapon; animation = playback.Animation; }
                 float extraFlash = 0, extraRecoil = 0;
                 // shortcut: a shared part has one base clip; use rig mixing for layered skeletal animation.
-                if (pose.WeaponCount > 0 && pose.WeaponOffset + pose.WeaponCount <= weapons.Length)
+                if (construct < 0 && pose.WeaponCount > 0 && pose.WeaponOffset + pose.WeaponCount <= weapons.Length)
                     foreach (var channel in weapons.Slice(pose.WeaponOffset, pose.WeaponCount))
                     {
                         var clip = channel.Animation;

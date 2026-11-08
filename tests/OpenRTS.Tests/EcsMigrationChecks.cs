@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Rebased for supply state in frame poses and the new skirmish building and production content.
+    // Rebased for the upgrade state and the APC, bunker and factory capability definitions.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "5FFFFEBC309F1BF9A49738880F3AA4E07D1C1A0E0546A7103EBFC6462DA9AE32",
-        ["navigation"] = "22AC8D239C505915827BF9A15939BFB6190AA3DCF6632886DD14647A13EA5E8E",
-        ["combat"] = "06E77A5442272575F5EE71E049CBF1DD8EF62230DEEA12985BFB5AB92E69C182",
-        ["buildings"] = "3853E82F5ADD895E8DDD51B27CD64A213CEFE0462F785AB669AF7A203A278EC2",
-        ["production"] = "AAE6232D73CABD180775C332EEE3EDE4FCB89A446D73D52854D9741CDF70362D"
+        ["direct"] = "CCF73FF995FC0211C5159FC97A8732A33E5A4EA22530AE64FB24201A2B785AA2",
+        ["navigation"] = "89AEF906B2C7E476D0933C2D7A594BC38F1799DAE18542FA2F28425B19588127",
+        ["combat"] = "310671BC83EFD4B9C5B17FD0B64D97C654C58803665A53D731123169A52FFC6C",
+        ["buildings"] = "B3158566E138243B5CB078D111C504E184142AE0DA547D94024C793366992805",
+        ["production"] = "B4A3841820C9B94B591ED147DF06BE5083CA21C5B3AF5DF30CE9DF49A21FCA10"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

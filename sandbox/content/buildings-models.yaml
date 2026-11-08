@@ -460,12 +460,79 @@ crane:
 supply-truck:
   Inherits: ^sprite
   Model:
+    States:
+      loaded: {}
+    Parts:
+      empty: {Resource: res://resources/units/supply-truck-empty.tres, Size: [1.12, 2.18], HiddenWhen: [loaded]}
+      loaded: {Resource: res://resources/units/supply-truck.tres, Size: [1.12, 2.18], VisibleWhen: [loaded]}
+    Animations:
+      idle: {Sequence: stand, Parts: [empty, loaded]}
+      move: {Sequence: travel, Parts: [empty, loaded]}
+
+upgradable-factory:
+  Inherits: factory
+  Model:
+    States:
+      heavy: {}
+    Parts:
+      heavy:
+        Parent: body
+        Resource: res://resources/buildings/crane.tres
+        Size: [2.3, 2.35]
+        Offset: [-1.2, -0.65]
+        Layer: 2
+        VisibleWhen: [heavy]
+        HiddenWhen: [destroyed]
+    Animations:
+      idle: {Sequence: stand, Parts: [body, ruins, workfx, door, heavy]}
+      construct: {Sequence: stand, Parts: [body, heavy], ScaleFrom: 0.92, OpacityFrom: 0.25}
+
+bunker-upgradable:
+  Inherits: ^building-model
+  Model:
+    States:
+      expanded: {}
+      cannon: {}
+      mixed: {}
+      garrisoned: {Pulse: 0.08}
     Parts:
       body:
-        {
-          Resource: res://resources/units/supply-truck.tres,
-          Size: [1.12, 2.18],
-        }
+        Resource: res://resources/units/bunker-base.tres
+        Size: [2.6, 2.6]
+        HiddenWhen: [destroyed, expanded]
+      expanded:
+        Resource: res://resources/units/bunker-base.tres
+        Size: [3.4, 3.1]
+        VisibleWhen: [expanded]
+        HiddenWhen: [destroyed]
+      cannon:
+        Facing: Weapon
+        Mount: cannon
+        Resource: res://resources/units/tank-turret.tres
+        Size: [1.7, 1.7]
+        Pivot: [0.5, 0.73]
+        Layer: 1
+        VisibleWhen: [cannon]
+        HiddenWhen: [destroyed]
+      machinegun:
+        Facing: Weapon
+        Mount: machinegun
+        Resource: res://resources/units/apc-mg-turret.tres
+        Size: [1.1, 1.1]
+        Offset: [-0.37, 0]
+        Layer: 1
+        VisibleWhen: [mixed]
+        HiddenWhen: [destroyed]
+      missiles:
+        Facing: Weapon
+        Mount: missiles
+        Resource: res://resources/units/apc-rocket-turret.tres
+        Size: [1.1, 1.1]
+        Offset: [0.37, 0]
+        Layer: 1
+        VisibleWhen: [mixed]
+        HiddenWhen: [destroyed]
     Animations:
-      idle: { Sequence: stand, Parts: [body] }
-      move: { Sequence: travel, Parts: [body] }
+      idle: {Sequence: stand, Parts: [body, expanded, ruins, workfx, cannon, machinegun, missiles]}
+      construct: {Sequence: stand, Parts: [body, expanded, cannon, machinegun, missiles], ScaleFrom: 0.86, OpacityFrom: 0.28}
+      fire: {Sequence: shoot, Parts: [cannon, machinegun, missiles], Flash: 0.32}

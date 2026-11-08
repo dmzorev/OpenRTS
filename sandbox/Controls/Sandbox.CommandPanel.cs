@@ -90,7 +90,7 @@ public partial class Sandbox
         if (_typeRow is null || _customRow is null) return;
         _sitePlacement = null;
         _panelDirty = true; _activeRecipients = Controlled().Where(id => _selectionPoses[id].UnitType == _activeType).ToArray();
-        ClearChildren(_typeRow); ClearChildren(_customRow); if (_tasksRow is not null) ClearChildren(_tasksRow); if (_taskScroll is not null) _taskScroll.Visible = false; _customButtons.Clear(); _cooldowns.Clear(); _taskSignature = "";
+        ClearChildren(_typeRow); ClearChildren(_customRow); if (_tasksRow is not null) ClearChildren(_tasksRow); if (_taskScroll is not null) _taskScroll.Visible = false; _customButtons.Clear(); _upgradeButtons.Clear(); _cooldowns.Clear(); _taskSignature = "";
         foreach (int type in _panelTypes)
         {
             int count = _selection.Ids.ToArray().Count(id => _selectionPoses.TryGetValue(id, out var p) && p.UnitType == type);
@@ -120,6 +120,7 @@ public partial class Sandbox
                 { ActivateCustom(action.Id, click.ButtonIndex == MouseButton.Right, click.ShiftPressed); button.AcceptEvent(); } };
             _customRow.AddChild(button); _customButtons.Add(action.Id, button);
         }
+        if (_catalog.Units[_activeType].Upgrades.Count > 0) AddUpgradeButtons();
     }
     private bool HandleCustomKey(InputEventKey input, Key code)
     {
@@ -156,7 +157,7 @@ public partial class Sandbox
         _armedAction = null; _armedCustom = null; _placing = false; _productionPlacement = null; _sitePlacement = null; _pointerDown = false;
         if (ability is not null)
         {
-            if (right && ability.Kind is AbilityKind.Capture or AbilityKind.ClaimMine) return;
+            if (right && ability.Kind == AbilityKind.Capture) return;
             if (right)
             {
                 bool enabled = !ids.All(e => ability.Kind switch
@@ -172,6 +173,8 @@ public partial class Sandbox
         else
         {
             var product = type.Products.First(p => p.Id == id);
+            ids = ids.Where(e => type.ProductEnabled(id, _selectionPoses[e].Upgrade.Completed)).ToArray();
+            if (ids.Length == 0) return;
             if (product.OnSite)
             {
                 if (!right)
@@ -254,6 +257,7 @@ public partial class Sandbox
             if (!present) { _productionPlacement = null; _placing = false; } }
         if (_activeType < 0 || _tasksRow is null || _catalog is null) return;
         var ids = ActiveRecipients(); var type = _catalog.Units[_activeType];
+        UpdateUpgradeButtons(type, ids);
         foreach (var action in _catalog.Presentations[_activeType].Actions ?? [])
         {
             var button = _customButtons[action.Id]; string status = ""; bool auto = false; double progress = 0;
@@ -281,10 +285,6 @@ public partial class Sandbox
                     auto = ids.Length > 0 && ids.All(id => _selectionPoses[id].Supply.Automatic);
                     button.TooltipText = "Добыча [Q]\nЛКМ — назначить шахту или центр снабжения. ПКМ — переключить автоматическую добычу.";
                 }
-                else if (ability.Kind == AbilityKind.ClaimMine)
-                {
-                    button.TooltipText = $"Оборудовать шахту [{action.Hotkey}] · {SimulationWorld.MineProjectCost} кр.\nЛКМ — разместить проект поверх нейтральной шахты.";
-                }
                 else
                 {
                     var states = ids.Select(id => AbilityPose(id, action.Id)).Where(p => p is not null).Select(p => p!.Value).ToArray();
@@ -309,7 +309,9 @@ public partial class Sandbox
             button.Text = (_terminal is null ? $"{action.Hotkey} · {action.Label}" : action.Hotkey) + status + (auto ? " ↻" : "");
             bool armed = _armedCustom == action.Id || _sitePlacement?.Action == action.Id ||
                 _productionPlacement is { } placementTask && ids.Contains(placementTask.Producer) && type.Products[placementTask.Product].Id == action.Id;
-            button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active); button.Modulate = armed ? ActiveButtonColor : auto ? new(0.55f, 1, 0.65f) : Colors.White;
+            button.Disabled = ids.Length == 0 || ids.All(id => _selectionPoses[id].Construction.Active ||
+                type.Products.Any(p => p.Id == action.Id) && !type.ProductEnabled(action.Id, _selectionPoses[id].Upgrade.Completed));
+            button.Modulate = armed ? ActiveButtonColor : auto ? new(0.55f, 1, 0.65f) : Colors.White;
             _cooldowns[action.Id].Value = Math.Clamp(progress, 0, 100);
         }
         var selected = ids.ToHashSet();

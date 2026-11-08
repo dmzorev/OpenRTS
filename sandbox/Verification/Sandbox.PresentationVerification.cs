@@ -22,8 +22,8 @@ public partial class Sandbox
             if (tick != 12 || apc.Presentation.States != expected || !apc.Presentation.Weapon.IsActive(tick) ||
                 apc.Presentation.Body.Animation != type.MoveAnimation || apc.Presentation.BodyFacing == apc.Presentation.WeaponFacing)
                 throw new InvalidOperationException("Concurrent movement, aim, fire and states were not published.");
-            if (sprites.BatchCount != 17 || sprites.SpriteCount != 32)
-                throw new InvalidOperationException($"Expected seventeen frame batches and thirty-two sprite layers; got {sprites.BatchCount}/{sprites.SpriteCount}.");
+            if (sprites.BatchCount != 18 || sprites.SpriteCount != 32)
+                throw new InvalidOperationException($"Expected eighteen frame batches and thirty-two sprite layers; got {sprites.BatchCount}/{sprites.SpriteCount}.");
             int capacity = sprites.Capacity;
             sprites.Apply(ReadOnlySpan<EntityPose>.Empty, 1, tick, tickRate);
             if (sprites.SpriteCount != 0 || sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Any(n => n.Multimesh.VisibleInstanceCount != 0))
@@ -40,7 +40,7 @@ public partial class Sandbox
                 stress[i] = template with { Id = new((uint)i + 1), Previous = position, Current = position };
             }
             sprites.Apply(stress, 1, tick, tickRate);
-            if (sprites.BatchCount != 17 || sprites.SpriteCount != 16000 || sprites.Node.GetChildCount() != 17)
+            if (sprites.BatchCount != 18 || sprites.SpriteCount != 16000 || sprites.Node.GetChildCount() != 18)
                 throw new InvalidOperationException("Sprite scene size grew with entity count.");
             var savedDisplay = _displayPoses; int savedCount = _displayCount;
             _displayPoses = stress; _displayCount = stress.Length; RefreshSelection();

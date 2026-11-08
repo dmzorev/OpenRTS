@@ -13,6 +13,7 @@ public sealed partial class SimulationWorld
     bool ITransportWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
     Entity ITransportWorld.GetEntity(EntityId id) => _entityHandles[_indices[id]];
     UnitDefinition ITransportWorld.TypeOf(Entity entity) => TypeOf(entity);
+    TransportDefinition? ITransportWorld.TransportOf(Entity entity) => TypeOf(entity).TransportFor(CompletedUpgrade(entity));
     bool ITransportWorld.IsUnderConstruction(Entity entity) => (ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0;
 
     void ITransportWorld.IssueOrder(EntityId actor, UnitOrder order, bool queued) => IssueOrder(_indices[actor], order, queued);

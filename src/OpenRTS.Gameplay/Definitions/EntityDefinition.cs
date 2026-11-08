@@ -16,10 +16,11 @@ public sealed record EntityDefinition
     public TransportDefinition? Transport { get; }
     public int ConstructionRange { get; }
     public SupplyDefinition? Supply { get; }
+    public IReadOnlyList<UpgradeDefinition> Upgrades { get; }
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null, IEnumerable<UpgradeDefinition>? upgrades = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         if (constructionRange is < 0 or > WorldPosition.MaximumExtent ||
@@ -34,9 +35,23 @@ public sealed record EntityDefinition
                 spatial.Footprint is null) ||
             supply.Role == SupplyRole.Mine && (capturable is not null || health.Destruction != DestructionPolicy.Neutralize)))
             throw new ArgumentException("Invalid spatial, capture or health capability for supply.");
-        if (armament?.Abilities.Any(a => a.Kind == AbilityKind.Harvest) == true && supply?.Role != SupplyRole.Truck ||
-            armament?.Abilities.Any(a => a.Kind == AbilityKind.ClaimMine) == true && constructionRange == 0)
-            throw new ArgumentException("Supply abilities require the corresponding supply or construction capability.");
+        if (armament?.Abilities.Any(a => a.Kind == AbilityKind.Harvest) == true && supply?.Role != SupplyRole.Truck)
+            throw new ArgumentException("Harvest requires a supply truck.");
+        var variants = (upgrades ?? []).OrderBy(u => u.Id, StringComparer.Ordinal).ToArray();
+        if (variants.Length > 8 || variants.Select(u => u.Id).Distinct(StringComparer.Ordinal).Count() != variants.Length ||
+            variants.Count(u => u.Default) > 1)
+            throw new ArgumentException("Up to eight unique upgrades and one default are allowed.");
+        foreach (var variant in variants)
+        {
+            if (presentation?.States.Contains(variant.Id) != true ||
+                variant.Mounts.Any(id => armament?.Weapons.Any(w => w.Id == id) != true) ||
+                variant.Products.Any(id => production?.Products.Any(p => p.Id == id) != true) ||
+                (variant.Seats is not null || variant.PassengerFire is not null) && transport is null ||
+                variant.Seats is { } seats && seats < transport!.Slots ||
+                variant.ClaimNeutral && (spatial?.Movable != false || health?.Destruction != DestructionPolicy.Neutralize))
+                throw new ArgumentException("Upgrade requires a declared visual state and compatible capability references.");
+        }
+        Upgrades = Array.AsReadOnly(variants);
         Economy = economy; Capturable = capturable; Passenger = passenger; Transport = transport;
         if (passenger is not null && (spatial is null || !spatial.Movable || spatial.Footprint is not null || health is null || health.Destruction != DestructionPolicy.Destroy || production?.Queues.Count > 0))
             throw new ArgumentException("Passenger requires a movable unit without a footprint or production.");

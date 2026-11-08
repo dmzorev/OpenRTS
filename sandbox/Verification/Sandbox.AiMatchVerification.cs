@@ -41,8 +41,8 @@ public partial class Sandbox
             RefreshSelection();
             CheckSkirmish(Controlled().Length == 0 && !CanIssue(UnitActionKind.Stop) && ActiveRecipients().Length == 0,
                 "Inspecting the AI base allowed player commands.");
-            var ownEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 1 && p.Id != own.Id);
-            var enemyEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 2 && p.Id != enemy.Id);
+            var ownEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 1 && _catalog!.Units[p.UnitType].ConstructionRange > 0);
+            var enemyEngineer = frame.Poses.ToArray().Single(p => p.Presentation.Owner == 2 && _catalog!.Units[p.UnitType].ConstructionRange > 0);
             _selection.Change([ownEngineer.Id], SelectionChange.Replace);
             RefreshSelection();
             ActivateCustom("site-power", false, false);

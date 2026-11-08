@@ -7,7 +7,7 @@ namespace OpenRTS.Samples;
 public static class MapScenario
 {
     public const string DefaultMap = "content/maps/skirmish.yaml";
-    public const string DefaultStartSet = "content/start-sets/construction.yaml";
+    public const string DefaultStartSet = "content/start-sets/supply.yaml";
     public const string InfantryStartSet = "content/start-sets/infantry.yaml";
     public const string CrossroadsMap = "content/maps/crossroads.yaml";
     public const string RiversideMap = "content/maps/riverside-station.yaml";

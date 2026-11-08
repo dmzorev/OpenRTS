@@ -10,6 +10,8 @@ internal interface IProductionWorld
     bool TryGetEntity(EntityId id, out Entity entity);
     Entity GetEntity(EntityId id);
     bool IsConstructing(Entity actor);
+    bool IsUpgrading(Entity actor);
+    bool ProductEnabled(Entity actor, int product);
     GameplayConditions ReadConditions(UnitDefinition type, uint owner);
     void RebuildMotionIndex();
     bool TryFindExitPlacement(int type, WorldPosition origin, int radius, out WorldPosition exit);

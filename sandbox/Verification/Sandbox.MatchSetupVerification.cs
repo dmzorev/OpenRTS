@@ -47,13 +47,14 @@ public partial class Sandbox
             int slot = owner switch { 1 => 1, 2 => 0, _ => 2 };
             var team = poses.Where(p => p.Presentation.Owner == owner).ToArray();
             CheckSkirmish(team.Length == 3 && team.Any(p => _catalog!.Units[p.UnitType].Id == "crane" &&
-                p.Current == map.StartPosition(map.Slots[slot])) && team.Any(p => _catalog!.Units[p.UnitType].Id == "rocketeer"),
+                p.Current.X == map.StartPosition(map.Slots[slot]).X &&
+                Math.Abs(p.Current.Y - map.StartPosition(map.Slots[slot]).Y) == 512) && team.Any(p => _catalog!.Units[p.UnitType].Id == "rocketeer"),
                 "The chosen starting position or mode was ignored.");
         }
         CheckSkirmish(poses.Any(p => p.Presentation.Owner == 0 && _catalog!.Units[p.UnitType].Id == "civilian-station"),
             "The station was not placed as neutral.");
         var selected = Selected() ?? throw new InvalidOperationException("The player's starting unit is not selected.");
-        CheckSkirmish(selected.Presentation.Owner == 1 && selected.Current == map.StartPosition(map.Slots[1]),
+        CheckSkirmish(selected.Id == poses.Single(p => p.Presentation.Owner == 1 && _catalog!.Units[p.UnitType].Id == "crane").Id,
             "The initial selection belongs to a different player after exchanging starts.");
         var focus = GroundPoint(Playfield().GetCenter());
         CheckSkirmish(focus is { } center && Mathf.IsEqualApprox(center.X, selected.Current.X / (float)WorldPosition.UnitsPerCell) &&

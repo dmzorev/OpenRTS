@@ -27,9 +27,14 @@ public sealed partial class SimulationWorld
     private WeaponDefinition? OrderWeapon(int index, bool repair = false, EntityId target = default)
     {
         WeaponDefinition? best = null, compatible = null;
-        var mounts = _types[_entityHandles[index].Get<EntityIdentity>().Type].Weapons;
+        var actor = _entityHandles[index];
+        if (UpgradeImmobilizes(actor)) return null;
+        var type = TypeOf(actor);
+        var mounts = type.Weapons;
+        int enabled = type.EnabledMounts(CompletedUpgrade(actor));
         for (int m = 0; m < mounts.Count; m++)
         {
+            if ((enabled & (1 << m)) == 0) continue;
             var mount = mounts[m];
             if (MountAbility(_entityHandles[index].Get<EntityIdentity>().Type, m) >= 0 && !repair && !_entityHandles[index].Get<CombatState>().Weapons[m].AutoCast) continue;
             if ((mount.Weapon.Effect == WeaponEffect.Repair) != repair) continue;
@@ -39,12 +44,19 @@ public sealed partial class SimulationWorld
         var carrier = _entityHandles[index];
         if (!repair && _transport is { } transport)
             foreach (var id in transport.FiringPassengers(carrier))
-                foreach (var mount in TypeOf(_entityHandles[_indices[id]]).Weapons)
+            {
+                var passenger = _entityHandles[_indices[id]];
+                var passengerType = TypeOf(passenger);
+                int enabledPassengerMounts = passengerType.EnabledMounts(CompletedUpgrade(passenger));
+                for (int m = 0; m < passengerType.Weapons.Count; m++)
                 {
-                    if (!mount.FireFromTransport || mount.Weapon.Effect != WeaponEffect.Damage) continue;
+                    var mount = passengerType.Weapons[m];
+                    if ((enabledPassengerMounts & (1 << m)) == 0 || !mount.FireFromTransport ||
+                        mount.Weapon.Effect != WeaponEffect.Damage) continue;
                     if (best is null || mount.Weapon.Range < best.Range) best = mount.Weapon;
                     if (ValidTarget(index, target, mount.Weapon, out _) && (compatible is null || mount.Weapon.Range < compatible.Range)) compatible = mount.Weapon;
                 }
+            }
         return compatible ?? best;
     }
     private bool InWeaponRange(int index, int target, int range) => InWeaponRange(index, target, range, out _);
@@ -118,7 +130,8 @@ public sealed partial class SimulationWorld
             var carrier = _entityHandles[origin];
             bool stored = origin != i;
             var sourceType = stored ? TypeOf(carrier) : type;
-            if (stored && !TransportSystem.AllowsPassengerFire(sourceType)) continue;
+            if (UpgradeImmobilizes(carrier) || stored && !_transport!.AllowsPassengerFire(carrier)) continue;
+            int enabled = type.EnabledMounts(CompletedUpgrade(entity));
             ref var entitySpatial = ref carrier.Get<SpatialState>();
             ref var entityCombat = ref entity.Get<CombatState>();
             ref var entityPresentation = ref entity.Get<PresentationState>();
@@ -131,7 +144,8 @@ public sealed partial class SimulationWorld
             for (int mountIndex = 0; mountIndex < type.Weapons.Count; mountIndex++)
             {
                 var mount = type.Weapons[mountIndex]; var weapon = mount.Weapon; ref var state = ref entityCombat.Weapons[mountIndex];
-                if (stored && (!mount.FireFromTransport || weapon.Effect != WeaponEffect.Damage)) continue;
+                if ((enabled & (1 << mountIndex)) == 0 ||
+                    stored && (!mount.FireFromTransport || weapon.Effect != WeaponEffect.Damage)) continue;
                 if (!state.Animation.IsActive(Tick)) state.Animation = AnimationPlayback.None;
                 if (weaponsDisabled)
                 { state.Target = state.ChargingTarget = default; state.FireAtTick = 0; entityCombat.WeaponReadyTick = Math.Max(entityCombat.WeaponReadyTick, state.ReadyTick); continue; }

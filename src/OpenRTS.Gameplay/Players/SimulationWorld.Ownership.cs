@@ -16,12 +16,20 @@ public sealed partial class SimulationWorld
         _economy.CopyPlayers(destination, ExistingStorage);
     }
 
-    private void ChangeOwner(int index, uint owner)
+    private void ChangeOwner(int index, uint owner, bool upgradeTransition = false)
     {
         var entity = _entityHandles[index];
         var identity = entity.Get<EntityIdentity>();
         uint previous = entity.Get<OwnershipState>().Owner;
         if (previous == owner) return;
+
+        if (!upgradeTransition && entity.Has<UpgradeState>())
+        {
+            CancelUpgrade(entity, restoreNeutral: false);
+            ref var upgrade = ref entity.Get<UpgradeState>();
+            if (owner == 0 && upgrade.Completed >= 0 && _types[identity.Type].Upgrades[upgrade.Completed].ClaimNeutral)
+                upgrade.Completed = -1;
+        }
 
         _economy.EnsurePlayer(owner);
         _production.CancelForOwnerChange(entity);

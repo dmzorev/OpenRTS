@@ -28,14 +28,14 @@ internal sealed class StandardTransport : ITransportMechanic
     public bool Accepts(TransportParticipant passenger, TransportParticipant carrier)
     {
         var seat = passenger.Type.Passenger!;
-        var cargo = carrier.Type.Transport!;
+        var cargo = carrier.Transport!;
         return seat.Slots <= cargo.Slots && cargo.Accepts.Contains(seat.Type);
     }
 
     public int BoardingRange(TransportParticipant passenger, TransportParticipant carrier) => 512;
 
     public bool HasRoom(TransportParticipant passenger, TransportParticipant carrier) =>
-        carrier.Entity.Get<TransportState>().UsedSlots + passenger.Type.Passenger!.Slots <= carrier.Type.Transport!.Slots;
+        carrier.Entity.Get<TransportState>().UsedSlots + passenger.Type.Passenger!.Slots <= carrier.Transport!.Slots;
 
     public void Board(TransportParticipant passenger, TransportParticipant carrier, bool claimedNeutral)
     {

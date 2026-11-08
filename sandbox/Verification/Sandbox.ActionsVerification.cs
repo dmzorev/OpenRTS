@@ -126,7 +126,34 @@ public partial class Sandbox
             if (_actionsCheck == 9 && tick >= 300)
             {
                 Check(_storedPoses.Count == 0 && _session!.GetCommandLog().Last().Recipients?.Count == 2, "Double click did not unload all selected carriers");
-                GD.Print("OPENRTS_ACTIONS:PASS command panel, production, contextual boarding and multi-transport unload");
+                SelectTypes(3);
+                UpdateCommandPanel(lease);
+                Check(_customButtons["tank"].Disabled && !_upgradeButtons["heavy"].Disabled, "Factory upgrade or locked product is missing");
+                _upgradeButtons["heavy"].EmitSignal(BaseButton.SignalName.Pressed);
+                _actionsCheck = 10; Steps(4); return;
+            }
+            if (_actionsCheck == 10 && tick >= 304)
+            {
+                var factory = poses.Single(p => p.Id.Value == 3);
+                Check(factory.Upgrade is { Project: "heavy", Work: 4 } && _customButtons["tank"].Disabled, "Factory did not show its active upgrade");
+                _actionsCheck = 11; Steps(175); return;
+            }
+            if (_actionsCheck == 11 && tick >= 479)
+            {
+                Check(poses.Single(p => p.Id.Value == 3).Upgrade.Completed == "heavy" &&
+                    !_customButtons["tank"].Disabled && !_customButtons["mixed-tank"].Disabled, "Factory recipes stayed locked");
+                var apc = poses.Single(p => _catalog!.Units[p.UnitType].Id == "medium-apc");
+                SelectTypes(apc.Id.Value);
+                UpdateCommandPanel(lease);
+                Check(!_upgradeButtons["rockets"].Disabled && _upgradeButtons.Count == 4, "Supported APC variants are missing");
+                _upgradeButtons["rockets"].EmitSignal(BaseButton.SignalName.Pressed);
+                _actionsCheck = 12; Steps(270); return;
+            }
+            if (_actionsCheck == 12 && tick >= 749)
+            {
+                var apc = poses.Single(p => _catalog!.Units[p.UnitType].Id == "medium-apc");
+                Check(apc.Upgrade.Completed == "rockets", "An engineer did not complete the selected APC variant");
+                GD.Print("OPENRTS_ACTIONS:PASS command panel, production, factory and APC upgrades, boarding and unload");
                 _verificationDone = true; GetTree().Quit();
             }
         }

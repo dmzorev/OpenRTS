@@ -140,7 +140,7 @@ def main():
         raise RuntimeError("Skirmish player/economy UI failed:\n" + skirmish.stdout + skirmish.stderr)
     solo = report(run(headless + ["--skirmish", "--ticks=1800", "--workers=1"]).stdout, "OPENRTS_SIMULATION:")
     parallel = report(run(headless + ["--skirmish", "--ticks=1800", "--workers=4"]).stdout, "OPENRTS_SIMULATION:")
-    if solo != parallel or solo["EntityCount"] != 14:
+    if solo != parallel or solo["EntityCount"] != 16:
         raise RuntimeError("Skirmish resource/capture/production journal differs by workers")
     print("PASS Players, construction UI, capture cursor, dual-player controls and 1800-tick skirmish journal", flush=True)
 

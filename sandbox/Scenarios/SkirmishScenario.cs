@@ -10,7 +10,7 @@ public static class SkirmishScenario
     [
         new(1, 0, 1, CommandKind.PlanConstruction, new(2), new(22016, 12288), Action: "site-power", Queued: true),
         new(1, 0, 2, CommandKind.PlanConstruction, new(2), new(22528, 19968), Action: "site-barracks", Queued: true),
-        new(1, 0, 3, CommandKind.UseAbility, new(4), TargetEntity: new(8), Action: "capture"),
-        new(1, 0, 4, CommandKind.UseAbility, new(2), TargetEntity: new(7), Action: "capture", Queued: true)
+        new(1, 0, 3, CommandKind.UseAbility, new(5), TargetEntity: new(10), Action: "capture"),
+        new(1, 0, 4, CommandKind.UseAbility, new(2), TargetEntity: new(9), Action: "capture", Queued: true)
     ];
 }

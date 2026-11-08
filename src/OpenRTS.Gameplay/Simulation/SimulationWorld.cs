@@ -156,6 +156,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     protected override void Update(CancellationToken cancellationToken)
     {
         CapturePreviousFacings();
+        PrepareUpgrades();
         UpdateOrders();
         _capture?.EndOrders(Tick);
         EnsureMotionIndex();
@@ -184,6 +185,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             throw new ArgumentException("Commands must have a known kind.", batchArgument);
         if (command.Kind is CommandKind.Move or CommandKind.MoveAll or CommandKind.MoveGroup or CommandKind.Scatter or CommandKind.Spawn or CommandKind.BlockCell or CommandKind.UnblockCell or CommandKind.Aim or CommandKind.AttackMove or CommandKind.MoveSelected or CommandKind.UseAbility or CommandKind.PlaceProduced or CommandKind.SetRally or CommandKind.UnloadAt or CommandKind.PlanConstruction)
             ValidatePosition(command.Position);
+        if (command.Kind == CommandKind.StartUpgrade && command.Action is { Length: > 128 })
+            throw new ArgumentException("Upgrade ID is too long.", batchArgument);
         if (command.Kind is CommandKind.UseAbility or CommandKind.SetAutoCast or CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.PlanConstruction)
             if (string.IsNullOrWhiteSpace(command.Action) || command.Action.Length > 128 || command.Amount < 1 || command.Kind == CommandKind.EnqueueTask && command.Amount > 256 || command.TaskId < 0)
                 throw new ArgumentException("Custom actions require a valid ID, amount and task identity.", batchArgument);
@@ -229,12 +232,13 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             if (type.WeaponDisableVisualMask != 0 && WeaponsDisabled(entityIdentity.Id))
                 states |= type.WeaponDisableVisualMask;
             var rally = ProductionSystem.Project(entity, type, ref states);
+            var upgrade = ReadUpgrade(entity, type, ref states);
             var supply = ReadSupply(entity, type, ref states);
             var capture = _capture?.GetProgress(entity, entityOrders) ?? default;
             destination[i] = new(entityIdentity.Id, entityIdentity.Type, spatial.Previous, spatial.Position,
                 new(entityOwnership.Owner, entityPresentation.PreviousBodyFacing, entityPresentation.BodyFacing, entityPresentation.PreviousWeaponFacing, entityPresentation.WeaponFacing,
                     entityPresentation.BodyAnimation, entityPresentation.WeaponAnimation, states),
-                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind == UnitActionKind.Build ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply);
+                new(entityOrders.ActiveOrder.Kind, entityOrders.OrderPhase, entityMotion.Target, entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is UnitActionKind.Build or UnitActionKind.UpgradeSupport ? entityOrders.ActiveOrder.Target : entityOrders.CombatTarget, entityOrders.PendingOrders?.Count ?? 0, entityCombat.WeaponReadyTick, capture.Progress, capture.Duration), health, weaponOffset, entityCombat.Weapons.Length, entityNavigation.TerrainStranded, rally.HasRally, rally.Rally, carrier, construction, entityOrders.AutoBuild, supply, upgrade);
             weaponOffset += entityCombat.Weapons.Length;
         }
     }
@@ -280,6 +284,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
                 TransportSystem.WriteEntityState(_transport, writer, entity);
                 ConstructionSystem.WriteFoundation(_construction, writer, entity);
                 WriteSupply(writer, entity);
+                WriteUpgrade(writer, entity);
                 if (_navigation is not null)
                 {
                     writer.Write(entityNavigation.GoalCell); writer.Write(entityNavigation.GroupMember); writer.Write(entityNavigation.WaitTicks);
@@ -324,7 +329,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _production.Apply(command, recipients);
             return;
         }
-        if (command.Kind == CommandKind.CancelConstruction && TryCancelMineProject(command)) return;
+        if (command.Kind is CommandKind.StartUpgrade or CommandKind.CancelUpgrade) { ApplyUpgrade(command); return; }
         if (command.Kind is CommandKind.PlanConstruction or CommandKind.BuildSite or CommandKind.CancelConstruction)
         {
             ConstructionSystem.Apply(_construction, this, command);
@@ -413,6 +418,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         _production.BeforeRemove(_entityHandles[index]);
         _construction?.BeforeRemove(_entityHandles[index]);
         RemoveSupply(_entityHandles[index], actor.Get<EntityIdentity>());
+        CancelUpgrade(actor, restoreNeutral: false);
         bool stamped = _footprints.Remove(id);
         _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner));
         _economy.InvalidatePower();
@@ -429,7 +435,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityMotion = ref entity.Get<MotionState>();
-        if (!_types[entityIdentity.Type].Movable && position != entitySpatial.Position)
+        if ((!_types[entityIdentity.Type].Movable || UpgradeImmobilizes(entity)) && position != entitySpatial.Position)
         { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (_navigation is not null)
         {
@@ -481,6 +487,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             _economy.Initialize(state, type.Economy, owner, Tick);
             _capture?.Initialize(state, type);
             if (type.Supply is not null) InitializeSupply(state, id, type);
+            if (type.Upgrades.Count > 0) state.Add(new UpgradeState());
         }
         _economy.InvalidatePower();
         (_motion ?? _combatIndex)?.Add(id, position, type.Body, type.Footprint?.HalfWidth ?? type.Body.HalfWidth, type.Footprint?.HalfHeight ?? type.Body.HalfHeight);

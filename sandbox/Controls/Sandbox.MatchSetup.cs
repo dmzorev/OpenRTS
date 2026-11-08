@@ -26,7 +26,7 @@ public partial class Sandbox
             ];
         (string Title, StartingSet Set)[] modes =
             [
-                ("Строительство · площадка и инженер", Set(MapScenario.DefaultStartSet)),
+                ("Снабжение · центр, инженер и грузовик", Set(MapScenario.DefaultStartSet)),
                 ("Пехотный старт · площадка и два бойца", Set(MapScenario.InfantryStartSet))
             ];
         _matchSetup = new();

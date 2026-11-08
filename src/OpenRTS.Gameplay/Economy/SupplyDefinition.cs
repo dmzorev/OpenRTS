@@ -18,4 +18,4 @@ public sealed record SupplyDefinition
 }
 
 public readonly record struct SupplyPose(int Amount, int Capacity, bool Automatic, EntityId Mine, EntityId Depot,
-    EntityId Station, uint ProjectOwner, int ProjectWork, int ProjectRequired);
+    EntityId Station);

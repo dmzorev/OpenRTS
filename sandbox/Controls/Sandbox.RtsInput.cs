@@ -78,16 +78,16 @@ public partial class Sandbox
     {
         if (ability.Kind == AbilityKind.Capture) return CapturableTarget(target);
         if (ability.Kind == AbilityKind.Build) return Ally(target) && target.Construction.Active;
-        if (ability.Kind == AbilityKind.ClaimMine) return NeutralMine(target);
         if (ability.Kind == AbilityKind.Harvest) return HarvestTarget(target);
         var weapon = type.Weapons.First(m => m.Id == ability.Mount).Weapon;
         return weapon.Effect == WeaponEffect.Repair ? Ally(target) && target.Health < _catalog!.Units[target.UnitType].MaxHealth && weapon.Modifier(_catalog.Units[target.UnitType].Armor) > 0 : Enemy(target);
     }
     private EntityId[] Controlled() => _selection.Snapshot().Where(id => _selectionPoses.TryGetValue(id, out var pose) && Controls(pose.Presentation.Owner)).ToArray();
     private bool HasAttackMount(EntityPose pose, UnitDefinition type) =>
-        type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Damage) ||
-        type.Transport is { FireFromInside: true } && _loadedTransports.Contains(pose.Id) &&
-        _storedPoses.Any(cargo => cargo.Carrier == pose.Id && _catalog!.Units[cargo.UnitType].Weapons.Any(m => m.FireFromTransport && m.Weapon.Effect == WeaponEffect.Damage));
+        !(type.Movable && pose.Upgrade.Active) &&
+        (type.Weapons.Where((m, i) => type.MountEnabled(i, pose.Upgrade.Completed)).Any(m => m.Weapon.Effect == WeaponEffect.Damage) ||
+        type.TransportFor(pose.Upgrade.Completed) is { FireFromInside: true } && _loadedTransports.Contains(pose.Id) &&
+        _storedPoses.Any(cargo => cargo.Carrier == pose.Id && _catalog!.Units[cargo.UnitType].Weapons.Any(m => m.FireFromTransport && m.Weapon.Effect == WeaponEffect.Damage)));
 
     private bool CanIssue(UnitActionKind kind)
     {
@@ -100,7 +100,7 @@ public partial class Sandbox
                 if (!_selectionPoses.TryGetValue(id, out var pose) || !Controls(pose.Presentation.Owner)) { _canControl = false; break; }
                 if (pose.Construction.Active) continue;
                 var type = _catalog.Units[pose.UnitType];
-                _canMove |= type.Movable || type.TaskQueues.Count > 0;
+                _canMove |= type.Movable && !pose.Upgrade.Active || type.TaskQueues.Count > 0;
                 bool damage = HasAttackMount(pose, type);
                 _canAttack |= damage; _canAttackMove |= damage && type.Movable;
                 _canRepair |= type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair);
@@ -143,7 +143,7 @@ public partial class Sandbox
         {
             var type = _catalog!.Units[_selectionPoses[id].UnitType];
             return kind switch {
-                UnitActionKind.Move => type.Movable || type.TaskQueues.Count > 0,
+                UnitActionKind.Move => type.Movable && !_selectionPoses[id].Upgrade.Active || type.TaskQueues.Count > 0,
                 UnitActionKind.AttackMove => type.Movable && HasAttackMount(_selectionPoses[id], type),
                 UnitActionKind.Attack => HasAttackMount(_selectionPoses[id], type),
                 UnitActionKind.Repair => type.Weapons.Any(m => m.Weapon.Effect == WeaponEffect.Repair), _ => true };
@@ -200,7 +200,7 @@ public partial class Sandbox
         if (!CanIssue(UnitActionKind.Stop)) { _notice = "Выберите свои юниты."; return; }
         if (click.AltPressed && Selected() is { } unit)
         { _session!.Submit(CommandKind.Aim, point, unit.Id, targetEntity: picked?.Id ?? default); return; }
-        if (!click.CtrlPressed && picked is { } supply && ContextSupply(supply)) return;
+        if (!click.CtrlPressed && picked is { } supply && (TryContextUpgrade(supply) || ContextSupply(supply))) return;
         if (picked is { } capturable && CapturableTarget(capturable) && ContextCapture(capturable, click.ShiftPressed)) return;
         bool enemy = picked is { } enemyPose && Enemy(enemyPose);
         bool repair = !enemy && picked is { } ally && Ally(ally) && ally.Health < _catalog!.Units[ally.UnitType].MaxHealth && _catalog.Units[ally.UnitType].Armor != ArmorKind.Living && CanIssue(UnitActionKind.Repair) && !click.CtrlPressed;
@@ -348,8 +348,11 @@ public partial class Sandbox
         else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) &&
             !Input.IsPhysicalKeyPressed(Key.Alt) && CommandPoint(_pointer) is { } workPoint)
         {
-            if (Pick(workPoint) is { } supply && ContextSupplyAction(supply) is { } supplyAction)
-                _rtsOverlay.CustomCursor = supplyAction.Kind == AbilityKind.ClaimMine ? "build" : "harvest";
+            if (Pick(workPoint) is { } supply)
+            {
+                if (ContextUpgrade(supply) is not null) _rtsOverlay.CustomCursor = "build";
+                else if (ContextSupplyAction(supply) is not null) _rtsOverlay.CustomCursor = "harvest";
+            }
             var ghost = PickProject(workPoint);
             var site = Pick(workPoint);
             if (ghost is { } plan && BuildersFor(plan.Owner, plan.Position).Length > 0 ||

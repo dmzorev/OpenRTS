@@ -10,6 +10,7 @@ internal interface ITransportWorld
     bool TryGetEntity(EntityId id, out Entity entity);
     Entity GetEntity(EntityId id);
     UnitDefinition TypeOf(Entity entity);
+    TransportDefinition? TransportOf(Entity entity);
     bool IsUnderConstruction(Entity entity);
 
     void IssueOrder(EntityId actor, UnitOrder order, bool queued);

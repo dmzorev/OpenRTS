@@ -83,7 +83,7 @@ internal sealed class ConstructionSystem
             var type = _world.TypeOf(identity.Type);
             uint owner = actor.Get<OwnershipState>().Owner;
             if (owner == 0 || IsFoundation(actor) || command.Queued && !_world.CanQueueOrder(actor)) continue;
-            if (!_world.TryGetRecipe(identity.Type, command.Action, out int target, out var recipe)) continue;
+            if (!_world.TryGetRecipe(actor, command.Action, out int target, out var recipe)) continue;
             if (plan is null)
             {
                 var position = _world.GroundPosition(command.Position);

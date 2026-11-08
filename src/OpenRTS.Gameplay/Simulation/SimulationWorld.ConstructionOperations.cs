@@ -12,10 +12,12 @@ public sealed partial class SimulationWorld
     bool IConstructionWorld.TryGetEntity(EntityId id, out Entity entity) => TryGetEntity(id, out entity);
     UnitDefinition IConstructionWorld.TypeOf(int type) => _types[type];
 
-    bool IConstructionWorld.TryGetRecipe(int builderType, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe)
+    bool IConstructionWorld.TryGetRecipe(Entity builder, string? action, out int target, [NotNullWhen(true)] out BuildDefinition? recipe)
     {
+        int builderType = builder.Get<EntityIdentity>().Type;
         int product = _buildRecipes.FindProduct(builderType, action);
-        if (product >= 0 && _types[builderType].Products[product].OnSite)
+        if (product >= 0 && _types[builderType].Products[product].OnSite &&
+            _types[builderType].ProductEnabled(product, CompletedUpgrade(builder)))
         {
             var resolved = _buildRecipes[builderType, product];
             target = resolved.UnitType;

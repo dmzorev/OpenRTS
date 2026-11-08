@@ -20,16 +20,11 @@ public sealed partial class SimulationWorld
             ref var eOrders = ref e.Get<OrderState>();
             ref var eNavigation = ref e.Get<NavigationAgentState>();
             int ability = AbilityIndex(eIdentity.Type, command.Action);
-            if (ability < 0 || eOwnership.Owner == 0 || (ReadLocalConditions(e) & GameplayConditions.Constructing) != 0) continue;
+            if (ability < 0 || eOwnership.Owner == 0 || UpgradeImmobilizes(e) || (ReadLocalConditions(e) & GameplayConditions.Constructing) != 0) continue;
             var action = _types[eIdentity.Type].Abilities[ability];
             if (action.Kind == AbilityKind.Harvest)
             {
                 issuedOrder |= ApplyHarvest(i, command);
-                continue;
-            }
-            if (action.Kind == AbilityKind.ClaimMine)
-            {
-                if (ApplyMineProject(i, command)) return;
                 continue;
             }
             if (action.Kind == AbilityKind.Build)
@@ -45,7 +40,9 @@ public sealed partial class SimulationWorld
                 issuedOrder |= _capture?.TryApplyAbility(e, action, command) == true;
                 continue;
             }
-            int mount = AbilityMount(eIdentity.Type, ability); ref var state = ref eCombat.Weapons[mount];
+            int mount = AbilityMount(eIdentity.Type, ability);
+            if ((TypeOf(e).EnabledMounts(CompletedUpgrade(e)) & (1 << mount)) == 0) continue;
+            ref var state = ref eCombat.Weapons[mount];
             if (toggling) { state.AutoCast = command.Enabled; continue; }
             var definition = _types[eIdentity.Type].Abilities[ability]; var weapon = _types[eIdentity.Type].Weapons[mount].Weapon;
             if (state.ReadyTick > Tick || state.FireAtTick > 0 || eOrders.HasOrder && eOrders.ActiveOrder.Kind == UnitActionKind.Ability || eNavigation.TerrainStranded) continue;

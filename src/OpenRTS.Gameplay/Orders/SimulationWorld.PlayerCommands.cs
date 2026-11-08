@@ -15,14 +15,14 @@ public sealed partial class SimulationWorld
     private bool CanApplyPlayerCommand(WorldCommand command)
     {
         bool Owns(EntityId id) => TryGetGameplayOwner(id, out uint owner) && owner == command.Issuer;
-        if (command.Kind == CommandKind.CancelConstruction)
+        if (command.Kind is CommandKind.CancelConstruction or CommandKind.CancelUpgrade)
             return command.Recipients is null && command.Owner == command.Issuer && command.TargetEntity != default;
         if (command.Kind is CommandKind.Aim or CommandKind.ClearAim)
             return command.Recipients is null && Owns(command.Entity);
 
         if (command.Kind is not (CommandKind.Move or CommandKind.MoveSelected or CommandKind.MoveGroup or
             CommandKind.AttackMove or CommandKind.AttackTarget or CommandKind.Stop or CommandKind.HoldPosition or
-            CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.UseAbility or CommandKind.SetAutoCast or
+            CommandKind.StartUpgrade or CommandKind.RepairTarget or CommandKind.CaptureTarget or CommandKind.UseAbility or CommandKind.SetAutoCast or
             CommandKind.EnqueueTask or CommandKind.CancelTasks or CommandKind.PlaceProduced or CommandKind.SetRally or
             CommandKind.Enter or CommandKind.Unload or CommandKind.UnloadAt or CommandKind.PlanConstruction or CommandKind.BuildSite))
             return false;

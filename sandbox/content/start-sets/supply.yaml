@@ -1,6 +1,7 @@
 version: 1
-id: construction
+id: supply
 credits: 5000
 units:
   - { type: supply-center, offset: [0, 0] }
   - { type: construction-engineer, offset: [3584, 3072] }
+  - { type: supply-truck, offset: [4608, 3072] }

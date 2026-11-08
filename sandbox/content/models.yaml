@@ -154,3 +154,41 @@ bunker-mixed:
     Animations:
       idle: {Sequence: stand, Parts: [body, turret, ruins]}
       move: {Sequence: stand, Parts: [body]}
+
+apc-upgradable:
+  Inherits: apc-machinegun
+  Model:
+    States:
+      rockets: {}
+      cannon: {}
+      firing-ports: {}
+    Parts:
+      turret: {HiddenWhen: [rockets, cannon]}
+      rocket:
+        Parent: body
+        Facing: Weapon
+        Mount: option-rocket
+        Resource: res://resources/units/apc-rocket-turret.tres
+        Size: [1.25, 1.25]
+        Layer: 1
+        VisibleWhen: [rockets]
+      cannon:
+        Parent: body
+        Facing: Weapon
+        Mount: option-cannon
+        Resource: res://resources/units/tank-turret.tres
+        Size: [1.45, 1.45]
+        Pivot: [0.5, 0.73]
+        Layer: 1
+        VisibleWhen: [cannon]
+      ports:
+        Parent: body
+        Resource: res://resources/buildings/work-strip.tres
+        Size: [0.48, 0.48]
+        Offset: [0, 0.43]
+        Layer: 1
+        VisibleWhen: [firing-ports]
+    Animations:
+      idle: {Sequence: stand, Parts: [body, turret, rocket, cannon, ports]}
+      fire: {Sequence: shoot, Parts: [turret, rocket, cannon], Recoil: 0.06, Flash: 0.35}
+      construct: {Sequence: stand, Parts: [body, turret, rocket, cannon, ports], ScaleFrom: 0.85, OpacityFrom: 0.35}

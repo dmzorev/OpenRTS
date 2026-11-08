@@ -27,7 +27,7 @@ public partial class Sandbox
         if (id == carrier.Id || !_selectionPoses.TryGetValue(id, out var pose) || !Controls(pose.Presentation.Owner)) return false;
         var type = _catalog!.Units[carrier.UnitType];
         var passenger = _catalog.Units[pose.UnitType].Passenger;
-        return passenger is not null && type.Transport is { } transport && passenger.Slots <= transport.Slots &&
+        return passenger is not null && type.TransportFor(carrier.Upgrade.Completed) is { } transport && passenger.Slots <= transport.Slots &&
             transport.Accepts.Contains(passenger.Type) && !_loadedTransports.Contains(id) &&
             (carrier.Presentation.Owner == pose.Presentation.Owner || carrier.Presentation.Owner == 0 && !type.Movable);
     }

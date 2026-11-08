@@ -32,8 +32,8 @@ public partial class Sandbox
             foreach (var project in frame.ConstructionProjects)
                 if (project.Owner == _constructionViewer) _visibleProjectBuffer.Add(project);
             foreach (var pose in frame.Poses)
-                if (pose.Supply.ProjectOwner == _constructionViewer && pose.Supply.ProjectRequired > 0)
-                    _visibleProjectBuffer.Add(new(pose.Id, _constructionViewer, pose.UnitType, pose.Current, false));
+                if (pose.Upgrade.Payer == _constructionViewer && pose.Upgrade is { Active: false, Project: { } variant })
+                    _visibleProjectBuffer.Add(UpgradeGhost(pose, variant, _constructionViewer));
             _visibleProjects = _visibleProjectBuffer.ToArray();
         }
         if (_selection.Count > 0 || !_visibleProjects.Any(p => p.Id == _selectedProject)) _selectedProject = default;
@@ -50,7 +50,12 @@ public partial class Sandbox
     {
         foreach (var project in _visibleProjects)
         {
-            var footprint = _catalog!.Units[project.UnitType].Footprint!;
+            var type = _catalog!.Units[project.UnitType];
+            if (type.Footprint is not { } footprint)
+            {
+                if (ObjectGeometry.WithinRadius(type, project.Position, point, 600)) return project;
+                continue;
+            }
             foreach (var cell in footprint.Cells)
             {
                 var box = footprint.Bounds(cell, project.Position);
@@ -72,7 +77,9 @@ public partial class Sandbox
     private void CancelProject()
     {
         if (_selectedProject.Value == 0) return;
-        _session!.Submit(CommandKind.CancelConstruction, owner: _constructionViewer, targetEntity: _selectedProject);
+        var project = _visibleProjects.FirstOrDefault(p => p.Id == _selectedProject);
+        if (project.Upgrade is not null) CancelUpgrade(project.Id, project.Owner);
+        else _session!.Submit(CommandKind.CancelConstruction, owner: _constructionViewer, targetEntity: _selectedProject);
         _selectedProject = default;
         RefreshProjectButton();
     }
@@ -128,7 +135,7 @@ public partial class Sandbox
         if (_armedAction is not null || _armedCustom is not null || click.ButtonIndex != MouseButton.Right || click.CtrlPressed || click.AltPressed) return false;
 
         var project = PickProject(point);
-        if (project is { } plan && _catalog!.Units[plan.UnitType].Supply?.Role != SupplyRole.Mine && BuildersFor(plan.Owner, plan.Position) is { Length: > 0 } planners)
+        if (project is { } plan && plan.Upgrade is null && BuildersFor(plan.Owner, plan.Position) is { Length: > 0 } planners)
         {
             _session!.Submit(CommandKind.BuildSite, recipients: new(planners), targetEntity: plan.Id, queued: click.ShiftPressed);
             return true;
@@ -141,10 +148,6 @@ public partial class Sandbox
         return false;
     }
 
-    private bool NeutralMine(EntityPose pose) => pose.Presentation.Owner == 0 &&
-        _catalog!.Units[pose.UnitType].Supply?.Role == SupplyRole.Mine &&
-        pose.Supply.Amount > 0 && pose.Supply.ProjectRequired == 0;
-
     private bool HarvestTarget(EntityPose pose) => _catalog!.Units[pose.UnitType].Supply?.Role switch
     {
         SupplyRole.Mine => pose.Presentation.Owner == 0 || Ally(pose),
@@ -156,8 +159,7 @@ public partial class Sandbox
     {
         if (_activeType < 0 || _activeRecipients.Length == 0) return null;
         return _catalog!.Units[_activeType].Abilities.FirstOrDefault(a =>
-            a.Kind == AbilityKind.Harvest && HarvestTarget(pose) ||
-            a.Kind == AbilityKind.ClaimMine && NeutralMine(pose));
+            a.Kind == AbilityKind.Harvest && HarvestTarget(pose));
     }
 
     private bool ContextSupply(EntityPose target)
@@ -168,20 +170,12 @@ public partial class Sandbox
         return true;
     }
 
-    private ConstructionProjectPose? MinePreview()
-    {
-        if (_activeType < 0 || _activeRecipients.Length == 0 ||
-            _sitePlacement is not null || _placing || _armedAction is not null) return null;
-        var ability = _catalog!.Units[_activeType].Abilities.FirstOrDefault(a => a.Kind == AbilityKind.ClaimMine);
-        if (ability is null || _armedCustom is not null && _armedCustom != ability.Id ||
-            CommandPoint(_pointer) is not { } point || Pick(point) is not { } mine || !NeutralMine(mine)) return null;
-        return new(mine.Id, CommandOwner, mine.UnitType, mine.Current, false);
-    }
-
     private string ConstructionStatus()
     {
         if (Selected() is not { } selected) return "";
         var supply = selected.Supply;
+        var upgrade = selected.Upgrade;
+        string progress = upgrade.Project is { } variant ? $"\n{UpgradeLabel(variant)} · {100 * upgrade.Work / upgrade.Required}%" : "";
         if (_catalog!.Units[selected.UnitType].Supply?.Role == SupplyRole.Truck)
         {
             string phase = !supply.Automatic ? "автодобыча выкл." : selected.Order.Phase switch
@@ -194,12 +188,9 @@ public partial class Sandbox
             return $"\nГруз {supply.Amount}/{supply.Capacity} · {phase}";
         }
         if (_catalog.Units[selected.UnitType].Supply?.Role == SupplyRole.Mine)
-        {
-            var project = supply.ProjectRequired > 0 ? $" · оборудование {100 * supply.ProjectWork / supply.ProjectRequired}%" : "";
-            return $"\nРуда {supply.Amount}/{supply.Capacity}{project}";
-        }
-        if (!selected.Construction.Active) return "";
-        var progress = selected.Construction;
-        return $"\nСтроится · {100.0 * progress.Work / progress.Required:0}%";
+            return $"\nРуда {supply.Amount}/{supply.Capacity}{progress}";
+        if (!selected.Construction.Active) return progress;
+        var construction = selected.Construction;
+        return $"\nСтроится · {100.0 * construction.Work / construction.Required:0}%";
     }
 }

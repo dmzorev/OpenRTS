@@ -8,8 +8,6 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld
 {
     private const int DockRange = 1536;
-    public const int MineProjectCost = 900;
-    public const int MineProjectTicks = 150;
 
     private struct TruckState(bool automatic)
     {
@@ -21,9 +19,7 @@ public sealed partial class SimulationWorld
 
     private struct MineState(int remaining)
     {
-        public int Remaining = remaining, Work;
-        public EntityId Builder;
-        public uint Payer;
+        public int Remaining = remaining;
     }
 
     private readonly SortedSet<uint> _supplyMines = [], _supplyDepots = [];
@@ -52,7 +48,6 @@ public sealed partial class SimulationWorld
         switch (_types[identity.Type].Supply?.Role)
         {
             case SupplyRole.Mine:
-                CancelMineProject(actor);
                 _supplyMines.Remove(identity.Id.Value);
                 break;
             case SupplyRole.Depot:
@@ -105,7 +100,7 @@ public sealed partial class SimulationWorld
         if (returning)
             return TypeOf(station).Supply?.Role == SupplyRole.Depot && stationOwner == owner && !IsConstructing(station);
         return station.Has<MineState>() && (stationOwner == 0 || stationOwner == owner) &&
-            station.Get<MineState>() is { Remaining: > 0, Work: 0 };
+            station.Get<MineState>().Remaining > 0 && !IsUpgrading(station);
     }
 
     private EntityId NearestSupplyStation(Entity actor, uint owner, bool returning)
@@ -118,7 +113,7 @@ public sealed partial class SimulationWorld
         {
             var id = new EntityId(value);
             if (!TrySupplyStation(id, owner, returning, out var station)) continue;
-            long candidate = SupplyDistance(actor, station);
+            long candidate = ActorDistanceSquared(actor, station);
             if (candidate >= distance) continue;
             if (candidate > (long)DockRange * DockRange || !StopAllowed(identity.Type, position))
             {
@@ -133,7 +128,7 @@ public sealed partial class SimulationWorld
         return best;
     }
 
-    private long SupplyDistance(Entity actor, Entity station) =>
+    private long ActorDistanceSquared(Entity actor, Entity station) =>
         ObjectGeometry.DistanceSquared(TypeOf(actor), actor.Get<SpatialState>().Position,
             TypeOf(station), station.Get<SpatialState>().Position, out _, out _);
 
@@ -144,7 +139,7 @@ public sealed partial class SimulationWorld
     private bool CanApproachSupply(int type, WorldPosition from, WorldPosition point) =>
         StopAllowed(type, point) && (_navigation is null || Resolver(type).CanReach(from, point, StepCancellation));
 
-    private void ApproachSupply(int index, Entity station)
+    private void ApproachFootprint(int index, Entity station)
     {
         var actor = _entityHandles[index];
         if (actor.Get<MotionState>().Moving) return;
@@ -165,23 +160,7 @@ public sealed partial class SimulationWorld
                 return;
     }
 
-    private void BeginSupplyOrders()
-    {
-        _supplyDocks.Clear();
-        if (_supplyMines.Count == 0) return;
-        foreach (uint id in _supplyMines)
-        {
-            if (!TryGetEntity(new(id), out var station)) continue;
-            var mine = station.Get<MineState>();
-            if (mine.Builder == default) continue;
-            if (TryGetEntity(mine.Builder, out var builder) && IsOnMap(builder) &&
-                builder.Get<OwnershipState>().Owner == mine.Payer &&
-                !builder.Get<NavigationAgentState>().TerrainStranded &&
-                builder.Get<OrderState>() is { HasOrder: true, ActiveOrder.Kind: UnitActionKind.ClaimMine } orders &&
-                orders.ActiveOrder.Target.Value == id) continue;
-            CancelMineProject(station);
-        }
-    }
+    private void BeginSupplyOrders() => _supplyDocks.Clear();
 
     private void UpdateSupplyOrder(int index)
     {
@@ -216,11 +195,11 @@ public sealed partial class SimulationWorld
                 return;
             }
         }
-        if (SupplyDistance(actor, station) > (long)DockRange * DockRange ||
+        if (ActorDistanceSquared(actor, station) > (long)DockRange * DockRange ||
             !StopAllowed(actor.Get<EntityIdentity>().Type, actor.Get<SpatialState>().Position))
         {
             truck.Arrival = 0;
-            ApproachSupply(index, station);
+            ApproachFootprint(index, station);
             orders.OrderPhase = actor.Get<MotionState>().Moving ? OrderPhase.Approaching : OrderPhase.Waiting;
             return;
         }
@@ -265,100 +244,15 @@ public sealed partial class SimulationWorld
         }
     }
 
-    private bool ApplyMineProject(int index, WorldCommand command)
-    {
-        if (command.Kind != CommandKind.UseAbility || !TryGetEntity(command.TargetEntity, out var station) ||
-            !station.Has<MineState>() || station.Get<OwnershipState>().Owner != 0) return false;
-        var actor = _entityHandles[index];
-        var identity = actor.Get<EntityIdentity>();
-        uint owner = actor.Get<OwnershipState>().Owner;
-        ref var mine = ref station.Get<MineState>();
-        if (mine.Builder != default || mine.Remaining == 0 || actor.Get<NavigationAgentState>().TerrainStranded ||
-            !_types[identity.Type].Movable && !InMineBuildRange(actor, station) ||
-            !_economy.Spend(owner, MineProjectCost)) return false;
-        mine.Builder = identity.Id;
-        mine.Payer = owner;
-        IssueOrder(index, new(UnitActionKind.ClaimMine, default, command.TargetEntity), queued: false);
-        return true;
-    }
-
-    private bool InMineBuildRange(Entity builder, Entity station)
-    {
-        long range = TypeOf(builder).ConstructionRange;
-        return SupplyDistance(builder, station) <= range * range;
-    }
-
-    private void UpdateMineProject(int index)
-    {
-        var actor = _entityHandles[index];
-        ref var orders = ref actor.Get<OrderState>();
-        var target = orders.ActiveOrder.Target;
-        if (!TryGetEntity(target, out var station) || !station.Has<MineState>() ||
-            station.Get<MineState>().Builder != actor.Get<EntityIdentity>().Id)
-        {
-            orders.HasOrder = false;
-            orders.OrderPhase = OrderPhase.Idle;
-            Halt(index);
-            return;
-        }
-        if (!InMineBuildRange(actor, station) || TypeOf(actor).Movable &&
-            !StopAllowed(actor.Get<EntityIdentity>().Type, actor.Get<SpatialState>().Position))
-        {
-            ApproachSupply(index, station);
-            orders.OrderPhase = OrderPhase.Approaching;
-            return;
-        }
-        Halt(index);
-        orders.OrderPhase = OrderPhase.Engaging;
-        ref var mine = ref station.Get<MineState>();
-        if (mine.Work++ == 0)
-            _events.Add(new(Tick, WorldEventKind.ConstructionStarted, target,
-                station.Get<SpatialState>().Position, station.Get<EntityIdentity>().Type, Owner: mine.Payer));
-        if (mine.Work < MineProjectTicks) return;
-        uint owner = mine.Payer;
-        mine.Builder = default;
-        mine.Payer = 0;
-        mine.Work = 0;
-        station.Get<HealthState>().Current = TypeOf(station).MaxHealth;
-        ChangeOwner(_indices[target], owner);
-        _events.Add(new(Tick, WorldEventKind.ConstructionCompleted, target,
-            station.Get<SpatialState>().Position, station.Get<EntityIdentity>().Type, Owner: owner));
-        orders.HasOrder = false;
-        orders.OrderPhase = OrderPhase.Idle;
-    }
-
-    private bool TryCancelMineProject(WorldCommand command)
-    {
-        if (!TryGetEntity(command.TargetEntity, out var station) || !station.Has<MineState>() ||
-            station.Get<MineState>() is not { Builder.Value: > 0 } mine || mine.Payer != command.Owner)
-            return false;
-        CancelMineProject(station);
-        _events.Add(new(Tick, WorldEventKind.ConstructionCancelled, command.TargetEntity, Owner: mine.Payer));
-        return true;
-    }
-
-    private void CancelMineProject(Entity station)
-    {
-        ref var mine = ref station.Get<MineState>();
-        if (mine.Builder == default) return;
-        if (mine.Work == 0) _economy.Credit(mine.Payer, MineProjectCost);
-        mine.Builder = default;
-        mine.Payer = 0;
-        mine.Work = 0;
-    }
-
     private static SupplyPose ReadSupply(Entity actor, UnitDefinition type, ref uint states)
     {
         if (actor.Has<TruckState>())
         {
             var truck = actor.Get<TruckState>();
-            return new(truck.Cargo, type.Supply!.Capacity, truck.Automatic, truck.Mine, truck.Depot, truck.Station, 0, 0, 0);
+            if (truck.Cargo > 0 && type.States.Contains("loaded")) states |= type.StateMask("loaded");
+            return new(truck.Cargo, type.Supply!.Capacity, truck.Automatic, truck.Mine, truck.Depot, truck.Station);
         }
-        if (!actor.Has<MineState>()) return default;
-        var mine = actor.Get<MineState>();
-        if (actor.Get<OwnershipState>().Owner != 0 && type.States.Contains("owned")) states |= type.StateMask("owned");
-        return new(mine.Remaining, type.Supply!.Capacity, false, default, default, default, mine.Payer, mine.Work,
-            mine.Builder == default ? 0 : MineProjectTicks);
+        return actor.Has<MineState>() ? new(actor.Get<MineState>().Remaining, type.Supply!.Capacity, false, default, default, default) : default;
     }
 
     private static void WriteSupply(BinaryWriter writer, Entity actor)
@@ -369,10 +263,6 @@ public sealed partial class SimulationWorld
             writer.Write(truck.Automatic); writer.Write(truck.Returning); writer.Write(truck.Cargo);
             writer.Write(truck.Mine.Value); writer.Write(truck.Depot.Value); writer.Write(truck.Station.Value); writer.Write(truck.Arrival);
         }
-        else if (actor.Has<MineState>())
-        {
-            var mine = actor.Get<MineState>();
-            writer.Write(mine.Remaining); writer.Write(mine.Work); writer.Write(mine.Builder.Value); writer.Write(mine.Payer);
-        }
+        else if (actor.Has<MineState>()) writer.Write(actor.Get<MineState>().Remaining);
     }
 }

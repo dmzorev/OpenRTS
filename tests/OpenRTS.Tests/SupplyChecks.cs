@@ -54,29 +54,38 @@ internal static class SupplyChecks
 
         test("Supply: mine upgrade pauses service on arrival and keeps stock through ownership changes", () =>
         {
-            var engineer = new UnitDefinition("engineer", 100, constructionRange: 1536,
-                abilities: [new("claim", "", Kind: AbilityKind.ClaimMine)]);
+            const int upgradeTicks = 150;
+            var engineer = new UnitDefinition("engineer", 100, constructionRange: 1536);
+            var upgradeableMine = new UnitDefinition("mine", 100, states: ["owned"], movable: false, footprint: Dock,
+                destruction: DestructionPolicy.Neutralize, supply: new(SupplyRole.Mine, 300),
+                upgrades: [new("owned", 900, upgradeTicks, support: true, claimNeutral: true)]);
             var gun = new UnitDefinition("gun", 100, ["idle", "move", "fire"], weapon: new(8192, 8192, 101, 1000, 0));
-            using var world = new SimulationWorld([Truck(1000), Mine(300), engineer, gun], 24000, 16000,
+            using var world = new SimulationWorld([Truck(1000), upgradeableMine, engineer, gun], 24000, 16000,
                 speedPerTick: 512, players: [new(1, "Builder", 2000), new(2, "Rival", 0)]);
             var mine = world.AddInitialUnit(1, new(12288, 8192));
             var builder = world.AddInitialUnit(2, new(4096, 8192), 1);
             var enemy = world.AddInitialUnit(0, new(14336, 8192), 2);
-            world.Step([new(1, 0, 1, CommandKind.UseAbility, builder, TargetEntity: mine, Action: "claim")]);
-            NavigationChecks.Check(Credits(world, 1) == 1100 && Pose(world, mine).Supply is { ProjectOwner: 1, ProjectWork: 0, Amount: 299 },
+            world.Step([new(1, 0, 1, CommandKind.StartUpgrade, builder, TargetEntity: mine)]);
+            NavigationChecks.Check(Credits(world, 1) == 1100 && Pose(world, mine).Upgrade is { Payer: 1, Work: 0 } && Pose(world, mine).Supply.Amount == 299,
                 "The blueprint did not charge immediately or blocked mining before arrival");
-            world.Step([new(2, 0, 1, CommandKind.CancelConstruction, Owner: 1, TargetEntity: mine)]);
-            NavigationChecks.Check(Credits(world, 1) == 2000 && Pose(world, mine).Supply.ProjectRequired == 0, "Cancelling an untouched blueprint did not refund it");
-            world.Step([new(3, 0, 1, CommandKind.UseAbility, builder, TargetEntity: mine, Action: "claim")]);
-            for (int i = 0; i < 60 && Pose(world, mine).Supply.ProjectWork == 0; i++) world.Step();
-            var upgrading = Pose(world, mine).Supply;
-            NavigationChecks.Check(upgrading.ProjectWork > 0 && upgrading.Amount < 298, "Engineer did not approach and start the project");
-            for (int i = 0; i < SimulationWorld.MineProjectTicks; i++) world.Step();
-            NavigationChecks.Check(Pose(world, mine).Presentation.Owner == 1 && Pose(world, mine).Supply.Amount == upgrading.Amount &&
-                Pose(world, enemy).Supply.Amount == 300 - upgrading.Amount, "Upgrade failed, consumed ore or let a rival load");
+            world.Step([new(2, 0, 1, CommandKind.CancelUpgrade, Owner: 1, TargetEntity: mine)]);
+            NavigationChecks.Check(Credits(world, 1) == 2000 && Pose(world, mine).Upgrade.Project is null, "Cancelling an untouched blueprint did not refund it");
+            world.Step([new(3, 0, 1, CommandKind.StartUpgrade, builder, TargetEntity: mine)]);
+            for (int i = 0; i < 60 && Pose(world, mine).Upgrade.Work == 0; i++) world.Step();
+            var upgrading = Pose(world, mine);
+            NavigationChecks.Check(upgrading.Upgrade.Active && upgrading.Presentation.Owner == 1 && upgrading.Supply.Amount < 298,
+                "Engineer did not approach, start and claim the mine");
+            world.Step([new(world.Tick + 1, 0, 1, CommandKind.CancelUpgrade, Owner: 1, TargetEntity: mine)]);
+            NavigationChecks.Check(Credits(world, 1) == 2000 && Pose(world, mine).Presentation.Owner == 0 &&
+                Pose(world, mine).Upgrade.Project is null, "Cancelling work did not refund it and return the mine to neutral");
+            world.Step([new(world.Tick + 1, 0, 1, CommandKind.StartUpgrade, builder, TargetEntity: mine)]);
+            int stock = Pose(world, mine).Supply.Amount;
+            for (int i = 0; i < upgradeTicks; i++) world.Step();
+            NavigationChecks.Check(Pose(world, mine).Upgrade.Completed == "owned" && Pose(world, mine).Supply.Amount == stock &&
+                Pose(world, enemy).Supply.Amount == 300 - stock, "Upgrade failed, consumed ore or let a rival load");
             world.Step([new(world.Tick + 1, 0, 1, CommandKind.Spawn, Position: new(12288, 6144), UnitType: 0, Owner: 1)]);
             int remaining = Pose(world, mine).Supply.Amount;
-            NavigationChecks.Check(remaining == upgrading.Amount - 2, "An owned mine must load twice as fast");
+            NavigationChecks.Check(remaining == stock - 2, "An owned mine must load twice as fast");
             world.Step([
                 new(world.Tick + 1, 0, 1, CommandKind.SetAutoCast, new(4), Action: "harvest", Enabled: false),
                 new(world.Tick + 1, 0, 2, CommandKind.Spawn, Position: new(17408, 8192), UnitType: 3, Owner: 2),
@@ -102,19 +111,23 @@ internal static class SupplyChecks
             {
                 WorldCommand[] commands = i switch
                 {
-                    1 => [new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "truck")],
+                    1 =>
+                    [
+                        new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "truck"),
+                        new(1, 0, 2, CommandKind.SetAutoCast, Recipients: new([new(3), new(6)]), Action: "harvest", Enabled: false)
+                    ],
                     115 =>
                     [
-                        new(115, 0, 1, CommandKind.UseAbility, new(13), TargetEntity: new(5), Action: "harvest"),
-                        new(115, 0, 2, CommandKind.UseAbility, new(13), TargetEntity: new(1), Action: "harvest")
+                        new(115, 0, 1, CommandKind.UseAbility, new(15), TargetEntity: new(7), Action: "harvest"),
+                        new(115, 0, 2, CommandKind.UseAbility, new(15), TargetEntity: new(1), Action: "harvest")
                     ],
                     _ => []
                 };
                 a.Step(commands);
                 b.Step(commands);
             }
-            var truck = Poses(a).Single(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck);
-            NavigationChecks.Check(truck.Supply is { Automatic: true, Mine.Value: 5, Depot.Value: 1 } && Credits(a, 1) > 4650 && Credits(a, 2) == 5000 &&
+            var truck = Poses(a).Single(p => p.Id.Value == 15 && catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck);
+            NavigationChecks.Check(truck.Supply is { Automatic: true, Mine.Value: 7, Depot.Value: 1 } && Credits(a, 1) > 4650 && Credits(a, 2) == 5000 &&
                 Poses(a).Any(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Mine && p.Supply.Amount < p.Supply.Capacity),
                 $"No delivery reached the correct account: {truck.Current}, {truck.Supply}, credits {Credits(a, 1)}");
             NavigationChecks.Check(a.Report() == b.Report(), "Supply differs across navigation workers");
