@@ -99,7 +99,7 @@ try
                         if (definition.Supply?.Role == SupplyRole.Mine && unit.Upgrade.Completed is not null) upgradedMines++;
                         else if (definition.Supply?.Role == SupplyRole.Truck) trucks++;
                         else if (definition.Footprint is not null && unit.Upgrade.Completed is null) completedBuildings++;
-                        else if (profile.Group.Any(member => member.Recipe.ProductType == unit.UnitType)) trained++;
+                        else if (profile.Sergeants.Any(rule => rule.Definition.Members.Any(member => member.Recipe.ProductType == unit.UnitType))) trained++;
                     }
                 }
             });
@@ -108,7 +108,8 @@ try
                 Player = player, Profile = profile.Id, SkirmishAi.PolicyVersion,
                 ProfileFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(profile))),
                 Commands = issued, Attacks = attacks, Buildings = completedBuildings, Trained = trained, Captured = captured,
-                SupplyTrucks = trucks, UpgradedMines = upgradedMines, BuildingCandidates = ai.BuildingCandidatesChecked
+                SupplyTrucks = trucks, UpgradedMines = upgradedMines, BuildingCandidates = ai.BuildingCandidatesChecked,
+                Diagnostics = ai.Diagnostics
             }));
         }
         else if (benchmark)

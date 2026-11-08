@@ -7,11 +7,12 @@ namespace OpenRTS.AI;
 /// <summary>Skirmish policy for an exclusively controlled player. Call once per completed world tick.</summary>
 public sealed class SkirmishAi
 {
-    public const int PolicyVersion = 4;
+    public const int PolicyVersion = 5;
 
     private readonly SkirmishAiProfile _profile;
     private readonly IReadOnlyList<UnitDefinition> _types;
     private readonly BaseConstructionPlanner _baseConstruction;
+    private readonly ArmyPlanner _army;
     private readonly WorldPosition _baseCenter;
     private readonly WorldPosition _rally, _attack;
     private readonly uint _player;
@@ -29,12 +30,6 @@ public sealed class SkirmishAi
     private WorldPosition _mineBuilderPosition;
     private int _mineWork;
     private long _mineProgressAt, _mineRetryAt;
-    private EntityId[] _group = [];
-    private CommandKind _groupCommand;
-    private long _groupLastProgress, _attackRetryAt;
-    private long _attackDistance = long.MaxValue;
-    private long _enemyHealth = long.MaxValue;
-    private bool _assembled;
     private long _lastTick = -1;
     private string _productionStatus = "start";
     private string _diagnostics = "start";
@@ -51,6 +46,7 @@ public sealed class SkirmishAi
         _types = types;
         _baseCenter = baseCenter;
         _baseConstruction = new(player, baseCenter, types, profile.Buildings, profile.Opening, profile.BlockedGoalTicks, siteSearch);
+        _army = new(profile, rally, attack);
         _rally = rally;
         _attack = attack;
     }
@@ -77,16 +73,17 @@ public sealed class SkirmishAi
             world.CopyTaskPoses(_tasks);
             Array.Resize(ref _projects, world.ConstructionProjectCount);
             world.CopyConstructionProjects(_projects);
-            long credits = PlanProduction(world, own);
+            long credits = PlanProduction(world, own, tactics);
             PlanCapture(tick, own);
             PlanMineUpgrade(tick, own, credits);
         }
-        if (tactics) PlanGroup(tick, own);
-        var goal = _groupCommand == CommandKind.AttackMove ? _attack : _rally;
-        string squad = _group.Length == 0 ? "waiting for recruits" : $"{_groupCommand} ({goal.X}, {goal.Y}), {_group.Length} units";
+        else
+            UpdateArmy(world, own, credits: null, tactics);
+        string squads = _army.Status;
+        if (squads.Length == 0) squads = "no active sergeants";
         string capture = _deposit == default ? "idle" : $"deposit {_deposit.Value}, progress {_captureProgress}";
         string logistics = _mine == default ? "" : $" · mine {_mine.Value}, work {_mineWork}";
-        Volatile.Write(ref _diagnostics, $"T{tick} · {_productionStatus} · {squad} · capture {capture}{logistics}");
+        Volatile.Write(ref _diagnostics, $"T{tick} · {_productionStatus} · {squads} · capture {capture}{logistics}");
         return _commands.Select((command, i) => command.WithStamp(tick + 1, _player, i + 1)).ToArray();
     }
 
@@ -113,7 +110,7 @@ public sealed class SkirmishAi
                 if (reachable.Contains(building.Recipe.ProducerType)) reachable.Add(building.Recipe.ProductType);
         } while (reachable.Count > previousCount);
         if (_profile.Buildings.Any(b => !reachable.Contains(b.Recipe.ProducerType)) ||
-            _profile.Group.Any(m => !reachable.Contains(m.Recipe.ProducerType)) ||
+            _profile.Sergeants.SelectMany(rule => rule.Definition.Members).Any(m => !reachable.Contains(m.Recipe.ProducerType)) ||
             _profile.Supply is { } supply && !reachable.Contains(supply.Truck.ProducerType) ||
             _profile.ReplacementEngineer is { } replacement && !reachable.Contains(replacement.ProducerType))
             throw new ArgumentException("AI0 profile requires a producer unreachable from the starting set.", nameof(world));
@@ -124,7 +121,7 @@ public sealed class SkirmishAi
         actor.Order.Phase == OrderPhase.Idle && actor.Order.QueuedCount == 0 && !actor.Upgrade.Active &&
         !_commands.Any(c => c.Entity == actor.Id);
 
-    private long PlanProduction(SimulationWorld world, EntityPose[] own)
+    private long PlanProduction(SimulationWorld world, EntityPose[] own, bool tactics)
     {
         long unpaidTasks = _tasks.Where(t => t.Payer == _player).Sum(t => (long)t.UnpaidCost);
         long credits = _players.First(p => p.Id == _player).Credits - _profile.CreditReserve - unpaidTasks -
@@ -169,10 +166,10 @@ public sealed class SkirmishAi
             _poses.Any(p => (_types[p.UnitType].Supply?.Role == SupplyRole.Mine) && p.Supply.Amount > 0 &&
                 (p.Presentation.Owner == 0 || p.Presentation.Owner == _player)))
             IssueProduction(supply.Truck);
-        foreach (var member in _profile.Group)
-            if (Count(member.Recipe.ProductType) + Pending(member.Recipe.ProductType) < member.Target)
-                IssueProduction(member.Recipe);
-        if (_commands.Count > firstUnitCommand) _productionStatus += $" · {_commands[firstUnitCommand].Action}";
+        UpdateArmy(world, own, credits, tactics);
+        _army.PlanReinforcements(_tasks, own, _player, IssueProduction);
+        if (_commands.Skip(firstUnitCommand).FirstOrDefault(c => c.Kind == CommandKind.EnqueueTask).Action is { } action)
+            _productionStatus += $" · {action}";
         if (unpaidTasks > 0) _productionStatus += $" · reserved for tasks: {unpaidTasks}";
         return credits;
     }
@@ -267,55 +264,11 @@ public sealed class SkirmishAi
         }
     }
 
-    private void PlanGroup(long tick, EntityPose[] own)
+    private void UpdateArmy(SimulationWorld world, EntityPose[] own, long? credits, bool tactics)
     {
-        const long assemblyRadiusSquared = 4096L * 4096;
-        const long defenseRadiusSquared = 12288L * 12288;
-        var members = _profile.Group.SelectMany(member => own.Where(p => p.UnitType == member.Recipe.ProductType)
-            .Take(member.Target)).OrderBy(p => p.Id.Value).ToArray();
-        if (members.Length == 0) { _group = []; _assembled = false; return; }
-
-        bool Enough(Func<EntityPose, bool> predicate) => _profile.Group.All(member => members.Count(
-            p => p.UnitType == member.Recipe.ProductType && predicate(p)) >= member.Minimum);
-        bool Assembled(EntityPose p) => Distance(p.Current, _rally) <= assemblyRadiusSquared;
-        var enemies = _poses.Where(p => p.Presentation.Owner != 0 && p.Presentation.Owner != _player && p.Carrier == default
-            && _types[p.UnitType].Destruction != DestructionPolicy.Invulnerable).ToArray();
-        bool defend = enemies.Any(p => _types[p.UnitType].Weapons.Count > 0 && Distance(p.Current, _rally) <= defenseRadiusSquared);
-        if (!Enough(_ => true) || defend) _assembled = false;
-        else if (Enough(Assembled)) _assembled = true;
-
-        if (_groupCommand == CommandKind.AttackMove)
-        {
-            long distance = members.Min(p => Distance(p.Current, _attack));
-            long health = enemies.Where(p => Distance(p.Current, _attack) <= defenseRadiusSquared).Sum(p => (long)p.Health);
-            if (distance < _attackDistance || health < _enemyHealth)
-            {
-                _attackDistance = Math.Min(_attackDistance, distance);
-                _enemyHealth = Math.Min(_enemyHealth, health);
-                _groupLastProgress = tick;
-            }
-            if (tick - _groupLastProgress >= _profile.BlockedGoalTicks)
-            {
-                _attackRetryAt = tick + _profile.BlockedGoalTicks;
-                _assembled = false;
-            }
-        }
-
-        CommandKind kind = defend && members.All(Assembled) ? CommandKind.HoldPosition :
-            !defend && _assembled && tick >= _attackRetryAt && enemies.Length > 0 ? CommandKind.AttackMove : CommandKind.MoveSelected;
-        // An idle, already assembled group can stay put without a fresh Move.
-        if (kind == CommandKind.MoveSelected && members.All(Assembled)) kind = CommandKind.HoldPosition;
-        var ids = members.Select(p => p.Id).ToArray();
-        if (kind == _groupCommand && ids.SequenceEqual(_group)) return;
-        if (kind == CommandKind.AttackMove && _groupCommand != CommandKind.AttackMove)
-        {
-            _groupLastProgress = tick;
-            _attackDistance = long.MaxValue;
-            _enemyHealth = long.MaxValue;
-        }
-        _group = ids;
-        _groupCommand = kind;
-        _commands.Add(new(0, 0, 0, kind, Position: kind == CommandKind.AttackMove ? _attack : _rally, Recipients: new EntitySet(ids)));
+        var enemies = _poses.Where(p => p.Presentation.Owner != 0 && p.Presentation.Owner != _player && p.Carrier == default &&
+            !p.Construction.Active && _types[p.UnitType].Destruction != DestructionPolicy.Invulnerable).ToArray();
+        _army.Update(world.Tick, world.Width, world.Depth, own, enemies, credits, tactics, _commands);
     }
 
     private static long Distance(WorldPosition a, WorldPosition b)

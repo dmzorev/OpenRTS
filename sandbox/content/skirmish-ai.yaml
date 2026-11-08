@@ -1,18 +1,33 @@
+rifle-section:
+  Strategy: Assault
+  Members:
+    rifleman: {Min: 3, Target: 5, Recipe: {Producer: barracks, Action: rifleman}}
+
+rifle-guard:
+  Strategy: Guard
+  Members:
+    rifleman: {Min: 1, Target: 2, Recipe: {Producer: barracks, Action: rifleman}}
+
+apc-section:
+  Strategy: Assault
+  Members:
+    apc-mg: {Min: 1, Target: 2, Recipe: {Producer: factory, Action: apc}}
+
 infantry-skirmish:
-  Version: 1
+  Version: 2
   Opening: [power-plant, barracks]
   Buildings:
     power-plant: 1
     barracks: 1
   BuildingPriorities: {power-plant: 100, barracks: 50}
-  Group:
-    rifleman: {Min: 3, Target: 5}
+  Sergeants:
+    rifle-section: {Min: 1, Max: 2, Priority: 100, StartCredits: 4200, RetainCredits: 1800, UnderThreatStrategy: Guard}
+    rifle-guard: {Min: 1, Max: 1, Priority: 50, EarliestTick: 900}
   Capture: {Unit: construction-engineer, Action: capture}
   Supply: {Truck: supply-truck, Target: 2, ImproveMines: true}
   Recipes:
     power-plant: {Producer: construction-engineer, Action: site-power}
     barracks: {Producer: construction-engineer, Action: site-barracks}
-    rifleman: {Producer: barracks, Action: rifleman}
     supply-truck: {Producer: supply-center, Action: truck}
     construction-engineer: {Producer: supply-center, Action: engineer}
   CreditReserve: 300
@@ -26,8 +41,9 @@ mechanized-skirmish:
   Buildings:
     factory: 1
   BuildingPriorities: {factory: 25}
-  Group:
-    apc-mg: {Min: 1, Target: 2}
+  Sergeants:
+    apc-section: {Min: 1, Max: 2, Priority: 100, StartCredits: 10000, RetainCredits: 4500, UnderThreatStrategy: Guard}
+    rifle-section: {Max: 1, Priority: 50}
+    rifle-guard: {Min: 0, Priority: 25, EarliestTick: 1500, StartCredits: 3600, RetainCredits: 1400}
   Recipes:
     factory: {Producer: construction-engineer, Action: site-factory}
-    apc-mg: {Producer: factory, Action: apc}

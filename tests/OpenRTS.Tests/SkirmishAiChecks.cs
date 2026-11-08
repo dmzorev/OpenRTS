@@ -1,4 +1,5 @@
 using DeclarativeContent;
+using OpenRTS.AI;
 using OpenRTS.Content;
 using OpenRTS.Core;
 using OpenRTS.Core.Orders;
@@ -14,14 +15,150 @@ internal static class SkirmishAiChecks
         var source = Read("content/skirmish-ai.yaml");
         var profile = SkirmishAiCatalog.Load(source, catalog, SkirmishAiScenario.ProfileId);
 
-        test("AI0 rejects invalid recipes and accepts a changed group size", () =>
+        test("AI2 compiles shared sergeants with profile-specific rules", () =>
         {
             NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(
                 source with { Text = source.Text.Replace("Action: site-barracks", "Action: site-factory") }, catalog, profile.Id));
             NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(
                 source with { Text = source.Text.Replace("Target: 5", "Target: 2") }, catalog, profile.Id));
             var smaller = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Target: 5", "Target: 3") }, catalog, profile.Id);
-            NavigationChecks.Check(smaller.Group.Single().Target == 3, "Group target did not come from YAML.");
+            NavigationChecks.Check(smaller.Sergeants.Single(r => r.Definition.Id == "rifle-section").Definition.Members.Single().Target == 3, "Group target did not come from YAML.");
+            var infantry = profile.Sergeants.Single(r => r.Definition.Id == "rifle-section");
+            var mechanized = SkirmishAiCatalog.Load(source, catalog, SkirmishAiScenario.MechanizedProfileId)
+                .Sergeants.Single(r => r.Definition.Id == "rifle-section");
+            NavigationChecks.Check(infantry.Definition.Members.SequenceEqual(mechanized.Definition.Members) &&
+                infantry.Max > mechanized.Max && infantry.Priority > mechanized.Priority, "The shared roster must have independent general rules.");
+            foreach (var (before, after) in new[]
+            {
+                ("Strategy: Guard", "Strategy: Unknown"),
+                ("rifle-guard: {Min:", "undefined-sergeant: {Min:"),
+                ("Min: 1, Max: 2", "Min: 3, Max: 2"),
+                ("RetainCredits: 1800", "RetainCredits: 4300")
+            })
+                NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(source with { Text = source.Text.Replace(before, after) }, catalog, profile.Id));
+            var legacy = SkirmishAiCatalog.Load(new("legacy.yaml", """
+                legacy:
+                  Version: 1
+                  Buildings: {barracks: 1}
+                  Group: {rifleman: {Min: 3, Target: 5}}
+                  Capture: {Unit: construction-engineer, Action: capture}
+                  Recipes:
+                    barracks: {Producer: construction-engineer, Action: site-barracks}
+                    rifleman: {Producer: barracks, Action: rifleman}
+                """), catalog, "legacy");
+            NavigationChecks.Check(legacy.Sergeants is [{ Min: 1, Max: 1, Definition.Strategy: SergeantStrategy.Assault }],
+                "Version 1 did not compile to a single persistent assault sergeant.");
+        });
+
+        test("AI2 keeps a guard independent and rebuilds a wiped assault group", () =>
+        {
+            const uint player = 1;
+            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Min: 1, Max: 2", "Min: 1, Max: 1")
+                .Replace("Target: 5", "Target: 3").Replace("Target: 2, Recipe: {Producer: barracks", "Target: 1, Recipe: {Producer: barracks")
+                .Replace("EarliestTick: 900", "EarliestTick: 25") }, catalog, profile.Id);
+            var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
+            using var world = map.CreateWorld(4, restrictPlayerCommands: true);
+            int rifle = fixture.Sergeants[0].Definition.Members.Single().Recipe.ProductType;
+            var assault = new[] { world.AddInitialUnit(rifle, new(23552, 18432), player),
+                world.AddInitialUnit(rifle, new(24576, 18432), player), world.AddInitialUnit(rifle, new(25600, 18432), player) };
+            var guard = world.AddInitialUnit(rifle, new(24064, 12288), player);
+            var ai = new SkirmishAi(player, fixture, catalog.Units, map.Map.StartPosition("blue"), new(24064, 18432), new(64000, 18432));
+            var opening = ai.Plan(world);
+            NavigationChecks.Check(opening.Single(c => c.Kind == CommandKind.AttackMove).Recipients!.Ids.SequenceEqual(assault) &&
+                !opening.Any(c => c.Recipients is { } group && group.Ids.Contains(guard)), "The guard activated before its configured tick.");
+            world.Step(opening);
+            SkirmishAiScenario.Run(world, ai, 26);
+            NavigationChecks.Check(world.AppliedCommands.ToArray().Any(c => c.Kind == CommandKind.HoldPosition && c.Recipients is { Count: 1 } group &&
+                group.Ids[0] == guard), "The new guard did not keep its own orders.");
+            world.Step([.. assault.Select((id, i) => new WorldCommand(27, 0, i + 1, CommandKind.Destroy, id)), .. ai.Plan(world)]);
+            bool empty = false, ordered = false, rebuilt = false;
+            SkirmishAiScenario.Run(world, ai, 850, state =>
+            {
+                empty |= ai.Diagnostics.Contains("rifle-section#1 Assault/waiting:0", StringComparison.Ordinal);
+                ordered |= state.AppliedCommands.ToArray().Any(c => c.Action == "rifleman" && c.Kind == CommandKind.EnqueueTask);
+                foreach (var command in state.AppliedCommands)
+                    if (command.Kind == CommandKind.AttackMove)
+                    {
+                        NavigationChecks.Check(command.Recipients is { Count: 3 } attackers &&
+                            !attackers.Ids.Contains(guard) && attackers.Ids.ToArray().All(id => !assault.Contains(id)),
+                            "The recovered assault group used the guard or lost its minimum.");
+                        rebuilt = true;
+                    }
+            });
+            NavigationChecks.Check(empty && ordered && rebuilt, "The empty sergeant did not request replacements and lead them back into combat.");
+        });
+
+        test("AI2 switches strategy on threat and releases a discretionary squad after spending", () =>
+        {
+            const uint player = 1;
+            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Min: 1, Max: 2", "Min: 1, Max: 1")
+                .Replace("Target: 5", "Target: 3").Replace("Truck: supply-truck, Target: 2", "Truck: supply-truck, Target: 1")
+                .Replace("Min: 1, Max: 1, Priority: 50, EarliestTick: 900",
+                    "Min: 0, Max: 1, Priority: 50, StartCredits: 4700, RetainCredits: 4650")
+                .Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 5") }, catalog, profile.Id);
+            var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
+            using var world = map.CreateWorld();
+            int Type(string id) => catalog.Units.ToList().FindIndex(u => u.Id == id);
+            world.AddInitialUnit(Type("power-plant"), new(10752, 8192), player);
+            var barracks = world.AddInitialUnit(Type("barracks"), new(10240, 17920), player);
+            int rifle = Type("rifleman");
+            var assault = new[] { world.AddInitialUnit(rifle, new(23552, 18432), player),
+                world.AddInitialUnit(rifle, new(24576, 18432), player), world.AddInitialUnit(rifle, new(25600, 18432), player) };
+            var guard = world.AddInitialUnit(rifle, new(24064, 12288), player);
+            var ai = new SkirmishAi(player, fixture, catalog.Units, map.Map.StartPosition("blue"), new(24064, 18432), new(64000, 18432));
+            var opening = ai.Plan(world);
+            NavigationChecks.Check(opening.Any(c => c.Kind == CommandKind.AttackMove) && ai.Diagnostics.Contains("rifle-guard#1 Guard", StringComparison.Ordinal),
+                "The extra squad was not enabled at the starting credit threshold.");
+            world.Step([.. opening,
+                new(1, 0, 1, CommandKind.EnqueueTask, barracks, Action: "rifleman"),
+                new(1, 0, 2, CommandKind.Spawn, Position: new(35584, 18432), UnitType: rifle, Owner: 2)]);
+            SkirmishAiScenario.Run(world, ai, 5);
+            var changed = ai.Plan(world);
+            NavigationChecks.Check(changed.Any(c => c.Kind == CommandKind.Stop && c.Recipients is { Count: 1 } group && group.Ids[0] == guard) &&
+                !ai.Diagnostics.Contains("rifle-guard#1", StringComparison.Ordinal), "Spending did not deactivate the extra squad and clear its orders.");
+            NavigationChecks.Check(ai.Diagnostics.Contains("rifle-section#1 Guard", StringComparison.Ordinal) &&
+                changed.Any(c => (c.Kind is CommandKind.HoldPosition or CommandKind.MoveSelected) && c.Recipients is { } group &&
+                    group.Ids.SequenceEqual(assault)), "The threat did not reprofile the original squad with its existing members.");
+        });
+
+        test("AI2 counts queued recruits once across separate unarmed patrols", () =>
+        {
+            const uint player = 1;
+            var units = Read("content/units.yaml");
+            var definitions = UnitCatalog.Load([units with { Text = units.Text.Replace(
+                    "  Armaments:\n    Mounts:\n      main: { Weapon: missile, FireFromTransport: true }\n", "") },
+                Read("content/buildings.yaml")], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Strategy: Assault", "Strategy: Patrol")
+                .Replace("Strategy: Guard", "Strategy: Patrol").Replace(", UnderThreatStrategy: Guard", "")
+                .Replace("rifleman", "rocketeer").Replace("Min: 3, Target: 5", "Min: 1, Target: 1")
+                .Replace("Target: 2, Recipe: {Producer: barracks", "Target: 1, Recipe: {Producer: barracks")
+                .Replace("Min: 1, Max: 2", "Min: 1, Max: 1").Replace("EarliestTick: 900", "EarliestTick: 0")
+                .Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, definitions, profile.Id);
+            var map = MapScenario.Load(definitions, Read, MapScenario.DefaultMap);
+            using var world = map.CreateWorld();
+            int Type(string id) => definitions.Units.ToList().FindIndex(u => u.Id == id);
+            NavigationChecks.Check(definitions.Units[Type("rocketeer")].Weapons.Count == 0, "The patrol fixture must be unarmed.");
+            world.AddInitialUnit(Type("power-plant"), new(10752, 8192), player);
+            var first = world.AddInitialUnit(Type("barracks"), new(10240, 17920), player);
+            var second = world.AddInitialUnit(Type("barracks"), new(20480, 8704), player);
+            var ai = new SkirmishAi(player, fixture, definitions.Units, map.Map.StartPosition("blue"), new(24064, 18432), new(64000, 18432));
+            var firstOrder = ai.Plan(world).First(c => c.Action == "rocketeer");
+            NavigationChecks.Check(firstOrder.Entity == first, "The first patrol did not use the first producer.");
+            world.Step([firstOrder]);
+            var remaining = ai.Plan(world).Where(c => c.Action == "rocketeer").ToArray();
+            NavigationChecks.Check(remaining is [{ Entity: var producer }] && producer == second, "One queued recruit covered both patrols.");
+            world.Step(remaining);
+            var moving = new HashSet<EntityId>();
+            SkirmishAiScenario.Run(world, ai, 140, state =>
+            {
+                foreach (var command in state.AppliedCommands)
+                {
+                    NavigationChecks.Check(command.Kind != CommandKind.AttackMove && command.Action != "rocketeer", "Patrols attacked or ordered surplus units.");
+                    if (command.Kind == CommandKind.MoveSelected && command.Recipients is { Count: 1 } patrol)
+                        moving.Add(patrol.Ids[0]);
+                }
+            });
+            NavigationChecks.Check(moving.Count == 2, "The trained unarmed units did not patrol independently.");
         });
 
         test("AI2 opens on both sides, skips an invalid candidate and captures income", () =>
@@ -134,7 +271,7 @@ internal static class SkirmishAiChecks
                 NavigationChecks.Check(definitions.Units[barracksType].TaskQueues.Single().Payment == payment,
                     "Fixture did not load the intended payment policy.");
                 var frequent = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, definitions, profile.Id);
-                int rifleCost = frequent.Group.Single().Recipe.Cost;
+                int rifleCost = frequent.Sergeants.Single(r => r.Definition.Id == "rifle-section").Definition.Members.Single().Recipe.Cost;
                 int truckCost = frequent.Supply!.Truck.Cost;
                 var start = Read(MapScenario.DefaultStartSet);
                 foreach (int surplus in new[] { -1, 0 })
@@ -167,10 +304,10 @@ internal static class SkirmishAiChecks
             }
         });
 
-        test("AI2 builds a factory and sends progressively paid vehicles with the infantry", () =>
+        test("AI2 builds a factory and deploys a separate group of progressively paid vehicles", () =>
         {
             var mechanized = SkirmishAiCatalog.Load(source, catalog, SkirmishAiScenario.MechanizedProfileId);
-            int vehicle = mechanized.Group.Single(m => catalog.Units[m.Recipe.ProductType].Id == "apc-mg").Recipe.ProductType;
+            int vehicle = mechanized.Sergeants.Single(r => r.Definition.Id == "apc-section").Definition.Members.Single().Recipe.ProductType;
             var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
             for (uint player = 1; player <= 2; player++)
             {
