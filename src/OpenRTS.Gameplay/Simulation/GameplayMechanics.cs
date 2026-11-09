@@ -36,6 +36,9 @@ public sealed class GameplayMechanics
 {
     /// <summary>Null disables fog; positive size enables circular vision on an independent grid.</summary>
     public int? FogCellSize { get; init; }
+    public OpenRTS.Core.Visibility.FogMode FogMode { get; init; }
+    /// <summary>Derived coverage implementation; does not change gameplay or fingerprints.</summary>
+    public bool OptimizeFogGroups { get; init; } = true;
     public static GameplayRegistration<ICaptureMechanic> BuiltInCapture { get; } = new("openrts.capture", 2, static () => new TimedCapture());
     public static GameplayRegistration<ITransportMechanic> BuiltInTransport { get; } = new("openrts.transport", 1, static () => new StandardTransport());
     public static GameplayRegistration<IConstructionMechanic> BuiltInConstruction { get; } = new("openrts.construction", 1, static () => new StandardConstruction());

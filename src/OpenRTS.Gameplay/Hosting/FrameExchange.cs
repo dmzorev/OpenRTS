@@ -9,6 +9,8 @@ public sealed partial class FrameExchange
     {
         public EntityPose[] Poses = [];
         public ulong[] Observers = [], PreviousObservers = [];
+        public OpenRTS.Core.Visibility.VisionSource[] VisionSources = [];
+        public int VisionSourceCount;
         public uint[] FogPlayers = [];
         public OpenRTS.Core.Visibility.CellVisibility[] FogStates = [];
         public int FogColumns, FogRows, FogCellSize, FogWidth, FogDepth;
@@ -108,6 +110,7 @@ public sealed partial class FrameExchange
                 return _data;
             }
         }
+        public ReadOnlySpan<OpenRTS.Core.Visibility.VisionSource> VisionSources => Data.VisionSources.AsSpan(0, Data.VisionSourceCount);
         public uint Viewer => Data.Viewer;
         public int FogColumns => Data.FogColumns;
         public int FogRows => Data.FogRows;

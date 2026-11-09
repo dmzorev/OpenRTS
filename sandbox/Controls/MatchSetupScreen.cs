@@ -7,6 +7,10 @@ using OpenRTS.Core;
 public sealed partial class MatchSetupScreen : CanvasLayer
 {
     private readonly OptionButton _maps = new() { Name = "Maps" };
+    private readonly OptionButton _fog = new() { Name = "Fog", TooltipText = "Скрыта: требуется разведка. Разведана: известна вся местность, объекты только в обзоре. Видима: все объекты видны." };
+    private readonly OptionButton _fogStyle = new() { Name = "FogStyle" };
+    public OpenRTS.Core.Visibility.FogMode SelectedFog => (OpenRTS.Core.Visibility.FogMode)_fog.Selected;
+    public OpenRTS.Godot.Rendering.FogDisplayStyle SelectedFogStyle => (OpenRTS.Godot.Rendering.FogDisplayStyle)_fogStyle.Selected;
     private readonly OptionButton _modes = new() { Name = "Modes" };
     private readonly OptionButton _count = new() { Name = "PlayerCount" };
     private readonly CheckButton _opponent = new() { Name = "AiOpponent", Text = "Играть против ИИ" };
@@ -71,6 +75,10 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         AddField(setup, "Карта", _maps);
         AddField(setup, "Режим игры", _modes);
         AddField(setup, "Количество игроков", _count);
+        _fog.AddItem("Скрыта · нужна разведка"); _fog.AddItem("Разведана · только текущий обзор"); _fog.AddItem("Видима · без тумана");
+        _fogStyle.AddItem("Точная сетка"); _fogStyle.AddItem("Круги обзора"); _fogStyle.AddItem("Круги и границы сетки"); _fogStyle.Select(1);
+        AddField(setup, "Туман войны", _fog); AddField(setup, "Отображение тумана · F9 в игре", _fogStyle);
+        _fog.ItemSelected += _ => _fogStyle.Disabled = SelectedFog == OpenRTS.Core.Visibility.FogMode.Visible;
         setup.AddChild(_opponent);
         setup.AddChild(Sandbox.TerminalHeading("СТАРТОВЫЕ ПОЗИЦИИ"));
         _players.AddThemeConstantOverride("h_separation", 12);
@@ -176,7 +184,8 @@ public sealed partial class MatchSetupScreen : CanvasLayer
 
     public void SetLaunching(bool busy, string message)
     {
-        _maps.Disabled = _modes.Disabled = _count.Disabled = _launch.Disabled = busy;
+        _maps.Disabled = _modes.Disabled = _count.Disabled = _fog.Disabled = _launch.Disabled = busy;
+        _fogStyle.Disabled = busy || SelectedFog == OpenRTS.Core.Visibility.FogMode.Visible;
         _opponent.Disabled = busy || !CanUseOpponent;
         foreach (var start in _starts) start.Disabled = busy;
         _status.Text = message;

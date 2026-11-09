@@ -80,8 +80,8 @@ public partial class Sandbox
     }
     private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(_sprites!.DisplayPosition(pose, _displayAlpha));
     private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
-    private bool Controls(uint owner) => _fogScenario ? owner == _fogViewer : owner == 1 || _opponentProfile is null && _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
-    private uint CommandOwner => _fogScenario ? _fogViewer : _opponentProfile is null ? Selected()?.Presentation.Owner ?? 1 : 1;
+    private bool Controls(uint owner) => PlayerFog ? owner == _fogViewer : owner == 1 || _opponentProfile is null && _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
+    private uint CommandOwner => PlayerFog ? _fogViewer : _opponentProfile is null ? Selected()?.Presentation.Owner ?? 1 : 1;
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
     private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner != CommandOwner && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;
     private bool CanDamageSelected(EntityPose victim)

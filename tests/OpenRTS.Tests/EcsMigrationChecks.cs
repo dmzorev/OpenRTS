@@ -13,9 +13,9 @@ internal static class EcsMigrationChecks
         foreach (var scenario in new[] { "direct", "navigation", "combat", "buildings", "production" })
             test("ECS baseline: " + scenario, () =>
             {
-                var units = LocomotionChecks.Units();
-                var buildings = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units.yaml")),
-                    new("buildings", File.ReadAllText("sandbox/content/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+                var units = UnitCatalog.Load([new("units", LegacyContent("sandbox/content/units.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+                var buildings = UnitCatalog.Load([new("units", LegacyContent("sandbox/content/units.yaml")),
+                    new("buildings", LegacyContent("sandbox/content/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
                 using var world = scenario switch
                 {
                     "direct" => DiagnosticScenario.Create(units, 100),
@@ -50,6 +50,9 @@ internal static class EcsMigrationChecks
                 NavigationChecks.Check(actual == Expected[scenario], $"{scenario} trace changed: {actual}");
             });
     }
+
+    // Preserve the pre-fog mechanical baseline; positive vision radii have their own fingerprint tests.
+    private static string LegacyContent(string path) => System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(path), @"(?m)^  Vision:.*\r?\n", "");
 
     // Format 28/catalog 13 with the higher aviation profiles. Normalized ground traces still match 3ae082f.
     private static readonly Dictionary<string, string> Expected = new()

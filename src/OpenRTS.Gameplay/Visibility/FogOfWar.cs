@@ -2,11 +2,12 @@ using System.Numerics;
 
 namespace OpenRTS.Core.Visibility;
 
+public enum FogMode { Hidden, Explored, Visible }
 public enum CellVisibility : byte { Unknown, Explored, Visible }
 public readonly record struct VisionSource(EntityId Id, uint Owner, int X, int Y, int Radius);
 
 /// <summary>Single-owner, incremental circular coverage. Samples are centers of clipped cells.</summary>
-public sealed class FogOfWar
+public sealed partial class FogOfWar
 {
     public int Width { get; }
     public int Depth { get; }
@@ -15,6 +16,10 @@ public sealed class FogOfWar
     public int Rows { get; }
     public int CellCount => Columns * Rows;
     public IReadOnlyList<uint> Players { get; }
+    public bool OptimizeGroups { get; }
+    public FogMode Mode { get; }
+    public int RasterizedSources { get; private set; }
+    public int GroupCacheHits { get; private set; }
     private readonly uint[] _players;
     private readonly Dictionary<uint, int> _slots;
     private readonly int[] _coverage;
@@ -23,10 +28,12 @@ public sealed class FogOfWar
     private readonly List<int> _touched = [];
     private Dictionary<EntityId, VisionSource> _sources = [], _next = [];
 
-    public FogOfWar(int width, int depth, IEnumerable<uint> players, int cellSize = 1024)
+    public FogOfWar(int width, int depth, IEnumerable<uint> players, int cellSize = 1024, bool optimizeGroups = false, FogMode mode = FogMode.Hidden)
     {
         if (width <= 0 || width > WorldPosition.MaximumExtent || depth <= 0 || depth > WorldPosition.MaximumExtent || cellSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(width));
+        if (!Enum.IsDefined(mode) || mode == FogMode.Visible) throw new ArgumentException("Visible mode does not need fog fields.");
+        Mode = mode; OptimizeGroups = optimizeGroups;
         Width = width; Depth = depth; CellSize = cellSize;
         Columns = (int)(((long)width + cellSize - 1) / cellSize); Rows = (int)(((long)depth + cellSize - 1) / cellSize);
         _players = players.Order().ToArray();
@@ -35,7 +42,7 @@ public sealed class FogOfWar
         long cells = (long)Columns * Rows * _players.Length;
         // Bound the dense coverage, history and dirty storage before allocating any of them.
         if (cells > 32 * 1024 * 1024) throw new ArgumentException("Fog exceeds the 192 MiB field budget.");
-        _coverage = new int[(int)cells]; _explored = new byte[(int)cells]; _dirty = new bool[(int)cells];
+        _coverage = new int[(int)cells]; _explored = mode == FogMode.Hidden ? new byte[(int)cells] : []; _dirty = mode == FogMode.Hidden ? new bool[(int)cells] : [];
         _slots = _players.Select((id, slot) => (id, slot)).ToDictionary(p => p.id, p => p.slot);
         Players = Array.AsReadOnly(_players);
     }
@@ -45,14 +52,17 @@ public sealed class FogOfWar
     {
         if ((uint)cell >= CellCount || !_slots.TryGetValue(player, out int slot)) return CellVisibility.Unknown;
         int i = slot * CellCount + cell;
-        return _coverage[i] > 0 ? CellVisibility.Visible : _explored[i] != 0 ? CellVisibility.Explored : CellVisibility.Unknown;
+        return _coverage[i] > 0 ? CellVisibility.Visible : Mode == FogMode.Explored || _explored[i] != 0 ? CellVisibility.Explored : CellVisibility.Unknown;
     }
     public CellVisibility At(uint player, WorldPosition p) => At(player, CellAt(p));
     public int CellAt(WorldPosition p) => p.X < 0 || p.X >= Width || p.Y < 0 || p.Y >= Depth ? -1 : p.Y / CellSize * Columns + p.X / CellSize;
+    /// <summary>Number of effective contributors (merged groups when optimized), not necessarily individual actors.</summary>
     public int Coverage(uint player, int cell) => (uint)cell < CellCount && _slots.TryGetValue(player, out int slot) ? _coverage[slot * CellCount + cell] : 0;
 
     public void Update(ReadOnlySpan<VisionSource> sources, CancellationToken cancellationToken = default)
     {
+        RasterizedSources = GroupCacheHits = 0;
+        if (OptimizeGroups) { UpdateGroups(sources, cancellationToken); return; }
         _next.Clear();
         foreach (var s in sources)
         {
@@ -73,14 +83,22 @@ public sealed class FogOfWar
         }
         foreach (var (id, next) in _next)
             if (!_sources.ContainsKey(id)) Change(default, next, false, cancellationToken);
-        // Resolve history after the entire batch, never from a transient gap between sources.
-        foreach (int i in _touched) { if (_coverage[i] > 0) _explored[i] = 1; _dirty[i] = false; }
-        _touched.Clear();
+        FinishCoverage();
         (_sources, _next) = (_next, _sources);
     }
 
+    private void FinishCoverage()
+    {
+        foreach (int i in _touched)
+        {
+            if (Mode == FogMode.Hidden && _coverage[i] > 0) _explored[i] = 1;
+            _dirty[i] = false;
+        }
+        _touched.Clear();
+    }
     private void Change(VisionSource old, VisionSource next, bool sameOwner, CancellationToken token)
     {
+        RasterizedSources++;
         int first = Rows, last = -1;
         void Include(VisionSource s)
         {
@@ -110,7 +128,7 @@ public sealed class FogOfWar
                 int i = offset + x;
                 _coverage[i] = checked(_coverage[i] + delta);
                 if (_coverage[i] < 0) throw new InvalidOperationException("Negative vision coverage.");
-                if (!_dirty[i]) { _dirty[i] = true; _touched.Add(i); }
+                if (Mode == FogMode.Hidden && !_dirty[i]) { _dirty[i] = true; _touched.Add(i); }
             }
         }
     }
@@ -142,11 +160,13 @@ public sealed class FogOfWar
     internal void CopyStates(Span<CellVisibility> destination)
     {
         if (destination.Length < _coverage.Length) throw new ArgumentException("Fog destination too short.");
-        for (int i = 0; i < _coverage.Length; i++) destination[i] = _coverage[i] > 0 ? CellVisibility.Visible : _explored[i] != 0 ? CellVisibility.Explored : CellVisibility.Unknown;
+        for (int i = 0; i < _coverage.Length; i++) destination[i] = _coverage[i] > 0 ? CellVisibility.Visible : Mode == FogMode.Explored || _explored[i] != 0 ? CellVisibility.Explored : CellVisibility.Unknown;
     }
     internal void WriteState(BinaryWriter writer)
     {
-        writer.Write(1); writer.Write(CellSize); writer.Write(_players.Length);
+        writer.Write(Mode == FogMode.Hidden ? 1 : 2);
+        if (Mode != FogMode.Hidden) writer.Write((int)Mode);
+        writer.Write(CellSize); writer.Write(_players.Length);
         foreach (uint player in _players) writer.Write(player);
         writer.Write(_explored.Length); writer.Write(_explored);
     }

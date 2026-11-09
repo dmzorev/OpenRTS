@@ -67,6 +67,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         : base(width, depth, seed, initialCapacity, tickRate)
     {
         ArgumentNullException.ThrowIfNull(mechanics);
+        if (!Enum.IsDefined(mechanics.FogMode)) throw new ArgumentException("Invalid fog mode.", nameof(mechanics));
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
         _types = unitTypes.ToArray();
         if (_types.Length == 0 || _types.Any(t => t is null) || _types.Select(t => t.Id).Distinct(StringComparer.Ordinal).Count() != _types.Length)
@@ -85,11 +86,11 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (mechanics.GridPathfinder is not null && navigationGrid is null)
             throw new ArgumentException("A registered grid pathfinder requires a navigation grid.", nameof(navigationGrid));
         _economy = new(players, StorageGate, IsConstructing);
-        if (mechanics.FogCellSize is { } fogSize)
+        if (mechanics.FogCellSize is { } fogSize && mechanics.FogMode != OpenRTS.Core.Visibility.FogMode.Visible)
         {
             var initialPlayers = new PlayerPose[_economy.PlayerCount];
             _economy.CopyPlayers(initialPlayers, null);
-            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize);
+            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize, mechanics.OptimizeFogGroups, mechanics.FogMode);
         }
         _buildRecipes = new(_types);
         _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);

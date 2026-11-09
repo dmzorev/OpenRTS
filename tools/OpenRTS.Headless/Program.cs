@@ -10,13 +10,14 @@ try
 {
     var path = "sandbox/content/units.yaml";
     string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null;
-    bool fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;
+    bool fogGroupsBenchmark = false, fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;
     uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--fog-benchmark") fogBenchmark = true;
+        if (argument == "--fog-groups-benchmark") fogGroupsBenchmark = true;
+        else if (argument == "--fog-benchmark") fogBenchmark = true;
         else if (argument == "--fog") { fog = simulate = true; }
         else if (argument == "--aviation") { aviation = simulate = true; mapPath = AviationScenario.Map; }
         else if (argument == "--skirmish") { skirmish = simulate = true; }
@@ -50,6 +51,7 @@ try
     bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
         throw new ArgumentException("Select one map or diagnostic scenario.");
+    if (fogGroupsBenchmark) { FogGroupBenchmark.Run(count, ticks); return 0; }
     if (fogBenchmark) { FogBenchmark.Run(count, ticks); return 0; }
     if (ecsBenchmark) { EcsBenchmark.Run(count, ticks); return 0; }
     if (sizeBenchmark) { SizeBenchmark.Run(count, ticks, workers, reverseJobs); return 0; }

@@ -44,9 +44,10 @@ public partial class TerminalMinimap : Control
         _camera = camera;
     }
 
-    public void UpdateFog(FrameExchange.FrameLease frame)
+    public void UpdateFog(FrameExchange.FrameLease frame, Texture2D? visual = null)
     {
         if (frame.FogCellSize == 0) return;
+        if (visual is not null) { _fog = visual; if (_fogViewer != frame.Viewer) { _fogViewer = frame.Viewer; _tick = -1; } QueueRedraw(); return; }
         if (_fogViewer != frame.Viewer) { _fogViewer = frame.Viewer; _tick = -1; }
         using var image = Image.CreateEmpty(frame.FogColumns, frame.FogRows, false, Image.Format.Rgba8);
         for (int y = 0; y < frame.FogRows; y++) for (int x = 0; x < frame.FogColumns; x++)

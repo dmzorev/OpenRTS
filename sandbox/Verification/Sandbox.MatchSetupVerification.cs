@@ -4,6 +4,7 @@ using OpenRTS.Core;
 
 public partial class Sandbox
 {
+    private bool _verifyFogMatch;
     private void SelectVerificationMatch()
     {
         CheckSkirmish(_session is null && _camera is null, "A simulation or camera started before the lobby launch.");
@@ -14,6 +15,11 @@ public partial class Sandbox
             option.EmitSignal(OptionButton.SignalName.ItemSelected, index);
         }
 
+        var fog = FindOption("Fog");
+        CheckSkirmish(fog.ItemCount == 3 && fog.Selected == 0 && FindOption("FogStyle").ItemCount == 3, "Fog settings missing.");
+        Choose(fog, 1); CheckSkirmish(!FindOption("FogStyle").Disabled, "Explored mode lost style choice.");
+        Choose(fog, 2); CheckSkirmish(FindOption("FogStyle").Disabled, "Visible mode must disable fog styling.");
+        if (_verifyFogMatch) Choose(fog, 0);
         var maps = FindOption("Maps");
         var count = FindOption("PlayerCount");
         CheckSkirmish(maps.ItemCount == 3 && count.ItemCount == 2, "The lobby does not show all maps or the valley capacity.");
@@ -40,6 +46,13 @@ public partial class Sandbox
         CheckSkirmish(frame.Tick == 0 && _matchSetup is null && _terminal is not null, "The configured match did not replace the lobby at tick zero.");
         CheckSkirmish(map.Id == "riverside-station" && frame.Players.Length == 4 && _mapWidth == 88 && _mapDepth == 60,
             "The selected map, dimensions or player count did not reach the match.");
+        if (_verifyFogMatch)
+        {
+            CheckSkirmish(PlayerFog && frame.Viewer == 1 && frame.FogCellSize == 1024 && frame.VisionSources.Length == 3 &&
+                frame.Poses.ToArray().Count(p => p.Presentation.Owner == 1) == 3 && !frame.Poses.ToArray().Any(p => p.Presentation.Owner == 2) && !Controls(3), "Configured fog did not filter game state.");
+            GD.Print("OPENRTS_FOG_MATCH:PASS hidden match, unit vision, filtering, minimap and player control");
+            _verificationDone = true; GetTree().Quit(); return;
+        }
         CheckSkirmish(frame.Poses.Length == 26 && Controls(3), "Third side or alternate starting set is missing.");
         var poses = frame.Poses.ToArray();
         for (uint owner = 1; owner <= 3; owner++)

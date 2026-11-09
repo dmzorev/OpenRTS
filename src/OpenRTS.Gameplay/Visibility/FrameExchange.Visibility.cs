@@ -8,9 +8,12 @@ public sealed partial class FrameExchange
     {
         if (world.Fog is not { } fog)
         {
-            slot.FogCellSize = 0; slot.FogStates = []; slot.FogPlayers = [];
+            slot.FogCellSize = 0; slot.FogStates = []; slot.FogPlayers = []; slot.VisionSourceCount = 0;
             return;
         }
+        slot.VisionSourceCount = world.VisionSources.Length;
+        if (slot.VisionSources.Length < slot.VisionSourceCount) Array.Resize(ref slot.VisionSources, slot.VisionSourceCount);
+        world.VisionSources.CopyTo(slot.VisionSources);
         slot.FogCellSize = fog.CellSize; slot.FogColumns = fog.Columns; slot.FogRows = fog.Rows;
         slot.FogWidth = fog.Width; slot.FogDepth = fog.Depth;
         if (slot.FogStates.Length != fog.CellCount * fog.Players.Count) slot.FogStates = new CellVisibility[fog.CellCount * fog.Players.Count];
@@ -32,7 +35,8 @@ public sealed partial class FrameExchange
     {
         int player = Array.IndexOf(source.FogPlayers, viewer), cells = source.FogColumns * source.FogRows;
         ulong bit = player < 0 ? 0 : 1ul << player;
-        var result = new Slot { Viewer = viewer, Tick = source.Tick, Timestamp = source.Timestamp, TickRate = source.TickRate,
+        var circles = source.VisionSources.Take(source.VisionSourceCount).Where(s => s.Owner == viewer).ToArray();
+        var result = new Slot { VisionSources = circles, VisionSourceCount = circles.Length, Viewer = viewer, Tick = source.Tick, Timestamp = source.Timestamp, TickRate = source.TickRate,
             Grid = source.Grid, BaseGrid = source.BaseGrid, FogColumns = source.FogColumns, FogRows = source.FogRows,
             FogCellSize = source.FogCellSize, FogWidth = source.FogWidth, FogDepth = source.FogDepth,
             FogStates = player < 0 ? new CellVisibility[cells] : source.FogStates.AsSpan(player * cells, cells).ToArray() };

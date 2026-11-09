@@ -1,4 +1,5 @@
 ^unit:
+  Vision: { Radius: 6144 }
   Buildable: { Ticks: 75, Cost: 100 }
   Movement: { Locomotor: infantry }
   Health: { HP: 100, Armor: Living }

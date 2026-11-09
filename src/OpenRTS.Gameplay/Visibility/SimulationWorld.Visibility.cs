@@ -8,9 +8,10 @@ namespace OpenRTS.Core;
 public sealed partial class SimulationWorld
 {
     private readonly FogOfWar? _fog;
-    private readonly List<VisionSource> _visionSources = [];
+    private List<VisionSource> _visionSources = [], _nextVisionSources = [];
     private readonly Dictionary<uint, HashSet<EntityId>> _commandVision = [];
     public FogOfWar? Fog => _fog;
+    public ReadOnlySpan<VisionSource> VisionSources => CollectionsMarshal.AsSpan(_visionSources);
 
     /// <summary>Refresh on the simulation owner thread, including after initial placement.</summary>
     public void SynchronizeVisibility(CancellationToken cancellationToken = default)
@@ -18,14 +19,16 @@ public sealed partial class SimulationWorld
         ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("Incomplete world.");
         if (_fog is null) return;
-        _visionSources.Clear();
+        _nextVisionSources.Clear();
         for (int i = 0; i < Count; i++)
         {
             var e = _entityHandles[i]; var type = TypeOf(e);
             if (type.VisionRadius == 0 || !IsOnMap(e) || IsConstructing(e)) continue;
             var p = e.Get<SpatialState>().Position;
-            _visionSources.Add(new(e.Get<EntityIdentity>().Id, e.Get<OwnershipState>().Owner, p.X, p.Y, type.VisionRadius));
+            _nextVisionSources.Add(new(e.Get<EntityIdentity>().Id, e.Get<OwnershipState>().Owner, p.X, p.Y, type.VisionRadius));
         }
+        if (CollectionsMarshal.AsSpan(_visionSources).SequenceEqual(CollectionsMarshal.AsSpan(_nextVisionSources))) return;
+        (_visionSources, _nextVisionSources) = (_nextVisionSources, _visionSources);
         _fog.Update(CollectionsMarshal.AsSpan(_visionSources), cancellationToken);
     }
     public bool IsVisible(uint viewer, EntityId id)

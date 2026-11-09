@@ -9,7 +9,7 @@ public partial class Sandbox
     private bool _verifyFog, _fogCaptureStarted;
     private void SwitchFogViewer()
     {
-        _fogViewer = _fogViewer == 1 ? 2u : 1u; _constructionViewer = _fogViewer;
+        _fogViewer = _fogViewer >= (_fogScenario ? 2 : _matchPlayers) ? 1u : _fogViewer + 1; _constructionViewer = _fogViewer;
         _selection.Reset(); _focusStartingBase = true; _combatEffects?.Clear(); _sprites?.ClearWrecks();
     }
     private async void VerifyFog(FrameExchange.FrameLease frame)
@@ -26,10 +26,22 @@ public partial class Sandbox
             if (_label is not null) _label.Text = "Туман войны F1 · F8 сменить наблюдателя · три состояния карты";
             if (_capturePath is not null && DisplayServer.GetName() != "headless")
             {
-                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
                 string path = Path.GetFullPath(_capturePath); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                using var picture = GetViewport().GetTexture().GetImage();
-                if (picture.SavePng(path) != Error.Ok) throw new IOException("Fog capture failed.");
+                foreach (var style in Enum.GetValues<OpenRTS.Godot.Rendering.FogDisplayStyle>())
+                {
+                    _fogStyle = style;
+                    using (var current = _session.Frames.AcquireLatest(_fogViewer)!)
+                    {
+                        _fogView!.Apply(current, style);
+                        _minimap?.UpdateFog(current, _fogView.Texture);
+                    }
+                    await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                    await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                    using var picture = GetViewport().GetTexture().GetImage();
+                    string variant = Path.Combine(Path.GetDirectoryName(path)!, "fog-" + style.ToString().ToLowerInvariant() + ".png");
+                    if (picture.SavePng(variant) != Error.Ok || style == OpenRTS.Godot.Rendering.FogDisplayStyle.Compare && picture.SavePng(path) != Error.Ok)
+                        throw new IOException("Fog capture failed.");
+                }
             }
             SwitchFogViewer();
             if (Controls(1) || !Controls(2)) throw new Exception("Viewer control policy failed.");

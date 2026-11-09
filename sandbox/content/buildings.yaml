@@ -1,4 +1,5 @@
 ^building:
+  Vision: { Radius: 7168 }
   Buildable:
     { Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400 }
   Health: { HP: 1000, Armor: Building }

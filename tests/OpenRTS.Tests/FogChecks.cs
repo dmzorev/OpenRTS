@@ -132,6 +132,44 @@ internal static class FogChecks
             w.SynchronizeVisibility();w.Step([new(1,0,1,CommandKind.Destroy,hidden)]);
             Check(w.Events.ToArray().Single(e=>e.Kind==WorldEventKind.Destroyed).ForViewer(1) is null,"hidden death leaked");
         });
+        test("Fog: grouped unions and translated phase caches equal individual coverage", () =>
+        {
+            var random=new Random(34);
+            foreach(var mode in new[]{FogMode.Hidden,FogMode.Explored})
+            {
+                var reference=new FogOfWar(65539,32773,[1,2],1024,mode:mode);
+                var optimized=new FogOfWar(65539,32773,[1,2],1024,optimizeGroups:true,mode:mode);
+                var sources=Enumerable.Range(1,160).Select(i=>new VisionSource(new((uint)i),1,12000+(i%16)*512,9000+(i/16)*512,3072)).ToArray();
+                int hits=0;
+                for(int tick=0;tick<65;tick++)
+                {
+                    if(tick<24) sources=sources.Select(s=>s with{X=s.X+128}).ToArray();
+                    else sources=sources.Where(s=>random.Next(8)!=0).Select(s=>s with{X=random.Next(65540),Y=random.Next(32774),Radius=random.Next(1,6000),Owner=random.Next(2)==0?1u:2u}).ToArray();
+                    reference.Update(sources);optimized.Update(sources);hits+=optimized.GroupCacheHits;
+                    foreach(uint player in reference.Players)for(int i=0;i<reference.CellCount;i++)
+                        Check(reference.At(player,i)==optimized.At(player,i) && (reference.Coverage(player,i)>0)==(optimized.Coverage(player,i)>0),"union/cache diverged from exact sources");
+                }
+                Check(hits>0,"rigid translation did not reuse phase masks");
+                optimized.Update([]);reference.Update([]);
+                foreach(uint player in reference.Players)for(int i=0;i<reference.CellCount;i++) Check(reference.At(player,i)==optimized.At(player,i),"last group removal lost history");
+            }
+        });
+        test("Fog: map modes preserve gameplay and visible mode skips all fields", () =>
+        {
+            SimulationWorld Make(FogMode mode,bool groups=true) => SimulationWorld.CreateWithMechanics(new(){FogCellSize=1024,FogMode=mode,OptimizeFogGroups=groups},
+                [new("unit",100,body:BodyShape.None,visionRadius:2048)],32768,16384,players:[new(1,"a"),new(2,"b")]);
+            using var hidden=Make(FogMode.Hidden);using var explored=Make(FogMode.Explored);using var visible=Make(FogMode.Visible);
+            foreach(var w in new[]{hidden,explored,visible}) {w.AddInitialUnit(0,new(2048,2048),1);w.AddInitialUnit(0,new(24576,2048),2);w.SynchronizeVisibility();}
+            Check(hidden.Fog!.At(1,200)==CellVisibility.Unknown && explored.Fog!.At(1,200)==CellVisibility.Explored,"initial map mode");
+            Check(!hidden.IsVisible(1,new(2)) && !explored.IsVisible(1,new(2)) && visible.IsVisible(1,new(2)) && visible.Fog is null,"mode target policy");
+            Check(hidden.Report()!=explored.Report(),"map modes missing from hash");
+            using var a=Make(FogMode.Hidden);using var b=Make(FogMode.Hidden,false);
+            for(int i=0;i<16;i++) foreach(var w in new[]{a,b})w.AddInitialUnit(0,new(8192+i*128,8192),1);
+            for(int tick=1;tick<=20;tick++)
+            {WorldCommand[] cmds=tick==1?[new(1,0,1,CommandKind.MoveAll,Position:new(24576,8192))]:[];a.Step(cmds);b.Step(cmds);Check(a.Report()==b.Report(),"optimization changed gameplay/hash");}
+            var frames=new FrameExchange();frames.TryPublish(hidden);using var frame=frames.AcquireLatest(1)!;
+            Check(frame.VisionSources.Length==1 && frame.VisionSources[0].Owner==1,"visual circles leaked enemy sources");
+        });
         test("Fog: event audience survives loss of vision and removal", () =>
         {
             using var w=World(); var scout=w.AddInitialUnit(0,new(2048,2048),1); var victim=w.AddInitialUnit(1,new(3072,2048),2);

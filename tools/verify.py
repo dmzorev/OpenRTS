@@ -69,6 +69,10 @@ def main():
     if "OPENRTS_FOG:PASS" not in fog.stdout or "SCRIPT ERROR:" in fog.stderr:
         raise RuntimeError("Fog verification failed:\n" + fog.stdout + fog.stderr)
     print("PASS F1 fog: three states, viewer filtering and controls", flush=True)
+    fog_match = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-fog-match"])
+    if "OPENRTS_FOG_MATCH:PASS" not in fog_match.stdout:
+        raise RuntimeError("Configured fog match failed:\n" + fog_match.stdout + fog_match.stderr)
+    print("PASS configured hidden match and player fog settings", flush=True)
     expected = report(run(headless).stdout)
     if expected["DefinitionCount"] != 12:
         raise RuntimeError("Expected twelve concrete unit definitions, including aviation")

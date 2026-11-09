@@ -9,6 +9,7 @@ public partial class Sandbox
     private void SelectAiVerificationMatch()
     {
         var setup = _matchSetup!;
+        var fog = (OptionButton)setup.FindChild("Fog", owned: false); fog.Select(2); fog.EmitSignal(OptionButton.SignalName.ItemSelected, 2);
         var option = (CheckButton)setup.FindChild("AiOpponent", owned: false);
         if (_aiProfileId == SkirmishAiScenario.MechanizedProfileId)
         {
