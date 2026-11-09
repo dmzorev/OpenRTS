@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace OpenRTS.Core.Combat;
 
 public enum ArmorKind { Living, Mechanical, Building }
@@ -66,4 +68,14 @@ public sealed record WeaponDefinition
 public sealed record WeaponMountDefinition(string Id, WeaponDefinition Weapon, string Animation = "fire", bool FireWhileMoving = false, bool FireFromTransport = false);
 public readonly record struct WeaponPose(EntityId Entity, int Mount, FacingDirection PreviousFacing, FacingDirection Facing,
     AnimationPlayback Animation, long ReadyTick, int BurstRemaining, EntityId Target, bool AutoCast = false, bool Busy = false);
-public readonly record struct ProjectilePose(long Id, int UnitType, int Mount, WorldPosition Previous, WorldPosition Current, FacingDirection Facing);
+[Flags]
+public enum HoverEndpoints { None = 0, Source = 1, Target = 2 }
+
+/// <summary>Physical flight samples used to project the visual path between two sprite anchors.</summary>
+public readonly record struct ProjectileProjection(HoverEndpoints Hover, int LaunchElevation, WorldPosition Destination, int Travelled);
+
+public readonly record struct ProjectilePose(long Id, int UnitType, int Mount, WorldPosition Previous, WorldPosition Current, FacingDirection Facing)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ProjectileProjection Projection { get; init; }
+}

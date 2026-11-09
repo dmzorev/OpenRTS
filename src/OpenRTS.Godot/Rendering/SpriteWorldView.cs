@@ -33,6 +33,7 @@ public sealed class SpriteWorldView
     }
     private const int ModelLayers = 3, PreviewLayer = 3, AirLayer = 4, LayerCount = AirLayer + 1;
     private const float LayerStep = 0.4f, LayerSpan = 0.32f, ShadowHeight = 0.38f;
+    private const float HoverLiftScale = 0.45f;
     public const float OverlayHeight = 2f;
     private readonly Model[] _models;
     private readonly SortedDictionary<EntityId, EntityPose> _wrecks = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
@@ -61,6 +62,19 @@ public sealed class SpriteWorldView
     public int MaximumParts { get; }
 
     private readonly Func<uint, Color> _ownerColor;
+    private float _flightSurface;
+    internal float FlightSurface => _flightSurface;
+
+    public void SetFlightSurface(NavigationGrid? grid) =>
+        _flightSurface = grid?.HasSurface == true ? grid.SurfaceAt(0).Elevation / 1024f : 0;
+
+    /// <summary>Interpolated sprite anchor, including the screen lift of a hovering aircraft.</summary>
+    public Vector3 DisplayPosition(in EntityPose pose, float alpha = 1)
+    {
+        var point = Interpolate(pose, alpha);
+        point.Z -= HoverLift(_models[pose.UnitType].Unit, point.Y);
+        return point;
+    }
 
     public SpriteWorldView(UnitCatalog units, ModelCatalog models, Func<uint, Color>? ownerColor = null)
     {
@@ -224,8 +238,11 @@ public sealed class SpriteWorldView
             if (model.Damaged != 0 && pose.Health > 0 && (long)pose.Health * 2 <= model.Unit.MaxHealth) view = view with { States = view.States | model.Damaged };
             if (model.NearlyDestroyed != 0 && pose.Health > 0 && (long)pose.Health * 4 <= model.Unit.MaxHealth) view = view with { States = view.States | model.NearlyDestroyed };
             bool ghost = _ghostIds.Contains(pose.Id);
-            Vector2 origin = new(Lerp(pose.Previous.X, pose.Current.X, alpha), Lerp(pose.Previous.Y, pose.Current.Y, alpha));
-            float elevation = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha);
+            var point = Interpolate(pose, alpha);
+            float elevation = point.Y;
+            float height = Math.Max(0, elevation - _flightSurface);
+            float lift = HoverLift(model.Unit, elevation);
+            Vector2 origin = new(point.X, point.Z - lift);
             float body = Angle(view.PreviousBodyFacing, view.BodyFacing, alpha), weapon = Angle(view.PreviousWeaponFacing, view.WeaponFacing, alpha);
             int construct = pose.Upgrade.Active ? model.Unit.AnimationIndex("construct") : -1;
             Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : Colors.White;
@@ -294,10 +311,10 @@ public sealed class SpriteWorldView
                 team.A = Math.Max(stateFlash, Math.Max(pulse * (float)effect.Flash, extraFlash));
                 var directions = runtime.Sequences[animation]!;
                 var frame = directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate);
-                if (model.Unit.Flight is not null && part.Parent < 0 && elevation > 0.25f && !ghost)
+                if (model.Unit.Flight is { } flight && part.Parent < 0 && height > 0.25f && !ghost)
                 {
-                    float shadowOffset = elevation * 0.28f;
-                    frame.Add(new(center.X + shadowOffset, ShadowHeight, center.Y + shadowOffset * 0.65f), drawAngle, size * 0.9f, new(0, 0, 0, 0.3f), Colors.Transparent);
+                    float shadowOffset = flight.Mode == FlightMode.Hover ? 0 : height * 0.28f;
+                    frame.Add(new(center.X + shadowOffset, ShadowHeight, center.Y + lift + shadowOffset * 0.65f), drawAngle, size * 0.9f, new(0, 0, 0, 0.3f), Colors.Transparent);
                     SpriteCount++;
                 }
                 int layer = ghost ? PreviewLayer : pose.Flight.Airborne ? AirLayer : (int)(part.DrawLayer ?? model.DrawLayer);
@@ -315,5 +332,9 @@ public sealed class SpriteWorldView
         return from + Mathf.Wrap(to - from, -MathF.PI, MathF.PI) * alpha;
     }
     private static Vector2 Rotate(Vector2 point, float angle) => new(point.X * MathF.Cos(angle) - point.Y * MathF.Sin(angle), point.X * MathF.Sin(angle) + point.Y * MathF.Cos(angle));
+    private float HoverLift(UnitDefinition unit, float elevation) => unit.Flight?.Mode == FlightMode.Hover ? HoverLift(elevation, _flightSurface) : 0;
+    internal static float HoverLift(float elevation, float surface) => Math.Max(0, elevation - surface) * HoverLiftScale;
+    private static Vector3 Interpolate(in EntityPose pose, float alpha) => new(
+        Lerp(pose.Previous.X, pose.Current.X, alpha), Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha), Lerp(pose.Previous.Y, pose.Current.Y, alpha));
     private static float Lerp(int previous, int current, float alpha) => (previous + ((long)current - previous) * alpha) / 1024;
 }

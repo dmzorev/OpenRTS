@@ -332,11 +332,10 @@ public partial class Sandbox
             bool showHealth = selected || _allHealth || pose.Health < type.MaxHealth;
             bool showCapture = pose.Capture is { Progress: > 0, Duration: > 0 };
             if (!showHealth && !pose.Upgrade.Active && !showCapture) continue;
-            float x = Mathf.Lerp(pose.Previous.X, pose.Current.X, alpha) / 1024;
-            float z = Mathf.Lerp(pose.Previous.Y, pose.Current.Y, alpha) / 1024;
-            float y = Mathf.Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha) / 1024;
+            var position = _sprites!.DisplayPosition(pose, alpha);
             float depth = (type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f;
-            var point = _camera!.UnprojectPosition(new(x, y, z - depth));
+            position.Z -= depth;
+            var point = _camera!.UnprojectPosition(position);
             float width = type.Footprint is null ? 26 : 44;
             var rect = new Rect2(point.X - width / 2, point.Y - 10, width, 5);
             if (showHealth && field.Encloses(rect)) bars.Add((rect, Mathf.Clamp(pose.Health / (float)type.MaxHealth, 0, 1)));

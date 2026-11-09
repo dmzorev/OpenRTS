@@ -11,11 +11,13 @@ public sealed partial class SimulationWorld
         public int UnitType, Mount, Remaining, InitialDistance;
         public WorldPosition Previous, Position, Destination;
         public WeaponDefinition Weapon;
+        public HoverEndpoints Hover;
+        public int LaunchElevation;
     }
     private readonly List<ProjectileState> _projectiles = [];
     private long _nextProjectileId = 1;
     public int ProjectileCount => _projectiles.Count;
-    private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point = null, int weaponUnitType = -1)
+    private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition? point, int weaponUnitType, HoverEndpoints hover)
     {
         ref var actor = ref _entityHandles[source];
         ref var actorSpatial = ref actor.Get<SpatialState>();
@@ -26,7 +28,7 @@ public sealed partial class SimulationWorld
         else ObjectGeometry.DistanceSquared(TypeOf(actor), actorSpatial.Position, TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, out muzzle, out destination);
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actorIdentity.Id, Target = target < 0 ? default : _entityHandles[target].Get<EntityIdentity>().Id,
             Owner = actorOwnership.Owner, UnitType = weaponUnitType < 0 ? actorIdentity.Type : weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
-            Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit,
+            Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit, Hover = hover, LaunchElevation = muzzle.Elevation,
             InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
     private void UpdateProjectiles()
@@ -88,8 +90,10 @@ public sealed partial class SimulationWorld
         if (write < _projectiles.Count) _projectiles.RemoveRange(write, _projectiles.Count - write);
         void Hit(ProjectileState shot, EntityId target, WorldPosition point)
         {
+            var hover = target != default && _indices.TryGetValue(target, out int index) && TypeOf(_entityHandles[index]).Flight?.Mode == FlightMode.Hover
+                ? HoverEndpoints.Target : HoverEndpoints.None;
             _events.Add(new(Tick, WorldEventKind.ProjectileImpact, shot.Source, point, shot.UnitType, TargetEntity: target,
-                Mount: shot.Mount, SourcePosition: shot.Previous, ProjectileId: shot.Id));
+                Mount: shot.Mount, SourcePosition: shot.Previous, ProjectileId: shot.Id) { Hover = hover });
             Impact(shot.Weapon, shot.Owner, target, point, shot.Source, shot.UnitType, shot.Mount);
         }
         void Expire(ProjectileState shot) => _events.Add(new(Tick, WorldEventKind.ProjectileExpired, shot.Source, shot.Position, shot.UnitType, Mount: shot.Mount, ProjectileId: shot.Id));
@@ -131,7 +135,11 @@ public sealed partial class SimulationWorld
                 }
             }
             destination[i] = new(shot.Id, shot.UnitType, shot.Mount, previous, current,
-                new(shot.Destination.X - shot.Position.X, shot.Destination.Y - shot.Position.Y));
+                new(shot.Destination.X - shot.Position.X, shot.Destination.Y - shot.Position.Y))
+            {
+                Projection = shot.Hover == HoverEndpoints.None ? default :
+                    new(shot.Hover, shot.LaunchElevation, shot.Destination, shot.Weapon.TravelLimit - shot.Remaining)
+            };
         }
     }
     private void WriteProjectiles(BinaryWriter writer)

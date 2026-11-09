@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using OpenRTS.Core.Combat;
 
 namespace OpenRTS.Core.Orders;
 
@@ -30,6 +31,9 @@ public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityI
     WorldPosition Position = default, int UnitType = -1, int Animation = -1, int DurationTicks = 0, AnimationTrack Track = AnimationTrack.Weapon,
     int Amount = 0, EntityId TargetEntity = default, int Mount = 0, WorldPosition SourcePosition = default, long ProjectileId = 0, uint Owner = 0, uint PreviousOwner = 0)
 {
+    /// <summary>Sprite projection of the emitter and the actual target at the time of the event.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public HoverEndpoints Hover { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public GameplayConditions Condition { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

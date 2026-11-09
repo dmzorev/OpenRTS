@@ -13,6 +13,7 @@ public partial class Sandbox
     private Vector2 _pointer, _dragStart;
     private RtsOverlay? _rtsOverlay;
     private readonly Dictionary<EntityId, EntityPose> _selectionPoses = new();
+    private float _displayAlpha = 1;
     private readonly Dictionary<UnitActionKind, Button> _actionButtons = new();
     private readonly Dictionary<Locomotor, DestinationResolver> _cursorResolvers = new();
     private NavigationGrid? _cursorGrid;
@@ -77,7 +78,7 @@ public partial class Sandbox
         }
         return selected;
     }
-    private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(new(pose.Current.X / 1024f, pose.Current.Elevation / 1024f, pose.Current.Y / 1024f));
+    private Vector2 Screen(EntityPose pose) => _camera!.UnprojectPosition(_sprites!.DisplayPosition(pose, _displayAlpha));
     private bool OnScreen(EntityPose pose) => Playfield().HasPoint(Screen(pose));
     private bool Controls(uint owner) => owner == 1 || _opponentProfile is null && _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
     private uint CommandOwner => _opponentProfile is null ? Selected()?.Presentation.Owner ?? 1 : 1;
@@ -419,9 +420,10 @@ public partial class Sandbox
             var type = _catalog!.Units[p.UnitType].WithRotation(p.QuarterTurns);
             _ringBuffer[at] = ((type.Footprint?.HalfWidth ?? type.Body.HalfWidth) / 1024f + 0.2f) / 0.88f;
             _ringBuffer[at + 10] = ((type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f + 0.2f) / 0.88f; _ringBuffer[at + 5] = 1;
-            _ringBuffer[at + 3] = (p.Previous.X + ((long)p.Current.X - p.Previous.X) * alpha) / 1024;
-            _ringBuffer[at + 7] = SpriteWorldView.OverlayHeight + (p.Previous.Elevation + ((long)p.Current.Elevation - p.Previous.Elevation) * alpha) / 1024;
-            _ringBuffer[at + 11] = (p.Previous.Y + ((long)p.Current.Y - p.Previous.Y) * alpha) / 1024;
+            var position = _sprites!.DisplayPosition(p, alpha);
+            _ringBuffer[at + 3] = position.X;
+            _ringBuffer[at + 7] = SpriteWorldView.OverlayHeight + position.Y;
+            _ringBuffer[at + 11] = position.Z;
             var color = p.Presentation.Owner switch
             {
                 1 => new Color(0.6f, 1, 0.6f),

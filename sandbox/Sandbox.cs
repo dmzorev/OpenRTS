@@ -234,6 +234,8 @@ public partial class Sandbox : Node3D
             _displayGrid = frame.Grid;
             if (_showcase)
             {
+                _displayAlpha = alpha;
+                _sprites!.SetFlightSurface(frame.Grid);
                 if (_displayPoses.Length < frame.Poses.Length) Array.Resize(ref _displayPoses, frame.Poses.Length);
                 _displayCount = 0;
                 _storedPoses.Clear();
@@ -279,7 +281,7 @@ public partial class Sandbox : Node3D
                 };
             }
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects, BuildingPreview() ?? UpgradePreview());
-            _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick);
+            _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick, _sprites?.FlightSurface ?? 0);
             UpdateTerminal(frame, alpha);
             if (_verifyAiMatch) { VerifyAiMatch(frame); return; }
             if (_verifyMatchSetup) { VerifyConfiguredMatch(frame); return; }
