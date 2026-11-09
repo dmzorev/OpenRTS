@@ -67,6 +67,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         : base(width, depth, seed, initialCapacity, tickRate)
     {
         ArgumentNullException.ThrowIfNull(mechanics);
+        if (mechanics.FogVisibilityHoldTicks is < 0 or > 250) throw new ArgumentOutOfRangeException(nameof(mechanics.FogVisibilityHoldTicks));
         if (!Enum.IsDefined(mechanics.FogMode)) throw new ArgumentException("Invalid fog mode.", nameof(mechanics));
         if (speedPerTick < 1 || speedPerTick > 1 << 20) throw new ArgumentOutOfRangeException(nameof(speedPerTick));
         _types = unitTypes.ToArray();
@@ -90,7 +91,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         {
             var initialPlayers = new PlayerPose[_economy.PlayerCount];
             _economy.CopyPlayers(initialPlayers, null);
-            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize, mechanics.OptimizeFogGroups, mechanics.FogMode);
+            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize, mechanics.OptimizeFogGroups, mechanics.FogMode, mechanics.FogVisibilityHoldTicks);
         }
         _buildRecipes = new(_types);
         _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);

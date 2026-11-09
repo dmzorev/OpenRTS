@@ -13,7 +13,8 @@ public sealed partial class FrameExchange
         public int VisionSourceCount;
         public uint[] FogPlayers = [];
         public OpenRTS.Core.Visibility.CellVisibility[] FogStates = [];
-        public int FogColumns, FogRows, FogCellSize, FogWidth, FogDepth;
+        public byte[] FogStrength = [];
+        public int FogColumns, FogRows, FogCellSize, FogWidth, FogDepth, FogHoldTicks;
         public uint Viewer;
         public readonly Dictionary<uint, Slot> Views = [];
         public WeaponPose[] Weapons = [];
@@ -112,6 +113,8 @@ public sealed partial class FrameExchange
         }
         public ReadOnlySpan<OpenRTS.Core.Visibility.VisionSource> VisionSources => Data.VisionSources.AsSpan(0, Data.VisionSourceCount);
         public uint Viewer => Data.Viewer;
+        public ReadOnlySpan<byte> FogStrength => Data.FogStrength;
+        public int FogHoldTicks => Data.FogHoldTicks;
         public int FogColumns => Data.FogColumns;
         public int FogRows => Data.FogRows;
         public int FogCellSize => Data.FogCellSize;

@@ -36,6 +36,8 @@ public sealed class GameplayMechanics
 {
     /// <summary>Null disables fog; positive size enables circular vision on an independent grid.</summary>
     public int? FogCellSize { get; init; }
+    /// <summary>Experimental gameplay visibility retention; zero keeps instantaneous visibility.</summary>
+    public int FogVisibilityHoldTicks { get; init; }
     public OpenRTS.Core.Visibility.FogMode FogMode { get; init; }
     /// <summary>Derived coverage implementation; does not change gameplay or fingerprints.</summary>
     public bool OptimizeFogGroups { get; init; } = true;

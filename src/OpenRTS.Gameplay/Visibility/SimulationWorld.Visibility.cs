@@ -19,6 +19,7 @@ public sealed partial class SimulationWorld
         ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("Incomplete world.");
         if (_fog is null) return;
+        _fog.AdvanceTo(Tick);
         _nextVisionSources.Clear();
         for (int i = 0; i < Count; i++)
         {

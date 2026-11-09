@@ -8,16 +8,23 @@ public sealed partial class FrameExchange
     {
         if (world.Fog is not { } fog)
         {
-            slot.FogCellSize = 0; slot.FogStates = []; slot.FogPlayers = []; slot.VisionSourceCount = 0;
+            slot.FogCellSize = 0; slot.FogHoldTicks = 0; slot.FogStates = []; slot.FogStrength = []; slot.FogPlayers = []; slot.VisionSourceCount = 0;
             return;
         }
         slot.VisionSourceCount = world.VisionSources.Length;
         if (slot.VisionSources.Length < slot.VisionSourceCount) Array.Resize(ref slot.VisionSources, slot.VisionSourceCount);
         world.VisionSources.CopyTo(slot.VisionSources);
+        slot.FogHoldTicks = fog.HoldTicks;
         slot.FogCellSize = fog.CellSize; slot.FogColumns = fog.Columns; slot.FogRows = fog.Rows;
         slot.FogWidth = fog.Width; slot.FogDepth = fog.Depth;
         if (slot.FogStates.Length != fog.CellCount * fog.Players.Count) slot.FogStates = new CellVisibility[fog.CellCount * fog.Players.Count];
         slot.FogPlayers = fog.Players.ToArray(); fog.CopyStates(slot.FogStates);
+        if (fog.HoldTicks > 0)
+        {
+            if (slot.FogStrength.Length != slot.FogStates.Length) slot.FogStrength = new byte[slot.FogStates.Length];
+            fog.CopyStrength(slot.FogStrength);
+        }
+        else slot.FogStrength = [];
         if (slot.Observers.Length < slot.Count) { slot.Observers = new ulong[slot.Count]; slot.PreviousObservers = new ulong[slot.Count]; }
         for (int i = 0; i < slot.Count; i++)
         {
@@ -38,7 +45,8 @@ public sealed partial class FrameExchange
         var circles = source.VisionSources.Take(source.VisionSourceCount).Where(s => s.Owner == viewer).ToArray();
         var result = new Slot { VisionSources = circles, VisionSourceCount = circles.Length, Viewer = viewer, Tick = source.Tick, Timestamp = source.Timestamp, TickRate = source.TickRate,
             Grid = source.Grid, BaseGrid = source.BaseGrid, FogColumns = source.FogColumns, FogRows = source.FogRows,
-            FogCellSize = source.FogCellSize, FogWidth = source.FogWidth, FogDepth = source.FogDepth,
+            FogCellSize = source.FogCellSize, FogHoldTicks = source.FogHoldTicks, FogWidth = source.FogWidth, FogDepth = source.FogDepth,
+            FogStrength = source.FogStrength.Length == 0 ? [] : player < 0 ? new byte[cells] : source.FogStrength.AsSpan(player*cells,cells).ToArray(),
             FogStates = player < 0 ? new CellVisibility[cells] : source.FogStates.AsSpan(player * cells, cells).ToArray() };
         var visible = new HashSet<EntityId>();
         for (int i = 0; i < source.Count; i++) if ((source.Observers[i] & bit) != 0) visible.Add(source.Poses[i].Id);

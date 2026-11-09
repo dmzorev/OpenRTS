@@ -170,6 +170,53 @@ internal static class FogChecks
             var frames=new FrameExchange();frames.TryPublish(hidden);using var frame=frames.AcquireLatest(1)!;
             Check(frame.VisionSources.Length==1 && frame.VisionSources[0].Owner==1,"visual circles leaked enemy sources");
         });
+        test("Fog: retained cells expire without moving sources and fade in copied frames", () =>
+        {
+            foreach(int hold in new[]{2,5,12,25,50})foreach(bool grouped in new[]{false,true})foreach(var mode in new[]{FogMode.Hidden,FogMode.Explored})
+            {
+                var fog=new FogOfWar(8192,8192,[1,2],1024,grouped,mode,hold);
+                VisionSource[] eyes=Enumerable.Range(1,8).Select(i=>new VisionSource(new((uint)i),1,2048+i*128,2048,2048)).ToArray();
+                fog.AdvanceTo(0);fog.Update(eyes);
+                int cell=fog.CellAt(new(2560,2560));Check(fog.At(1,cell)==CellVisibility.Visible,"initial source");
+                fog.AdvanceTo(1);fog.Update([]);
+                fog.AdvanceTo(hold);Check(fog.At(1,cell)==CellVisibility.Visible,"retention expired too soon");
+                fog.AdvanceTo(hold+1);Check(fog.At(1,cell)==CellVisibility.Explored,"stationary/empty world kept expired vision");
+                Check(fog.At(2,cell)==(mode==FogMode.Hidden?CellVisibility.Unknown:CellVisibility.Explored),"retention crossed owners");
+            }
+            using var w=SimulationWorld.CreateWithMechanics(new(){FogCellSize=1024,FogVisibilityHoldTicks=5},
+                [new("eye",100,body:BodyShape.None,visionRadius:2048),new("blind",100,body:BodyShape.None)],16384,8192,players:[new(1,"a"),new(2,"b")]);
+            var eye=w.AddInitialUnit(0,new(2048,2048),1);var target=w.AddInitialUnit(1,new(3072,2048),2);
+            var frames=new FrameExchange();frames.TryPublish(w);
+            w.Step([new(1,0,1,CommandKind.Remove,eye)]);frames.TryPublish(w);using var first=frames.AcquireLatest(1)!;
+            int at=w.Fog!.CellAt(new(3072,2048));byte brightness=first.FogStrength[at];
+            Check(w.IsVisible(1,target) && first.Poses.Length==1 && brightness is >0 and <255,"retained gameplay sight/frame");
+            for(int tick=2;tick<=5;tick++)w.Step();frames.TryPublish(w);using var last=frames.AcquireLatest(1)!;
+            Check(w.IsVisible(1,target) && last.FogStrength[at]<brightness && first.FogStrength[at]==brightness,"fade or old lease changed");
+            w.Step();frames.TryPublish(w);using var expired=frames.AcquireLatest(1)!;
+            Check(!w.IsVisible(1,target) && expired.Poses.Length==0 && expired.FogStrength[at]==0,"unchanged sources stopped expiration");
+        });
+        test("Fog: retention refreshes on reentry, respects batch unions and hashes future expiration", () =>
+        {
+            var fog=new FogOfWar(8192,8192,[1],holdTicks:5);VisionSource source=new(new(1),1,2048,2048,2048);
+            int cell=fog.CellAt(new(2560,2560));fog.Update([source]);fog.AdvanceTo(1);fog.Update([]);
+            fog.AdvanceTo(3);fog.Update([source]);fog.AdvanceTo(4);fog.Update([]);
+            fog.AdvanceTo(8);Check(fog.At(1,cell)==CellVisibility.Visible,"reentry did not refresh expiration");
+            fog.AdvanceTo(9);Check(fog.At(1,cell)==CellVisibility.Explored,"reentry extended past deadline");
+            SimulationWorld Make(int hold,bool grouped=true)=>SimulationWorld.CreateWithMechanics(new(){FogCellSize=1024,FogVisibilityHoldTicks=hold,OptimizeFogGroups=grouped},
+                [new("eye",100,body:BodyShape.None,visionRadius:2048)],8192,8192,players:[new(1,"a")]);
+            using var a=Make(2);using var b=Make(5);
+            foreach(var w in new[]{a,b}) {w.AddInitialUnit(0,new(2048,2048),1);w.Step([new(1,0,1,CommandKind.Remove,new(1))]);}
+            Check(a.Report()!=b.Report(),"retention duration/state missing from hash");
+            using var grouped=Make(5);using var individual=Make(5,false);
+            for(int i=0;i<8;i++)foreach(var w in new[]{grouped,individual})w.AddInitialUnit(0,new(2048+i*128,2048),1);
+            for(int tick=1;tick<=75;tick++)
+            {
+                WorldCommand[] commands=tick==1?[new(1,0,1,CommandKind.MoveAll,Position:new(6144,2048))]:[];
+                grouped.Step(commands);individual.Step(commands);
+                Check(grouped.Report()==individual.Report(),"grouping changed future retention state");
+            }
+
+        });
         test("Fog: event audience survives loss of vision and removal", () =>
         {
             using var w=World(); var scout=w.AddInitialUnit(0,new(2048,2048),1); var victim=w.AddInitialUnit(1,new(3072,2048),2);

@@ -9,9 +9,9 @@ public static class FogScenario
 {
     public static OpenRTS.Core.Orders.WorldCommand[] Commands => [new(1, 0, 1, OpenRTS.Core.Orders.CommandKind.Move, new(1), new(30 * 1024, 12 * 1024))];
     public static string AddVision(string yaml) => Regex.Replace(yaml, @"(?m)^([\w-]+):\s*$", "$0\n  Vision: {Radius: 6144}");
-    public static SimulationWorld Create(UnitCatalog catalog)
+    public static SimulationWorld Create(UnitCatalog catalog, int holdTicks = 0)
     {
-        var world = SimulationWorld.CreateWithMechanics(new() { FogCellSize = 1024 }, catalog.Units,
+        var world = SimulationWorld.CreateWithMechanics(new() { FogCellSize = 1024, FogVisibilityHoldTicks = holdTicks }, catalog.Units,
             ShowcaseScenario.Width * 1024, ShowcaseScenario.Height * 1024, navigationGrid: ShowcaseScenario.Grid(catalog.Locomotion),
             players: [new(1, "Blue"), new(2, "Red")]);
         try

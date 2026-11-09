@@ -10,13 +10,14 @@ try
 {
     var path = "sandbox/content/units.yaml";
     string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null;
-    bool fogGroupsBenchmark = false, fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;
+    bool fogRetentionBenchmark = false, fogGroupsBenchmark = false, fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;
     uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--fog-groups-benchmark") fogGroupsBenchmark = true;
+        if (argument == "--fog-retention-benchmark") fogRetentionBenchmark = true;
+        else if (argument == "--fog-groups-benchmark") fogGroupsBenchmark = true;
         else if (argument == "--fog-benchmark") fogBenchmark = true;
         else if (argument == "--fog") { fog = simulate = true; }
         else if (argument == "--aviation") { aviation = simulate = true; mapPath = AviationScenario.Map; }
@@ -40,7 +41,7 @@ try
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) { ticks = value; ticksSpecified = true; }
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1..4] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--simulate|--benchmark|--fog-retention-benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1..4] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
     if (skirmishAi && skirmish)
         throw new ArgumentException("Select either the scripted skirmish or the AI skirmish.");
@@ -51,6 +52,7 @@ try
     bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
         throw new ArgumentException("Select one map or diagnostic scenario.");
+    if (fogRetentionBenchmark) { FogRetentionBenchmark.Run(count,ticks); return 0; }
     if (fogGroupsBenchmark) { FogGroupBenchmark.Run(count, ticks); return 0; }
     if (fogBenchmark) { FogBenchmark.Run(count, ticks); return 0; }
     if (ecsBenchmark) { EcsBenchmark.Run(count, ticks); return 0; }

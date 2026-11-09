@@ -30,6 +30,7 @@ public sealed class FogWorldView
     private readonly ShaderMaterial _shader;
     private readonly MeshInstance3D _plane = new() { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
     private ImageTexture? _states;
+    private TemporalSight? _trail;
     private long _tick = -1;
     private uint _viewer;
     private FogDisplayStyle _style;
@@ -45,11 +46,13 @@ public sealed class FogWorldView
             uniform vec2 cells;
             uniform vec2 world_size;
             uniform float cell_size;
+            uniform bool retention = false;
             void fragment() {
                 vec2 logical = UV * world_size / cell_size;
-                float state = texture(states, (floor(logical)+0.5)/cells).r;
+                vec2 data = texture(states, (floor(logical)+0.5)/cells).rg;
+                float state = data.r;
                 float circle = texture(sight, UV).a;
-                float visible = style == 0 ? step(0.75, state) : circle;
+                float visible = style == 0 ? (retention ? data.g : step(0.75, state)) : circle;
                 float alpha = state < 0.25 ? 1.0 : 0.65 * (1.0-visible);
                 if (style == 2 && state >= 0.25) {
                     vec2 edge = min(fract(logical), 1.0-fract(logical));
@@ -80,16 +83,24 @@ public sealed class FogWorldView
             _plane.Mesh = new PlaneMesh { Size = new(_width/1024f,_depth/1024f) };
             _plane.Position = new(_width/2048f,0.08f,_depth/2048f);
         }
-        using var image = Image.CreateEmpty(frame.FogColumns, frame.FogRows, false, Image.Format.R8);
+        using var image = Image.CreateEmpty(frame.FogColumns, frame.FogRows, false, Image.Format.Rg8);
         for (int y = 0; y < frame.FogRows; y++) for (int x = 0; x < frame.FogColumns; x++)
-            image.SetPixel(x,y,new Color((int)frame.FogStates[y*frame.FogColumns+x]/2f,0,0));
+            image.SetPixel(x,y,new Color((int)frame.FogStates[y*frame.FogColumns+x]/2f,frame.FogStrength.Length == 0 ? 0 : frame.FogStrength[y*frame.FogColumns+x]/255f,0));
         if (_states is null) _states = ImageTexture.CreateFromImage(image); else _states.Update(image);
+        _shader.SetShaderParameter("retention",frame.FogStrength.Length > 0);
         _shader.SetShaderParameter("states",_states); _shader.SetShaderParameter("style",(int)style);
         _shader.SetShaderParameter("cells",new Vector2(frame.FogColumns,frame.FogRows));
         _shader.SetShaderParameter("world_size",new Vector2(_width,_depth)); _shader.SetShaderParameter("cell_size",(float)frame.FogCellSize);
-        _canvas.SourceCount = style == FogDisplayStyle.Exact ? 0 : frame.VisionSources.Length;
+        _canvas.SourceCount = style == FogDisplayStyle.Exact && frame.FogHoldTicks == 0 ? 0 : frame.VisionSources.Length;
         if (_canvas.Sources.Length < _canvas.SourceCount) Array.Resize(ref _canvas.Sources, _canvas.SourceCount);
         frame.VisionSources[.._canvas.SourceCount].CopyTo(_canvas.Sources); _canvas.QueueRedraw();
         _circles.RenderTargetUpdateMode = _composite.RenderTargetUpdateMode = SubViewport.UpdateMode.Once;
+        if (frame.FogHoldTicks > 0)
+        {
+            _trail ??= new(Node,_circles.GetTexture());
+            _trail.Apply(frame.Tick,frame.Viewer,frame.FogHoldTicks,_circles.Size);
+            _shader.SetShaderParameter("sight",_trail.Texture);
+        }
+        else _shader.SetShaderParameter("sight",_circles.GetTexture());
     }
 }
