@@ -9,6 +9,10 @@ public sealed partial class FrameExchange
     {
         public EntityPose[] Poses = [];
         public ulong[] Observers = [], PreviousObservers = [];
+        public ulong[] HealthObservers = [], StateObservers = [];
+        public bool RestrictLiveFields;
+        public List<OpenRTS.Core.Visibility.ContactPose>[] PlayerContacts = [];
+        public List<OpenRTS.Core.Visibility.ContactPose>? Contacts;
         public OpenRTS.Core.Visibility.VisionSource[] VisionSources = [];
         public int VisionSourceCount;
         public uint[] FogPlayers = [];
@@ -87,7 +91,7 @@ public sealed partial class FrameExchange
             int index = _latest;
             _slots[index].Readers++;
             var data = _slots[index];
-            if (viewer != 0 && data.FogCellSize != 0)
+            if (viewer != 0 && data.FogPlayers.Length != 0)
             {
                 if (!data.Views.TryGetValue(viewer, out var view)) data.Views.Add(viewer, view = Filter(data, viewer));
                 data = view;
@@ -112,6 +116,7 @@ public sealed partial class FrameExchange
             }
         }
         public ReadOnlySpan<OpenRTS.Core.Visibility.VisionSource> VisionSources => Data.VisionSources.AsSpan(0, Data.VisionSourceCount);
+        public ReadOnlySpan<OpenRTS.Core.Visibility.ContactPose> Contacts => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Data.Contacts);
         public uint Viewer => Data.Viewer;
         public ReadOnlySpan<byte> FogStrength => Data.FogStrength;
         public int FogHoldTicks => Data.FogHoldTicks;

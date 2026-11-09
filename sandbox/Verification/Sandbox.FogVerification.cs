@@ -7,6 +7,20 @@ using System.IO;
 public partial class Sandbox
 {
     private bool _verifyFog, _fogCaptureStarted;
+
+    private void VerifySensors(FrameExchange.FrameLease frame)
+    {
+        if (!_session!.Completion.IsCompleted || frame.Tick != _ticks) return;
+        if (frame.Viewer != 1 || frame.Poses.Length != 3 || frame.Contacts.Length != 2)
+            throw new InvalidOperationException($"Expected three models and two radar contacts for player 1. Got {frame.Poses.Length} models and {frame.Contacts.Length} contacts for player {frame.Viewer}.");
+        foreach (var contact in frame.Contacts)
+            if (contact.Knowledge.UnitType.HasValue || contact.Health.HasValue || contact.States.HasValue)
+                throw new InvalidOperationException("The initial radar contacts should be anonymous.");
+        GD.Print("OPENRTS_SENSORS:PASS filtered models and anonymous radar contacts");
+        _verificationDone = true;
+        GetTree().Quit();
+    }
+
     private void SwitchFogViewer()
     {
         _fogViewer = _fogViewer >= (_fogScenario ? 2 : _matchPlayers) ? 1u : _fogViewer + 1; _constructionViewer = _fogViewer;

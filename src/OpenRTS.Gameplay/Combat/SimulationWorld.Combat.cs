@@ -1,5 +1,6 @@
 using OpenRTS.Core.Simulation;
 using OpenRTS.Core.Transport;
+using OpenRTS.Core.Visibility;
 
 namespace OpenRTS.Core;
 
@@ -98,8 +99,10 @@ public sealed partial class SimulationWorld
             if (rule is not null)
             {
                 var actor = _entityHandles[candidate];
+                bool healthKnown = !UsesSensors ||
+                    ModelObservation(owner, candidateId).GetValueOrDefault().HasFlag(LiveObservationFields.Health);
                 var target = new CombatTargetCandidate(candidateId, actor.Get<OwnershipState>().Owner, TypeOf(actor),
-                    actor.Get<HealthState>().Current, distance);
+                    healthKnown ? actor.Get<HealthState>().Current : 0, distance);
                 if (rule.Score(in query, in target) is not { } priority) continue;
                 score = priority;
             }

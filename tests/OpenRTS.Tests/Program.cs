@@ -47,6 +47,7 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
     Reject<ArgumentException>(() => Load("^base: {Health: {HP: 1}}"));
 });
 FogChecks.Run(Test);
+SensorChecks.Run(Test);
 PresentationChecks.Run(Test);
 LocomotionChecks.Run(Test);
 OrderChecks.Run(Test);

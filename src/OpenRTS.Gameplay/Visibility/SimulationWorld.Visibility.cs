@@ -18,8 +18,13 @@ public sealed partial class SimulationWorld
     {
         ThrowIfDisposed();
         if (_failed) throw new InvalidOperationException("Incomplete world.");
-        if (_fog is null) return;
-        _fog.AdvanceTo(Tick);
+        if (_fog is not null) SynchronizeFog(cancellationToken);
+        RefreshSensors(cancellationToken);
+    }
+
+    private void SynchronizeFog(CancellationToken cancellationToken)
+    {
+        _fog!.AdvanceTo(Tick);
         _nextVisionSources.Clear();
         for (int i = 0; i < Count; i++)
         {
@@ -32,15 +37,18 @@ public sealed partial class SimulationWorld
         (_visionSources, _nextVisionSources) = (_nextVisionSources, _visionSources);
         _fog.Update(CollectionsMarshal.AsSpan(_visionSources), cancellationToken);
     }
+
+    /// <summary>Whether the player can observe the live entity or owns the reserved construction project.</summary>
     public bool IsVisible(uint viewer, EntityId id)
     {
         ThrowIfDisposed();
-        if (!_indices.TryGetValue(id, out int index)) return _fog is not null && _fog.PlayerSlot(viewer) >= 0 && _construction?.OwnsProject(viewer, id) == true;
+        if (ModelObservation(viewer, id).HasValue) return true;
+        return ObservationPlayers.Contains(viewer) && _construction?.OwnsProject(viewer, id) == true;
+    }
+
+    private bool InOpticalCoverage(uint viewer, Frent.Entity e)
+    {
         if (_fog is null) return true;
-        if (_fog.PlayerSlot(viewer) < 0) return false;
-        var e = _entityHandles[index];
-        if (e.Get<OwnershipState>().Owner == viewer) return true;
-        if (!IsOnMap(e)) return false;
         var p = e.Get<SpatialState>().Position;
         var footprint = TypeOf(e).Footprint;
         if (footprint is not null && footprint.TargetBounds.Count > 0)
@@ -61,9 +69,9 @@ public sealed partial class SimulationWorld
 
     private void CaptureCommandVision()
     {
-        if (_fog is null) return;
+        if (ObservationPlayers.Count == 0) return;
         SynchronizeVisibility();
-        foreach (uint p in _fog.Players)
+        foreach (uint p in ObservationPlayers)
         {
             if (!_commandVision.TryGetValue(p, out var ids)) _commandVision.Add(p, ids = []);
             ids.Clear();
@@ -81,7 +89,7 @@ public sealed partial class SimulationWorld
     }
     private bool CommandTargetVisible(WorldCommand command)
     {
-        if (_fog is null || command.TargetEntity.Value == 0) return true;
+        if (ObservationPlayers.Count == 0 || command.TargetEntity.Value == 0) return true;
         if (command.Issuer != 0) return _commandVision.TryGetValue(command.Issuer, out var ids) && ids.Contains(command.TargetEntity);
         // Unstamped direct actions still use the recipients' knowledge.
         if (command.Recipients is { } recipients)
@@ -96,7 +104,7 @@ public sealed partial class SimulationWorld
     }
     private void ForgetHiddenTargets()
     {
-        if (_fog is null) return;
+        if (ObservationPlayers.Count == 0) return;
         for (int i = 0; i < Count; i++)
         {
             var e = _entityHandles[i]; uint owner = e.Get<OwnershipState>().Owner;
@@ -109,6 +117,6 @@ public sealed partial class SimulationWorld
     }
     private void ValidateVisionOwner(uint owner)
     {
-        if (_fog is not null && owner != 0 && _fog.PlayerSlot(owner) < 0) throw new ArgumentException("Fog requires an explicitly configured player.", nameof(owner));
+        if (ObservationPlayers.Count != 0 && owner != 0 && !ObservationPlayers.Contains(owner)) throw new ArgumentException("Visibility requires an explicitly configured player.", nameof(owner));
     }
 }

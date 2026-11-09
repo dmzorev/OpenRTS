@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using Godot;
 using OpenRTS.Content;
 using OpenRTS.Core;
+using OpenRTS.Core.Visibility;
 
 namespace OpenRTS.Godot.Controls;
 
 public partial class TerminalMinimap : Control
 {
     private readonly List<(Vector2 Position, Color Color, bool Neutral)> _markers = [];
+    private readonly List<(Vector2 Position, bool Identified)> _contacts = [];
     private NavigationGrid? _grid;
     private Texture2D? _terrain;
     private Rect2 _camera;
@@ -20,7 +22,8 @@ public partial class TerminalMinimap : Control
     public event Action<Vector2>? Navigate;
     public required Func<uint, Color> TeamColor { get; init; }
 
-    public void UpdateMap(NavigationGrid grid, LocomotionCatalog locomotion, ReadOnlySpan<EntityPose> poses, long tick, Rect2 camera)
+    public void UpdateMap(NavigationGrid grid, LocomotionCatalog locomotion, ReadOnlySpan<EntityPose> poses, long tick, Rect2 camera,
+        ReadOnlySpan<ContactPose> contacts = default)
     {
         bool changed = !ReferenceEquals(_grid, grid);
         if (changed)
@@ -37,6 +40,13 @@ public partial class TerminalMinimap : Control
                 var color = TeamColor(pose.Presentation.Owner);
                 _markers.Add((new Vector2(pose.Current.X, pose.Current.Y) / WorldPosition.UnitsPerCell, color,
                     pose.Presentation.Owner == 0));
+            }
+            _contacts.Clear();
+            foreach (var contact in contacts)
+            {
+                var knowledge = contact.Knowledge;
+                _contacts.Add((new Vector2(knowledge.Position.X, knowledge.Position.Y) / WorldPosition.UnitsPerCell,
+                    knowledge.UnitType.HasValue));
             }
             changed = true;
         }
@@ -103,6 +113,13 @@ public partial class TerminalMinimap : Control
             var marker = new Rect2(point - Vector2.One * 2, Vector2.One * 4);
             if (neutral) DrawRect(marker, color, false);
             else DrawRect(marker, color);
+        }
+        var radar = new Color("#ffcc6e");
+        foreach (var (world, identified) in _contacts)
+        {
+            var point = map.Position + world * scale;
+            if (identified) DrawRect(new Rect2(point - Vector2.One * 3, Vector2.One * 6), radar, false, 1.5f);
+            else DrawCircle(point, 2.5f, radar);
         }
         var camera = new Rect2(map.Position + _camera.Position * scale, _camera.Size * scale);
         var visible = map.Intersection(camera);

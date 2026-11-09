@@ -87,11 +87,16 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (mechanics.GridPathfinder is not null && navigationGrid is null)
             throw new ArgumentException("A registered grid pathfinder requires a navigation grid.", nameof(navigationGrid));
         _economy = new(players, StorageGate, IsConstructing);
-        if (mechanics.FogCellSize is { } fogSize && mechanics.FogMode != OpenRTS.Core.Visibility.FogMode.Visible)
+        bool hasFog = mechanics.FogCellSize.HasValue && mechanics.FogMode != OpenRTS.Core.Visibility.FogMode.Visible;
+        bool hasSensors = _types.Any(t => t.Sensors is not null);
+        if (hasFog || hasSensors)
         {
             var initialPlayers = new PlayerPose[_economy.PlayerCount];
             _economy.CopyPlayers(initialPlayers, null);
-            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize, mechanics.OptimizeFogGroups, mechanics.FogMode, mechanics.FogVisibilityHoldTicks);
+            var viewers = initialPlayers.Where(p => p.Id != 0).Select(p => p.Id).ToArray();
+            if (hasFog)
+                _fog = new(width, depth, viewers, mechanics.FogCellSize!.Value, mechanics.OptimizeFogGroups, mechanics.FogMode, mechanics.FogVisibilityHoldTicks);
+            if (hasSensors) _sensors = new(_types, viewers);
         }
         _buildRecipes = new(_types);
         _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);
@@ -163,6 +168,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     {
         CaptureCommandVision();
         _conditionGrants?.Expire(Tick + 1);
+        _sensors?.Expire(Tick + 1);
         RebuildMotionIndex();
     }
 
@@ -311,6 +317,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         {
             SynchronizeVisibility();
             if (_fog is not null) { writer.Write(29); _fog.WriteState(writer); }
+            _sensors?.WriteState(writer);
             WriteMechanics(writer);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(NextEntityId); writer.Write(_random.State);
@@ -512,6 +519,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (!replacing) EmitEvent(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
         _economy.InvalidatePower();
         _conditionGrants?.RemoveEntity(id);
+        if (!replacing) _sensors?.Grants.Remove(id);
         DeleteEntity(index);
         _orderDirty = true;
         if (!replacing && stamped && _baseGrid is not null) CommitGrid(ComposeFootprints(_baseGrid));

@@ -5,6 +5,7 @@ using System.Text;
 using DeclarativeContent;
 using OpenRTS.Core;
 using OpenRTS.Core.Orders;
+using OpenRTS.Core.Visibility;
 
 namespace OpenRTS.Content;
 
@@ -48,6 +49,7 @@ public sealed partial class UnitCatalog
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>()
             .Register<VisionOptions>("Vision", (_, _, options) => options)
+            .Register<SensorOptions>("Sensors", (_, _, options) => options)
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
             .Register<EconomyOptions>("Economy", (_, _, options) => options)
             .Register<PassengerOptions>("Passenger", (_, _, options) => options)
@@ -119,7 +121,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)), targetCategories: new TargetCategories(traits.All<TargetOptions>().SingleOrDefault()?.Categories ?? ["ground"]), flight: traits.All<FlightOptions>().SingleOrDefault()?.Compile(), airbase: traits.All<AirbaseOptions>().SingleOrDefault()?.Compile(), visionRadius: traits.All<VisionOptions>().SingleOrDefault()?.Radius ?? 0);
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)), targetCategories: new TargetCategories(traits.All<TargetOptions>().SingleOrDefault()?.Categories ?? ["ground"]), flight: traits.All<FlightOptions>().SingleOrDefault()?.Compile(), airbase: traits.All<AirbaseOptions>().SingleOrDefault()?.Compile(), visionRadius: traits.All<VisionOptions>().SingleOrDefault()?.Radius ?? 0, sensors: traits.All<SensorOptions>().SingleOrDefault()?.Compile(locomotion));
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons), visual?.Selectable ?? true);
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -229,6 +231,38 @@ public sealed partial class UnitCatalog
     private sealed class VisionOptions
     {
         [Range(0, WorldPosition.MaximumExtent)] public int Radius { get; set; }
+    }
+
+    private sealed class SensorOptions
+    {
+        public string[]? Signatures { get; set; }
+        public ConcealmentOptions[] Concealments { get; set; } = [];
+        public DetectorOptions[] Detectors { get; set; } = [];
+
+        public SensorDefinition Compile(LocomotionCatalog? locomotion) => new(Signatures,
+            Concealments.Select(c => new ConcealmentDefinition(c.Channel, c.Counter, c.Terrain is null ? null :
+                (locomotion ?? throw new ArgumentException("Terrain concealment requires a terrain catalog.")).TerrainIndex(c.Terrain))),
+            Detectors.Select(d => new DetectorDefinition(d.Channel, d.Signature, d.Range, d.Display, d.Counters,
+                (d.Health ? LiveObservationFields.Health : LiveObservationFields.None) |
+                (d.States ? LiveObservationFields.States : LiveObservationFields.None))));
+    }
+
+    private sealed class ConcealmentOptions
+    {
+        public string Channel { get; set; } = SensorDefinition.Optical;
+        public string Counter { get; set; } = "";
+        public string? Terrain { get; set; }
+    }
+
+    private sealed class DetectorOptions
+    {
+        public string Channel { get; set; } = "";
+        public string Signature { get; set; } = "";
+        public int Range { get; set; }
+        public SensorDisplay Display { get; set; }
+        public string[] Counters { get; set; } = [];
+        public bool Health { get; set; }
+        public bool States { get; set; }
     }
 
     private sealed class FlightOptions

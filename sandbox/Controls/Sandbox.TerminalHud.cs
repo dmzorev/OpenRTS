@@ -281,7 +281,7 @@ public partial class Sandbox
         var field = Playfield();
         if (_displayBaseGrid is { } grid && GroundPoint(field.Position) is { } start && GroundPoint(field.End) is { } end)
             _minimap!.UpdateMap(grid, _catalog!.Locomotion!, _displayPoses.AsSpan(0, _displayCount), frame.Tick,
-                new Rect2(start.X, start.Z, end.X - start.X, end.Z - start.Z));
+                new Rect2(start.X, start.Z, end.X - start.X, end.Z - start.Z), frame.Contacts);
 
         foreach (var player in frame.Players)
             if (player.Id == _constructionViewer)
@@ -330,7 +330,7 @@ public partial class Sandbox
             var pose = _displayPoses[i];
             var type = _catalog!.Units[pose.UnitType].WithRotation(pose.QuarterTurns);
             bool selected = _selection.Contains(pose.Id);
-            bool showHealth = selected || _allHealth || pose.Health < type.MaxHealth;
+            bool showHealth = pose.Health > 0 && (selected || _allHealth || pose.Health < type.MaxHealth);
             bool showCapture = pose.Capture is { Progress: > 0, Duration: > 0 };
             if (!showHealth && !pose.Upgrade.Active && !showCapture) continue;
             var position = _sprites!.DisplayPosition(pose, alpha);

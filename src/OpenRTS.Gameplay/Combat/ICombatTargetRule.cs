@@ -4,6 +4,7 @@ namespace OpenRTS.Core.Combat;
 public readonly record struct CombatTargetQuery(EntityId Origin, uint Owner, UnitDefinition OriginType, WeaponDefinition Weapon, int Range);
 
 /// <summary>A legal automatic target. Distance is measured between the entities' physical boundaries.</summary>
+/// <param name="Health">Current health when disclosed to the observer, otherwise zero.</param>
 public readonly record struct CombatTargetCandidate(EntityId Entity, uint Owner, UnitDefinition Type, int Health, long DistanceSquared);
 
 /// <summary>Ranks targets during automatic acquisition, including attack-move and autocast.</summary>
