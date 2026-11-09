@@ -234,7 +234,7 @@ public sealed partial class SimulationWorld
         entityMotion.Moving = false; entityNavigation.GroupMember = false; entity.Get<NavigationAgentState>().Route = null;
         entityNavigation.WaitTicks = entityNavigation.PathLength = entityNavigation.PathCursor = 0;
         entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0; entityNavigation.LocalTarget = default;
-        _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, entityMotion.Target, entityIdentity.Type));
+        EmitEvent(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, entityMotion.Target, entityIdentity.Type));
     }
 
     private static long DistanceSquared(WorldPosition a, WorldPosition b)

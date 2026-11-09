@@ -65,6 +65,10 @@ def main():
     print("PASS aviation sources and normalized sprites match SHA-256", flush=True)
 
     headless = ["dotnet", "run", "--project", "tools/OpenRTS.Headless", "--no-build", "--no-launch-profile", "--"]
+    fog = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-fog"])
+    if "OPENRTS_FOG:PASS" not in fog.stdout or "SCRIPT ERROR:" in fog.stderr:
+        raise RuntimeError("Fog verification failed:\n" + fog.stdout + fog.stderr)
+    print("PASS F1 fog: three states, viewer filtering and controls", flush=True)
     expected = report(run(headless).stdout)
     if expected["DefinitionCount"] != 12:
         raise RuntimeError("Expected twelve concrete unit definitions, including aviation")

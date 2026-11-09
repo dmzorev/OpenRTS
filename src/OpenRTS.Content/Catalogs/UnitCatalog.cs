@@ -47,6 +47,7 @@ public sealed partial class UnitCatalog
     {
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>()
+            .Register<VisionOptions>("Vision", (_, _, options) => options)
             .Register<HealthOptions>("Health", (_, _, options) => options, required: true)
             .Register<EconomyOptions>("Economy", (_, _, options) => options)
             .Register<PassengerOptions>("Passenger", (_, _, options) => options)
@@ -118,7 +119,7 @@ public sealed partial class UnitCatalog
                 }
                 var queues = (traits.All<QueueOptions>().SingleOrDefault()?.Queues ?? new()).OrderBy(q => q.Key, StringComparer.Ordinal).Select(q => q.Value.Compile(q.Key)).ToArray();
                 var (abilities, products, buttons) = CompileActions(traits.All<ActionsOptions>().SingleOrDefault(), traits.All<ActionPanelOptions>().SingleOrDefault(), queues, buildDefaults);
-                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)), targetCategories: new TargetCategories(traits.All<TargetOptions>().SingleOrDefault()?.Categories ?? ["ground"]), flight: traits.All<FlightOptions>().SingleOrDefault()?.Compile(), airbase: traits.All<AirbaseOptions>().SingleOrDefault()?.Compile());
+                units[i] = new(id, health.HP, visual?.Animations, visual?.States, profile, weapons: mounts, armor: health.Armor, movable: movement?.Enabled ?? stamp is null, body: shape, footprint: stamp, abilities: abilities, taskQueues: queues, products: products, build: build, economy: traits.All<EconomyOptions>().SingleOrDefault()?.Compile(), capturable: traits.All<CapturableOptions>().SingleOrDefault()?.Compile(), destruction: health.Destruction, passenger: traits.All<PassengerOptions>().SingleOrDefault()?.Compile(), transport: traits.All<TransportOptions>().SingleOrDefault()?.Compile(), constructionRange: traits.All<BuilderOptions>().SingleOrDefault()?.Range ?? 0, supply: traits.All<SupplyOptions>().SingleOrDefault()?.Compile(), upgrades: traits.All<UpgradesOptions>().SingleOrDefault()?.Variants.Select(p => p.Value.Compile(p.Key)), targetCategories: new TargetCategories(traits.All<TargetOptions>().SingleOrDefault()?.Categories ?? ["ground"]), flight: traits.All<FlightOptions>().SingleOrDefault()?.Compile(), airbase: traits.All<AirbaseOptions>().SingleOrDefault()?.Compile(), visionRadius: traits.All<VisionOptions>().SingleOrDefault()?.Radius ?? 0);
                 bindings[i] = new(id, visual?.Model, visual?.Name ?? id, Array.AsReadOnly(buttons), visual?.Selectable ?? true);
             }
             catch (ArgumentException error) { throw definition.Error(id, error.Message); }
@@ -225,6 +226,11 @@ public sealed partial class UnitCatalog
         public bool FireFromTransport { get; set; }
     }
     private sealed class TargetOptions { public string[] Categories { get; set; } = ["ground"]; }
+    private sealed class VisionOptions
+    {
+        [Range(0, WorldPosition.MaximumExtent)] public int Radius { get; set; }
+    }
+
     private sealed class FlightOptions
     {
         public FlightMode Mode { get; set; }

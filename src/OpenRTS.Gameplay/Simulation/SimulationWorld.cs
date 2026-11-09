@@ -85,6 +85,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (mechanics.GridPathfinder is not null && navigationGrid is null)
             throw new ArgumentException("A registered grid pathfinder requires a navigation grid.", nameof(navigationGrid));
         _economy = new(players, StorageGate, IsConstructing);
+        if (mechanics.FogCellSize is { } fogSize)
+        {
+            var initialPlayers = new PlayerPose[_economy.PlayerCount];
+            _economy.CopyPlayers(initialPlayers, null);
+            _fog = new(width, depth, initialPlayers.Where(p => p.Id != 0).Select(p => p.Id), fogSize);
+        }
         _buildRecipes = new(_types);
         _production = new(this, _types, _buildRecipes, _economy, mechanics.ProductionRate, StorageGate);
         SpeedPerTick = speedPerTick;
@@ -122,6 +128,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (Tick != 0) throw new InvalidOperationException("After initialization, entities are created through commands.");
         ValidatePosition(position);
         ValidateType(unitType);
+        ValidateVisionOwner(owner);
         var type = _types[unitType];
         if (type.Flight is not null && !FlightPlacementAllowed(type, position, owner))
             throw new ArgumentException("Initial aircraft placement is occupied or has no compatible landing surface.", nameof(position));
@@ -152,6 +159,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     protected override void PrepareStep()
     {
+        CaptureCommandVision();
         _conditionGrants?.Expire(Tick + 1);
         RebuildMotionIndex();
     }
@@ -161,6 +169,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         CapturePreviousFacings();
         CompleteTransformations();
         PrepareUpgrades();
+        SynchronizeVisibility(cancellationToken);
+        ForgetHiddenTargets();
         UpdateOrders();
         _capture?.EndOrders(Tick);
         EnsureMotionIndex();
@@ -168,6 +178,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_navigation is not null) UpdateNavigation(cancellationToken);
         else UpdateDirectMovement();
         UpdateFlights();
+        SynchronizeVisibility(cancellationToken);
+        ForgetHiddenTargets();
         UpdateWeapons();
         AdvanceAirService();
         AdvanceTransformations();
@@ -175,9 +187,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         AdvanceSupply();
         _economy.AdvanceIncome(ExistingStorage, Tick);
         _production.Advance(ExistingStorage, StepCancellation);
+        SynchronizeVisibility(cancellationToken);
+        ForgetHiddenTargets();
         UpdatePresentation();
         if (_transformations.Count != 0) ApplyTransformationFacings();
         _endOfTick?.Advance(new(this));
+        SynchronizeVisibility(cancellationToken);
     }
 
     internal bool TryGetGameplayOwner(EntityId id, out uint owner)
@@ -292,6 +307,8 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
+            SynchronizeVisibility();
+            if (_fog is not null) { writer.Write(29); _fog.WriteState(writer); }
             WriteMechanics(writer);
             writer.Write(Tick); writer.Write(Width); writer.Write(Depth);
             writer.Write(TickRate); writer.Write(SpeedPerTick); writer.Write(NextEntityId); writer.Write(_random.State);
@@ -350,9 +367,14 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
 
     protected override void ApplyCommand(WorldCommand command)
     {
+        if (!CommandTargetVisible(command))
+        {
+            EmitEvent(new(Tick, WorldEventKind.CommandDenied, command.Entity, Owner: command.Issuer));
+            return;
+        }
         if (_restrictPlayerCommands && command.Issuer != 0 && !CanApplyPlayerCommand(command))
         {
-            _events.Add(new(Tick, WorldEventKind.CommandDenied, command.Entity, TargetEntity: command.TargetEntity, Owner: command.Issuer));
+            EmitEvent(new(Tick, WorldEventKind.CommandDenied, command.Entity, TargetEntity: command.TargetEntity, Owner: command.Issuer));
             return;
         }
         if (command.Kind == CommandKind.Transform)
@@ -424,15 +446,15 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
             terrain &= stamp;
             if (!terrain || !free)
             {
-                _events.Add(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
+                EmitEvent(new(Tick, !free ? WorldEventKind.CellOccupied : WorldEventKind.CellBlocked,
                     default, command.Position, command.UnitType));
                 return;
             }
             if ((command.States & ~_types[command.UnitType].AllowedStateMask) != 0)
-            { _events.Add(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
+            { EmitEvent(new(Tick, WorldEventKind.InvalidPresentation, default, command.Position, command.UnitType)); return; }
             var id = Spawn(command.UnitType, command.Position, command.Owner, command.States, quarterTurns: command.QuarterTurns);
             if (footprintGrid is not null) CommitGrid(footprintGrid);
-            _events.Add(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType) { QuarterTurns = command.QuarterTurns });
+            EmitEvent(new(Tick, WorldEventKind.Spawned, id, command.Position, command.UnitType) { QuarterTurns = command.QuarterTurns });
             return;
         }
         if (command.Kind is CommandKind.MoveAll or CommandKind.Scatter)
@@ -450,7 +472,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         }
         if (!_indices.TryGetValue(command.Entity, out int index))
         {
-            _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity));
+            EmitEvent(new(Tick, WorldEventKind.MissingEntity, command.Entity));
             return;
         }
         if (command.Kind is CommandKind.PlayAnimation or CommandKind.SetVisualStates or CommandKind.ToggleVisualState or CommandKind.Aim or CommandKind.ClearAim)
@@ -468,7 +490,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         RejectAction(command.Entity);
     }
 
-    private void RejectAction(EntityId id = default) => _events.Add(new(Tick, WorldEventKind.ActionUnavailable, id));
+    private void RejectAction(EntityId id = default) => EmitEvent(new(Tick, WorldEventKind.ActionUnavailable, id));
 
     private void DestroyIndex(int index, bool wreck = true, bool replacing = false)
     {
@@ -485,7 +507,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         RemoveSupply(_entityHandles[index], actor.Get<EntityIdentity>());
         CancelUpgrade(actor, restoreNeutral: false);
         bool stamped = _footprints.Remove(id);
-        if (!replacing) _events.Add(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
+        if (!replacing) EmitEvent(new(Tick, wreck ? WorldEventKind.Destroyed : WorldEventKind.Removed, id, _entityHandles[index].Get<SpatialState>().Position, _entityHandles[index].Get<EntityIdentity>().Type, Owner: _entityHandles[index].Get<OwnershipState>().Owner) { QuarterTurns = RotationOf(actor) });
         _economy.InvalidatePower();
         _conditionGrants?.RemoveEntity(id);
         DeleteEntity(index);
@@ -501,7 +523,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         ref var entityNavigation = ref entity.Get<NavigationAgentState>();
         ref var entityMotion = ref entity.Get<MotionState>();
         if ((!_types[entityIdentity.Type].Movable || UpgradeImmobilizes(entity)) && position != entitySpatial.Position)
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        { EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (IsAircraft(entity))
         {
             var body = _types[entityIdentity.Type].Body;
@@ -513,12 +535,12 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
         if (_navigation is not null)
         {
             if (!Resolver(entityIdentity.Type).Resolve(entitySpatial.Position, position, out var resolved, StepCancellation))
-            { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
-            if (resolved != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, entityIdentity.Id, resolved, entityIdentity.Type));
+            { EmitEvent(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
+            if (resolved != position) EmitEvent(new(Tick, WorldEventKind.DestinationAdjusted, entityIdentity.Id, resolved, entityIdentity.Type));
             position = resolved;
         }
         else if (!StopAllowed(entityIdentity.Type, position))
-        { _events.Add(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
+        { EmitEvent(new(Tick, WorldEventKind.NoRoute, entityIdentity.Id, position, entityIdentity.Type)); return false; }
         entityNavigation.GroupMember = false; entityNavigation.OrderGroup = 0; entityMotion.MovementRemainder = 0;
         entityNavigation.WaitTicks = entityNavigation.PathLength = entityNavigation.PathCursor = 0;
         entityNavigation.YieldFor = default; entityNavigation.YieldDeadline = 0; entityNavigation.LocalTarget = default;
@@ -543,6 +565,7 @@ public sealed partial class SimulationWorld : Simulation<WorldCommand, WorldEven
     private EntityId Spawn(int unitType, WorldPosition position, uint owner = 0, uint states = 0,
         EntityId id = default, int? initialHealth = null, Action<Frent.Entity>? initialize = null, int quarterTurns = 0)
     {
+        ValidateVisionOwner(owner);
         if (_types[unitType].Flight is not null) ValidateFlightSurface();
         if (id.Value == 0) id = AllocateEntityId();
         Frent.Entity state;

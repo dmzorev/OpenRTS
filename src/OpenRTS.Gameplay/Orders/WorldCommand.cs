@@ -31,6 +31,10 @@ public readonly record struct WorldEvent(long Tick, WorldEventKind Kind, EntityI
     WorldPosition Position = default, int UnitType = -1, int Animation = -1, int DurationTicks = 0, AnimationTrack Track = AnimationTrack.Weapon,
     int Amount = 0, EntityId TargetEntity = default, int Mount = 0, WorldPosition SourcePosition = default, long ProjectileId = 0, uint Owner = 0, uint PreviousOwner = 0)
 {
+    [JsonIgnore]
+    public OpenRTS.Core.Visibility.FogEventVisibility? Visibility { get; init; }
+    public WorldEvent? ForViewer(uint viewer) => Visibility is null ? this : Visibility.ForViewer(this, viewer);
+
     /// <summary>Sprite projection of the emitter and the actual target at the time of the event.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public HoverEndpoints Hover { get; init; }

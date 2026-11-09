@@ -62,6 +62,7 @@ public sealed class SkirmishAi
         _commands.Clear();
         Array.Resize(ref _poses, world.Count);
         world.CopyPoses(_poses);
+        if (world.Fog is not null) _poses = _poses.Where(p => world.IsVisible(_player, p.Id)).ToArray();
         var own = _poses.Where(p => p.Presentation.Owner == _player && p.Carrier == default)
             .OrderBy(p => p.Id.Value).ToArray();
         if (tick == 0) ValidateStart(world, own);

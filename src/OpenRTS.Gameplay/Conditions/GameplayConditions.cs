@@ -30,18 +30,18 @@ public sealed partial class SimulationWorld
     {
         if (!_indices.ContainsKey(command.Entity))
         {
-            _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity));
+            EmitEvent(new(Tick, WorldEventKind.MissingEntity, command.Entity));
             return;
         }
         if (command.Kind == CommandKind.GrantCondition)
         {
             long id = (_conditionGrants ??= new()).Add(command.Entity, Tick, command.DurationTicks);
-            _events.Add(new WorldEvent(Tick, WorldEventKind.ConditionGranted, command.Entity, DurationTicks: command.DurationTicks)
+            EmitEvent(new WorldEvent(Tick, WorldEventKind.ConditionGranted, command.Entity, DurationTicks: command.DurationTicks)
                 { Condition = command.Condition, ConditionGrantId = id });
         }
         else if (_conditionGrants?.Revoke(command.Entity, command.ConditionGrantId) == true)
         {
-            _events.Add(new WorldEvent(Tick, WorldEventKind.ConditionRevoked, command.Entity)
+            EmitEvent(new WorldEvent(Tick, WorldEventKind.ConditionRevoked, command.Entity)
                 { Condition = GameplayConditions.WeaponsDisabled, ConditionGrantId = command.ConditionGrantId });
         }
         else RejectAction(command.Entity);

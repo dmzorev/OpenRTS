@@ -3,11 +3,17 @@ using System.Diagnostics;
 namespace OpenRTS.Core;
 
 /// <summary>One producer and multiple readers. Leases pin a slot until its last reader releases it.</summary>
-public sealed class FrameExchange
+public sealed partial class FrameExchange
 {
-    private sealed class Slot
+    internal sealed class Slot
     {
         public EntityPose[] Poses = [];
+        public ulong[] Observers = [], PreviousObservers = [];
+        public uint[] FogPlayers = [];
+        public OpenRTS.Core.Visibility.CellVisibility[] FogStates = [];
+        public int FogColumns, FogRows, FogCellSize, FogWidth, FogDepth;
+        public uint Viewer;
+        public readonly Dictionary<uint, Slot> Views = [];
         public WeaponPose[] Weapons = [];
         public ProjectilePose[] Projectiles = [];
         public TaskPose[] Tasks = [];
@@ -36,6 +42,7 @@ public sealed class FrameExchange
             if (index < 0) return false;
             var slot = _slots[index];
             if (slot.Poses.Length < world.Count) Array.Resize(ref slot.Poses, Math.Max(world.Count, checked(Math.Max(16, slot.Poses.Length * 2))));
+            world.SynchronizeVisibility();
             world.CopyPoses(slot.Poses);
             slot.WeaponCount = world.WeaponCount; slot.ProjectileCount = world.ProjectileCount;
             if (slot.Weapons.Length < slot.WeaponCount) Array.Resize(ref slot.Weapons, Math.Max(slot.WeaponCount, slot.Weapons.Length * 2));
@@ -62,19 +69,27 @@ public sealed class FrameExchange
             slot.Yields = world.NavigationYields;
             slot.GoalExchanges = world.NavigationGoalExchanges;
             slot.QueueWaiting = world.NavigationQueueWaitingCount;
+            CaptureFog(slot, world);
+            slot.Views.Clear();
             _latest = index;
             return true;
         }
     }
 
-    public FrameLease? AcquireLatest()
+    public FrameLease? AcquireLatest(uint viewer = 0)
     {
         lock (_gate)
         {
             if (_latest < 0) return null;
             int index = _latest;
             _slots[index].Readers++;
-            return new FrameLease(this, index);
+            var data = _slots[index];
+            if (viewer != 0 && data.FogCellSize != 0)
+            {
+                if (!data.Views.TryGetValue(viewer, out var view)) data.Views.Add(viewer, view = Filter(data, viewer));
+                data = view;
+            }
+            return new FrameLease(this, index, data);
         }
     }
 
@@ -83,15 +98,23 @@ public sealed class FrameExchange
         private readonly FrameExchange _owner;
         private readonly int _index;
         private int _disposed;
-        internal FrameLease(FrameExchange owner, int index) { _owner = owner; _index = index; }
+        private readonly Slot _data;
+        internal FrameLease(FrameExchange owner, int index, Slot data) { _owner = owner; _index = index; _data = data; }
         private Slot Data
         {
             get
             {
                 ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-                return _owner._slots[_index];
+                return _data;
             }
         }
+        public uint Viewer => Data.Viewer;
+        public int FogColumns => Data.FogColumns;
+        public int FogRows => Data.FogRows;
+        public int FogCellSize => Data.FogCellSize;
+        public int FogWidth => Data.FogWidth;
+        public int FogDepth => Data.FogDepth;
+        public ReadOnlySpan<OpenRTS.Core.Visibility.CellVisibility> FogStates => Data.FogStates;
         public long Tick => Data.Tick;
         public int TickRate => Data.TickRate;
         public long Timestamp => Data.Timestamp;

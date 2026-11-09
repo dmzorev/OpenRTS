@@ -28,6 +28,7 @@ internal sealed class ConstructionSystem
     }
 
     internal bool IsFoundation(Entity entity) => _mechanic.IsFoundation(entity);
+    internal bool OwnsProject(uint owner, EntityId id) => _constructionProjects.TryGetValue(owner, out var projects) && projects.ContainsKey(id.Value);
     internal bool HasReservations => _siteReservations.Count != 0;
     internal void BeginOrders()
     {

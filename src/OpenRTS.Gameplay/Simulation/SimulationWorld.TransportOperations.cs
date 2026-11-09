@@ -52,5 +52,5 @@ public sealed partial class SimulationWorld
         CancelWindups(index);
     }
 
-    void ITransportWorld.Emit(WorldEvent value) => _events.Add(value);
+    void ITransportWorld.Emit(WorldEvent value) => EmitEvent(value);
 }

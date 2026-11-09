@@ -21,7 +21,7 @@ public sealed partial class SimulationWorld
     private void SetGroupTarget(WorldPosition position, int[] members, UnitActionKind action = UnitActionKind.Move, bool queued = false)
     {
         bool Eligible(int i) => _types[_entityHandles[i].Get<EntityIdentity>().Type].Movable && !UpgradeImmobilizes(_entityHandles[i]) && !IsTransformationLocked(_entityHandles[i]) && (action != UnitActionKind.AttackMove || OrderWeapon(i) is not null);
-        foreach (int i in members) if (!Eligible(i)) _events.Add(new(Tick, WorldEventKind.InvalidOrder, _entityHandles[i].Get<EntityIdentity>().Id));
+        foreach (int i in members) if (!Eligible(i)) EmitEvent(new(Tick, WorldEventKind.InvalidOrder, _entityHandles[i].Get<EntityIdentity>().Id));
         members = members.Where(Eligible).ToArray();
         var grid = _navigation!.Grid;
         if (members.Length == 0) return;
@@ -51,7 +51,7 @@ public sealed partial class SimulationWorld
         if (anchor is not { } destination) { SplitOrReject(); return; }
         slots = GroupDestinations.Slots(grid, destination, members.Length, components.Keys.ToArray(), Valid);
         if (slots is null) { Reject(); return; }
-        if (destination != position) _events.Add(new(Tick, WorldEventKind.DestinationAdjusted, default, destination));
+        if (destination != position) EmitEvent(new(Tick, WorldEventKind.DestinationAdjusted, default, destination));
         _bulkAllowed = !_navigation.UsesWeightedRoutes;
         int root = grid.CellAt(slots.OrderBy(point => DistanceSquared(point, destination)).ThenBy(point => point.Y).ThenBy(point => point.X).First());
         _navigation.ResetGroup(root);
@@ -65,7 +65,7 @@ public sealed partial class SimulationWorld
             if (parts.Length == 1) { Reject(); return; }
             foreach (var part in parts) SetGroupTarget(position, part, action, queued);
         }
-        void Reject() => _events.Add(new(Tick, WorldEventKind.NoRoute, default, position));
+        void Reject() => EmitEvent(new(Tick, WorldEventKind.NoRoute, default, position));
     }
 
     private void TryBulkStep()

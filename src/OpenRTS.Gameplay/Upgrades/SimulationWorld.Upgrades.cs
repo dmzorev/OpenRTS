@@ -190,7 +190,7 @@ public sealed partial class SimulationWorld
     private void EmitUpgradeEvent(Entity actor, WorldEventKind kind, uint payer)
     {
         var identity = actor.Get<EntityIdentity>();
-        _events.Add(new(Tick, kind, identity.Id, actor.Get<SpatialState>().Position, identity.Type, Owner: payer));
+        EmitEvent(new(Tick, kind, identity.Id, actor.Get<SpatialState>().Position, identity.Type, Owner: payer));
     }
 
     private static UpgradePose ReadUpgrade(Entity actor, UnitDefinition type, ref uint visualStates)

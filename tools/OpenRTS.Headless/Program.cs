@@ -10,13 +10,15 @@ try
 {
     var path = "sandbox/content/units.yaml";
     string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null;
-    bool skirmishAi = false, ticksSpecified = false, aviation = false;
+    bool fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;
     uint? aiPlayer = null;
     bool simulate = false, benchmark = false, hasPath = false, navigation = false, reverseJobs = false, showcase = false, buildings = false, sizeBenchmark = false, production = false, ecsBenchmark = false, skirmish = false;
     int count = 10000, ticks = DiagnosticScenario.DefaultTicks, workers = 4;
     foreach (string argument in args)
     {
-        if (argument == "--aviation") { aviation = simulate = true; mapPath = AviationScenario.Map; }
+        if (argument == "--fog-benchmark") fogBenchmark = true;
+        else if (argument == "--fog") { fog = simulate = true; }
+        else if (argument == "--aviation") { aviation = simulate = true; mapPath = AviationScenario.Map; }
         else if (argument == "--skirmish") { skirmish = simulate = true; }
         else if (argument == "--skirmish-ai") { skirmishAi = simulate = true; }
         else if (argument.StartsWith("--ai-player=", StringComparison.Ordinal) && uint.TryParse(argument[12..], out uint player) && player is >= 1 and <= MapScenario.MaximumPlayers) aiPlayer = player;
@@ -48,6 +50,7 @@ try
     bool mapRequested = skirmish || skirmishAi || mapPath is not null || startSetPath is not null;
     if (mapRequested && (buildings || showcase || navigation || benchmark || ecsBenchmark || sizeBenchmark || skirmish && mapPath is not null))
         throw new ArgumentException("Select one map or diagnostic scenario.");
+    if (fogBenchmark) { FogBenchmark.Run(count, ticks); return 0; }
     if (ecsBenchmark) { EcsBenchmark.Run(count, ticks); return 0; }
     if (sizeBenchmark) { SizeBenchmark.Run(count, ticks, workers, reverseJobs); return 0; }
     if (buildings && (showcase || navigation || benchmark)) throw new ArgumentException("Buildings is a separate fixture.");
@@ -55,7 +58,7 @@ try
     var terrainPath = Path.Combine(Path.GetDirectoryName(path)!, "terrain.yaml");
     var locomotion = File.Exists(terrainPath) ? LocomotionCatalog.Load([new(terrainPath, File.ReadAllText(terrainPath))]) : null;
     var weaponPath = Path.Combine(Path.GetDirectoryName(path)!, "weapons.yaml");
-    var sources = new List<ContentSource> { new(path, File.ReadAllText(path)) };
+    var sources = new List<ContentSource> { new(path, fog ? FogScenario.AddVision(File.ReadAllText(path)) : File.ReadAllText(path)) };
     if (buildings || mapRequested) { var buildingPath = Path.Combine(Path.GetDirectoryName(path)!, "buildings.yaml"); sources.Add(new(buildingPath, File.ReadAllText(buildingPath))); }
     var catalog = UnitCatalog.Load(sources, locomotion, File.Exists(weaponPath) ? WeaponCatalog.Load([new(weaponPath, File.ReadAllText(weaponPath))]) : null);
     Console.WriteLine("OPENRTS_CONTENT:" + JsonSerializer.Serialize(catalog.Summary));
@@ -67,9 +70,9 @@ try
             return new(file, File.ReadAllText(fullPath));
         }
         var map = aviation ? AviationScenario.Load(catalog, ReadMapSource) : mapRequested ? MapScenario.Load(catalog, ReadMapSource, mapPath ?? MapScenario.DefaultMap, startSetPath) : null;
-        SimulationWorld Create() => map is not null ? map.CreateWorld(workers) : buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
+        SimulationWorld Create() => fog ? FogScenario.Create(catalog) : map is not null ? map.CreateWorld(workers) : buildings ? BuildingScenario.Create(catalog, workers) : showcase ? ShowcaseScenario.Create(catalog) : navigation ? NavigationScenario.Create(catalog, count, workers, reverseJobs) : DiagnosticScenario.Create(catalog, count);
         using var world = Create();
-        var commands = skirmish && startSetPath is null ? SkirmishScenario.Commands() : aviation ? AviationScenario.Commands : map is not null ? [] : production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
+        var commands = fog ? [] : skirmish && startSetPath is null ? SkirmishScenario.Commands() : aviation ? AviationScenario.Commands : map is not null ? [] : production ? ProductionScenario.Commands(catalog) : buildings ? BuildingScenario.Commands(catalog) : showcase ? ShowcaseScenario.VerificationCommands(catalog) : navigation ? NavigationScenario.Commands(count, ticks) : benchmark
             ? new WorldCommand[] { new(1, 0, 1, CommandKind.MoveAll, Position: new(world.Width, world.Depth)) }
             : DiagnosticScenario.Commands(count, ticks);
         SimulationReport report;

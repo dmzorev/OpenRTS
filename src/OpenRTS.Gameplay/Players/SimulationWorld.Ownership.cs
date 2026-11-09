@@ -18,6 +18,7 @@ public sealed partial class SimulationWorld
 
     private void ChangeOwner(int index, uint owner, bool upgradeTransition = false)
     {
+        ValidateVisionOwner(owner);
         var entity = _entityHandles[index];
         var identity = entity.Get<EntityIdentity>();
         uint previous = entity.Get<OwnershipState>().Owner;
@@ -49,7 +50,7 @@ public sealed partial class SimulationWorld
         EconomySystem.ResetIncome(entity, _types[identity.Type].Economy, Tick);
         _capture?.OwnerChanged(entity, Tick);
         _economy.InvalidatePower();
-        _events.Add(new(Tick, WorldEventKind.OwnerChanged, identity.Id, entity.Get<SpatialState>().Position,
+        EmitEvent(new(Tick, WorldEventKind.OwnerChanged, identity.Id, entity.Get<SpatialState>().Position,
             identity.Type, Owner: owner, PreviousOwner: previous));
     }
 

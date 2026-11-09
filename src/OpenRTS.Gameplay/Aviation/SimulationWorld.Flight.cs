@@ -615,7 +615,7 @@ public sealed partial class SimulationWorld
             if (f.Ammo < definition.Ammo && ++f.ReloadWork >= service.ReloadTicks) { f.Ammo++; f.ReloadWork = 0; }
             ref var health = ref actor.Get<HealthState>();
             int before = health.Current; health.Current = Math.Min(TypeOf(actor).MaxHealth, health.Current + service.RepairPerTick);
-            if (health.Current != before) _events.Add(new(Tick, WorldEventKind.Repaired, id, actor.Get<SpatialState>().Position, actor.Get<EntityIdentity>().Type, Amount: health.Current - before));
+            if (health.Current != before) EmitEvent(new(Tick, WorldEventKind.Repaired, id, actor.Get<SpatialState>().Position, actor.Get<EntityIdentity>().Type, Amount: health.Current - before));
             if (f.Ammo == definition.Ammo && (service.RepairPerTick == 0 || health.Current == TypeOf(actor).MaxHealth))
             {
                 f.ReturnRequested = false; f.Phase = FlightPhase.Landed; f.ExitPoint = default;

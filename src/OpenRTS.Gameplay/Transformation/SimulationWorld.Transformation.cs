@@ -158,7 +158,7 @@ public sealed partial class SimulationWorld
             }
         }
         if (plan.Phase != TransformationPhase.Finishing)
-            _events.Add(new(Tick, WorldEventKind.TransformationCancelled, id, plan.Position, plan.Recipe.Target) { QuarterTurns = plan.Turns });
+            EmitEvent(new(Tick, WorldEventKind.TransformationCancelled, id, plan.Position, plan.Recipe.Target) { QuarterTurns = plan.Turns });
     }
 
     private void AdvanceTransformations()
@@ -355,7 +355,7 @@ public sealed partial class SimulationWorld
         }
         if (candidate is not null) CommitGrid(candidate);
         RebuildMotionIndex();
-        _events.Add(new(Tick, WorldEventKind.ActorTransformed, id, plan.Position, plan.Recipe.Target,
+        EmitEvent(new(Tick, WorldEventKind.ActorTransformed, id, plan.Position, plan.Recipe.Target,
             TargetEntity: created, SourcePosition: from, Owner: owner) { QuarterTurns = plan.Turns });
         if (finishing) PlayTransformationClip(created, plan.Recipe.After);
         else FinishTransformation(created, plan);
@@ -405,7 +405,7 @@ public sealed partial class SimulationWorld
 
     private void FinishTransformation(EntityId id, PendingTransformation plan)
     {
-        _events.Add(new(Tick, WorldEventKind.TransformationCompleted, id, plan.Position, plan.Recipe.Target) { QuarterTurns = plan.Turns });
+        EmitEvent(new(Tick, WorldEventKind.TransformationCompleted, id, plan.Position, plan.Recipe.Target) { QuarterTurns = plan.Turns });
         if (plan.MoveAfter is { } move) IssueOrder(_indices[id], new(UnitActionKind.Move, move), queued: false);
     }
 

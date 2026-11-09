@@ -55,5 +55,5 @@ public sealed partial class SimulationWorld
     void IProductionWorld.IssueRallyOrder(EntityId actor, WorldPosition point) =>
         IssueOrder(_indices[actor], new(UnitActionKind.Move, point), false);
 
-    void IProductionWorld.Emit(WorldEvent value) => _events.Add(value);
+    void IProductionWorld.Emit(WorldEvent value) => EmitEvent(value);
 }

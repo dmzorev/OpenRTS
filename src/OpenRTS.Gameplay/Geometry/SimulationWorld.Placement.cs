@@ -20,7 +20,7 @@ public sealed partial class SimulationWorld
     private EntityId SpawnFromRule(int unitType, WorldPosition position, uint owner)
     {
         var id = Spawn(unitType, position, owner);
-        _events.Add(new(Tick, WorldEventKind.Spawned, id, position, unitType, Owner: owner));
+        EmitEvent(new(Tick, WorldEventKind.Spawned, id, position, unitType, Owner: owner));
         return id;
     }
 

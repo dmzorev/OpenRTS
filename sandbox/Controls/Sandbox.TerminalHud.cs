@@ -271,6 +271,7 @@ public partial class Sandbox
     private void UpdateTerminal(FrameExchange.FrameLease frame, float alpha)
     {
         if (_terminal is null) return;
+        if (_fogScenario) _minimap!.UpdateFog(frame);
         if (_focusStartingBase && Selected() is { } startBase)
         {
             _focusStartingBase = false;

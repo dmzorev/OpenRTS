@@ -92,11 +92,11 @@ public sealed partial class SimulationWorld
         {
             var hover = target != default && _indices.TryGetValue(target, out int index) && TypeOf(_entityHandles[index]).Flight?.Mode == FlightMode.Hover
                 ? HoverEndpoints.Target : HoverEndpoints.None;
-            _events.Add(new(Tick, WorldEventKind.ProjectileImpact, shot.Source, point, shot.UnitType, TargetEntity: target,
+            EmitEvent(new(Tick, WorldEventKind.ProjectileImpact, shot.Source, point, shot.UnitType, TargetEntity: target,
                 Mount: shot.Mount, SourcePosition: shot.Previous, ProjectileId: shot.Id) { Hover = hover });
             Impact(shot.Weapon, shot.Owner, target, point, shot.Source, shot.UnitType, shot.Mount);
         }
-        void Expire(ProjectileState shot) => _events.Add(new(Tick, WorldEventKind.ProjectileExpired, shot.Source, shot.Position, shot.UnitType, Mount: shot.Mount, ProjectileId: shot.Id));
+        void Expire(ProjectileState shot) => EmitEvent(new(Tick, WorldEventKind.ProjectileExpired, shot.Source, shot.Position, shot.UnitType, Mount: shot.Mount, ProjectileId: shot.Id));
     }
     private static WorldPosition Interpolate(WorldPosition a, WorldPosition b, int fraction) =>
         new(a.X + (int)(((long)b.X - a.X) * fraction / 65536), a.Y + (int)(((long)b.Y - a.Y) * fraction / 65536), a.Elevation);

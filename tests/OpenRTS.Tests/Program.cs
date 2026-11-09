@@ -46,6 +46,7 @@ Test("Invalid concrete and abstract definitions fail before use", () =>
     Reject<ContentException>(() => Load("^unused: {Health: {Typo: 10}}\nx: {Health: {HP: 1}}"));
     Reject<ArgumentException>(() => Load("^base: {Health: {HP: 1}}"));
 });
+FogChecks.Run(Test);
 PresentationChecks.Run(Test);
 LocomotionChecks.Run(Test);
 OrderChecks.Run(Test);

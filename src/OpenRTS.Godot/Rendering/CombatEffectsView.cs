@@ -24,9 +24,9 @@ public sealed class CombatEffectsView
         Node.AddChild(_rounds.Node); Node.AddChild(_beams.Node); Node.AddChild(_impacts.Node);
     }
     public void Accept(WorldEvent value)
-    { if (value.Kind is WorldEventKind.WeaponFired or WorldEventKind.ProjectileImpact) _events.Add(value); }
+    { if (value.UnitType >= 0 && value.Kind is (WorldEventKind.WeaponFired or WorldEventKind.ProjectileImpact)) _events.Add(value); }
     public void Clear() => _events.Clear();
-    public void Apply(ReadOnlySpan<ProjectilePose> shots, float alpha, long tick, float flightSurface = 0)
+    public void Apply(ReadOnlySpan<ProjectilePose> shots, float alpha, long tick, float flightSurface = 0, FrameExchange.FrameLease? observation = null)
     {
         _rounds.Clear(); _beams.Clear(); _impacts.Clear(); ProjectileCount = shots.Length;
         double time = tick + Math.Clamp(alpha, 0, 1);
@@ -59,7 +59,14 @@ public sealed class CombatEffectsView
         int write = 0;
         for (int read = 0; read < _events.Count; read++)
         {
-            var value = _events[read]; var style = Style(value.UnitType, value.Mount);
+            var value = _events[read];
+            if (observation is { FogCellSize: > 0 } fog)
+            {
+                var point = value.Kind == WorldEventKind.WeaponFired ? value.SourcePosition : value.Position;
+                if (point.X < 0 || point.X >= fog.FogWidth || point.Y < 0 || point.Y >= fog.FogDepth ||
+                    fog.FogStates[point.Y / fog.FogCellSize * fog.FogColumns + point.X / fog.FogCellSize] != OpenRTS.Core.Visibility.CellVisibility.Visible) continue;
+            }
+            var style = Style(value.UnitType, value.Mount);
             double age = time - value.Tick; if (age >= style.DurationTicks) continue;
             _events[write++] = value; if (age < 0) continue;
             float phase = (float)(age / style.DurationTicks); var weapon = _units.Units[value.UnitType].Weapons[value.Mount].Weapon;

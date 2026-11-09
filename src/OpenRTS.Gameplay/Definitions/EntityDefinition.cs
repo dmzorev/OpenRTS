@@ -4,6 +4,7 @@ namespace OpenRTS.Core;
 public sealed record EntityDefinition
 {
     public string Id { get; }
+    public int VisionRadius { get; }
     public TargetCategories TargetCategories { get; }
     public FlightDefinition? Flight { get; }
     public AirbaseDefinition? Airbase { get; }
@@ -23,9 +24,11 @@ public sealed record EntityDefinition
 
     public EntityDefinition(string id, HealthDefinition? health = null, SpatialDefinition? spatial = null,
         PresentationDefinition? presentation = null, ArmamentDefinition? armament = null,
-        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null, IEnumerable<UpgradeDefinition>? upgrades = null, TargetCategories? targetCategories = null, FlightDefinition? flight = null, AirbaseDefinition? airbase = null)
+        ProducerDefinition? production = null, BuildDefinition? build = null, EconomyDefinition? economy = null, CapturableDefinition? capturable = null, PassengerDefinition? passenger = null, TransportDefinition? transport = null, int constructionRange = 0, SupplyDefinition? supply = null, IEnumerable<UpgradeDefinition>? upgrades = null, TargetCategories? targetCategories = null, FlightDefinition? flight = null, AirbaseDefinition? airbase = null, int visionRadius = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (visionRadius < 0 || visionRadius > WorldPosition.MaximumExtent || visionRadius > 0 && spatial is null) throw new ArgumentOutOfRangeException(nameof(visionRadius));
+        VisionRadius = visionRadius;
         TargetCategories = targetCategories ?? TargetCategories.Ground; Flight = flight; Airbase = airbase;
         if (flight is not null && (spatial?.Movable != true || spatial.Footprint is not null || health is null || passenger is not null || airbase is not null || supply is not null || constructionRange != 0))
             throw new ArgumentException("Aircraft require a mobile body and cannot be passengers, suppliers, builders or airbases.");

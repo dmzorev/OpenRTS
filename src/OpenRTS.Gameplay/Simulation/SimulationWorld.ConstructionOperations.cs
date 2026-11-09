@@ -101,5 +101,5 @@ public sealed partial class SimulationWorld
         _economy.InvalidatePower();
     }
 
-    void IConstructionWorld.Emit(WorldEvent value) => _events.Add(value);
+    void IConstructionWorld.Emit(WorldEvent value) => EmitEvent(value);
 }

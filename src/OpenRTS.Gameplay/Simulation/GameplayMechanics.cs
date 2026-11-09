@@ -34,6 +34,8 @@ public sealed class GameplayRegistration<T> where T : class
 
 public sealed class GameplayMechanics
 {
+    /// <summary>Null disables fog; positive size enables circular vision on an independent grid.</summary>
+    public int? FogCellSize { get; init; }
     public static GameplayRegistration<ICaptureMechanic> BuiltInCapture { get; } = new("openrts.capture", 2, static () => new TimedCapture());
     public static GameplayRegistration<ITransportMechanic> BuiltInTransport { get; } = new("openrts.transport", 1, static () => new StandardTransport());
     public static GameplayRegistration<IConstructionMechanic> BuiltInConstruction { get; } = new("openrts.construction", 1, static () => new StandardConstruction());

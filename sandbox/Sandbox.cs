@@ -12,6 +12,9 @@ using OpenRTS.Godot.Controls;
 public partial class Sandbox : Node3D
 {
     private SimulationSession? _session;
+    private bool _fogScenario;
+    private uint _fogViewer = 1;
+    private FogWorldView? _fogView;
     private UnitCatalog? _catalog;
     private MapMatch? _mapMatch;
     private WorldView? _view;
@@ -49,6 +52,8 @@ public partial class Sandbox : Node3D
             foreach (string arg in OS.GetCmdlineUserArgs())
             {
                 if (arg == "--verify") continue;
+                if (arg == "--verify-fog") { _verifyFog = _fogScenario = _showcase = _verifySimulation = true; _ticks = 160; continue; }
+                if (arg == "--fog") { _fogScenario = _showcase = true; continue; }
                 if (arg == "--aviation") { mapPath = AviationScenario.Map; continue; }
                 if (arg == "--verify-aviation") { _verifyAviation = _verifySimulation = true; mapPath = AviationScenario.Map; _ticks = AviationScenario.Ticks; continue; }
                 if (arg == "--verify-actions") { _verifyActions = _buildings = _showcase = _paused = true; continue; }
@@ -100,7 +105,7 @@ public partial class Sandbox : Node3D
                 ?? throw new InvalidOperationException("Не удалось открыть content/units.yaml: " + Godot.FileAccess.GetOpenError());
             using var terrain = Godot.FileAccess.Open("res://content/terrain.yaml", Godot.FileAccess.ModeFlags.Read)
                 ?? throw new InvalidOperationException("Не удалось открыть terrain.yaml.");
-            var unitSources = new System.Collections.Generic.List<ContentSource> { new("content/units.yaml", file.GetAsText()) };
+            var unitSources = new System.Collections.Generic.List<ContentSource> { new("content/units.yaml", _fogScenario ? FogScenario.AddVision(file.GetAsText()) : file.GetAsText()) };
             if (_buildings) unitSources.Add(new("buildings.yaml", System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://content/buildings.yaml"))));
             _catalog = UnitCatalog.Load(unitSources,
                 LocomotionCatalog.Load([new("content/terrain.yaml", terrain.GetAsText())]),
@@ -160,6 +165,7 @@ public partial class Sandbox : Node3D
                     ShowcaseScenario.TerrainIds, _buildings ? BuildingScenario.TerrainAt : ShowcaseScenario.TerrainAt, TextureFor);
             AddChild(view.Node);
             AddChild(_sprites.Node);
+            if (_fogScenario) { _fogView = new(); AddChild(_fogView.Node); }
             CreateSelectionRing();
         }
         else { _view = new WorldView(catalog.Units[0], _count); AddChild(_view.Node); }
@@ -194,8 +200,8 @@ public partial class Sandbox : Node3D
         _combatEffects?.Clear(); _sprites?.ClearWrecks();
         var map = _mapMatch;
         var opponent = _opponent = _opponentProfile is { } profile ? SkirmishAiScenario.Create(catalog, profile, map!.Map, 2, _opponentStarts) : null;
-        _session = new SimulationSession(() => map is not null ? map.CreateWorld(_workers, restrictPlayerCommands: opponent is not null) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
-            _verifyAviation ? AviationScenario.Commands.Where(c => c.Tick <= _ticks).ToArray() : map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
+        _session = new SimulationSession(() => _fogScenario ? FogScenario.Create(catalog) : map is not null ? map.CreateWorld(_workers, restrictPlayerCommands: opponent is not null) : _buildings ? BuildingScenario.Create(catalog, _workers) : _showcase ? ShowcaseScenario.Create(catalog) : _navigation ? NavigationScenario.Create(catalog, _count, _workers, _reverseJobs) : DiagnosticScenario.Create(catalog, _count),
+            _verifyFog ? FogScenario.Commands : _verifyAviation ? AviationScenario.Commands.Where(c => c.Tick <= _ticks).ToArray() : map is not null ? [] : _productionScenario ? ProductionScenario.Commands(catalog) : _buildings ? BuildingScenario.Commands(catalog) : _showcase ? (_verifyPresentation ? ShowcaseScenario.VerificationCommands(catalog) : []) : _navigation ? (_verifySimulation ? NavigationScenario.Commands(_count, _ticks) : [])
                 : DiagnosticScenario.Commands(_count, _verifySimulation ? _ticks : long.MaxValue),
             _verifySimulation ? _ticks : null, realtime: !_verifySimulation || _pacedVerification,
             maximumEventBacklog: Math.Max(65536, _count + 1024),
@@ -227,11 +233,12 @@ public partial class Sandbox : Node3D
         {
             bool completed = _session.Completion.IsCompleted;
             if (_session.Completion.IsFaulted) _session.Completion.GetAwaiter().GetResult();
-            using var frame = _session.Frames.AcquireLatest();
+            using var frame = _session.Frames.AcquireLatest(_fogScenario ? _fogViewer : 0);
             if (frame is null) return;
             float alpha = completed ? 1 : _session.GetInterpolationAlpha(frame.Tick);
             _view?.Apply(frame.Poses, alpha);
             _displayGrid = frame.Grid;
+            _fogView?.Apply(frame);
             if (_showcase)
             {
                 _displayAlpha = alpha;
@@ -247,7 +254,7 @@ public partial class Sandbox : Node3D
                 }
                 if (_focusStartingBase && _selected.Value == 0)
                     for (int i = 0; i < _displayCount; i++)
-                        if (_displayPoses[i].Presentation.Owner == 1)
+                        if (_displayPoses[i].Presentation.Owner == (_fogScenario ? _fogViewer : 1))
                         {
                             _selected = _displayPoses[i].Id;
                             break;
@@ -257,7 +264,8 @@ public partial class Sandbox : Node3D
             _obstacles?.Apply(frame.Grid);
             while (_session.TryReadEvent(out var value))
             {
-                _combatEffects?.Accept(value); _sprites?.Accept(value);
+                if (_fogScenario) { if (value.ForViewer(_fogViewer) is not { } filtered) continue; value = filtered; }
+                _combatEffects?.Accept(value); if (!_fogScenario) _sprites?.Accept(value);
                 _notice = value.Kind switch
                 {
                     WorldEventKind.DestinationAdjusted => "Цель скорректирована к ближайшему достижимому месту.",
@@ -281,8 +289,9 @@ public partial class Sandbox : Node3D
                 };
             }
             _sprites?.Apply(frame.Poses, alpha, frame.Tick, frame.TickRate, frame.Weapons, _visibleProjects, BuildingPreview() ?? UpgradePreview());
-            _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick, _sprites?.FlightSurface ?? 0);
+            _combatEffects?.Apply(frame.Projectiles, alpha, frame.Tick, _sprites?.FlightSurface ?? 0, _fogScenario ? frame : null);
             UpdateTerminal(frame, alpha);
+            if (_verifyFog) { VerifyFog(frame); return; }
             if (_verifyAiMatch) { VerifyAiMatch(frame); return; }
             if (_verifyMatchSetup) { VerifyConfiguredMatch(frame); return; }
             if (_verifySkirmish) { VerifySkirmish(frame); return; }
@@ -383,7 +392,8 @@ public partial class Sandbox : Node3D
             if (input is InputEventKey { Pressed: true, Echo: false } key)
             {
                 Key code = key.PhysicalKeycode == Key.None ? key.Keycode : key.PhysicalKeycode;
-                if (_terminal is not null && code == Key.F10) ToggleTerminalLayout();
+                if (_fogScenario && code == Key.F8) SwitchFogViewer();
+                else if (_terminal is not null && code == Key.F10) ToggleTerminalLayout();
                 else if (_terminal is not null && code == Key.F11) SetTerminalFullscreen(!_exclusiveFullscreen);
                 else if (_matchMenu?.Visible == true) { if (code == Key.Escape) ToggleMatchMenu(); }
                 else if (_diagnostics is not null && code == Key.F12) _diagnostics.Visible = !_diagnostics.Visible;
@@ -555,18 +565,18 @@ public partial class Sandbox : Node3D
         _baseCameraSize = camera.Size;
         _mapWidth = groundSize.X; _mapDepth = groundSize.Y;
         _label = AddOverlay("OpenRTS · запуск симуляции…");
-        if (_skirmish) AddTerminalHud();
+        if (_skirmish || _fogScenario) AddTerminalHud();
         else if (_showcase) AddShowcaseFooter();
     }
 
     private Label AddOverlay(string text)
     {
-        var layer = new CanvasLayer { Layer = _skirmish ? 3 : 1 };
+        var layer = new CanvasLayer { Layer = _skirmish || _fogScenario ? 3 : 1 };
         AddChild(layer);
         var panel = new PanelContainer { Position = new Vector2(24, 24) };
         layer.AddChild(panel);
         if (_showcase) _rtsPanels.Add(panel);
-        if (_skirmish && _diagnostics is null) { _diagnostics = panel; panel.Hide(); }
+        if ((_skirmish || _fogScenario) && _diagnostics is null) { _diagnostics = panel; panel.Hide(); }
         var margin = new MarginContainer();
         foreach (string side in new[] { "left", "top", "right", "bottom" })
             margin.AddThemeConstantOverride("margin_" + side, 18);

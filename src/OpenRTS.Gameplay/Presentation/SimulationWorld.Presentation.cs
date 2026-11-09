@@ -22,17 +22,17 @@ public sealed partial class SimulationWorld
             var playback = new AnimationPlayback(command.Animation, Tick, command.DurationTicks);
             if (command.Track == AnimationTrack.Body) { entityPresentation.BodyAnimation = playback; entityPresentation.BodyAnimationOverride = true; }
             else entityPresentation.WeaponAnimation = playback;
-            _events.Add(new(Tick, WorldEventKind.AnimationPlayed, entityIdentity.Id, entity.Get<SpatialState>().Position, entityIdentity.Type,
+            EmitEvent(new(Tick, WorldEventKind.AnimationPlayed, entityIdentity.Id, entity.Get<SpatialState>().Position, entityIdentity.Type,
                 command.Animation, command.DurationTicks, command.Track));
         }
         else if (command.Kind == CommandKind.Aim)
         {
             if (command.TargetEntity.Value != 0 && !_indices.ContainsKey(command.TargetEntity))
-            { _events.Add(new(Tick, WorldEventKind.MissingEntity, command.TargetEntity)); return; }
+            { EmitEvent(new(Tick, WorldEventKind.MissingEntity, command.TargetEntity)); return; }
             entityPresentation.HasAim = true; entityPresentation.AimPoint = command.Position; entityPresentation.AimEntity = command.TargetEntity;
         }
         else { entityPresentation.HasAim = false; entityPresentation.AimEntity = default; entityPresentation.AimPoint = default; }
-        void Reject() => _events.Add(new(Tick, WorldEventKind.InvalidPresentation, command.Entity));
+        void Reject() => EmitEvent(new(Tick, WorldEventKind.InvalidPresentation, command.Entity));
     }
 
     private void UpdatePresentation()

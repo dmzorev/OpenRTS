@@ -14,6 +14,8 @@ public partial class TerminalMinimap : Control
     private Rect2 _camera;
     private long _tick = -1;
     private bool _dragging;
+    private Texture2D? _fog;
+    private uint _fogViewer;
 
     public event Action<Vector2>? Navigate;
     public required Func<uint, Color> TeamColor { get; init; }
@@ -40,6 +42,20 @@ public partial class TerminalMinimap : Control
         }
         if (changed || _camera != camera) QueueRedraw();
         _camera = camera;
+    }
+
+    public void UpdateFog(FrameExchange.FrameLease frame)
+    {
+        if (frame.FogCellSize == 0) return;
+        if (_fogViewer != frame.Viewer) { _fogViewer = frame.Viewer; _tick = -1; }
+        using var image = Image.CreateEmpty(frame.FogColumns, frame.FogRows, false, Image.Format.Rgba8);
+        for (int y = 0; y < frame.FogRows; y++) for (int x = 0; x < frame.FogColumns; x++)
+        {
+            var state = frame.FogStates[y * frame.FogColumns + x];
+            image.SetPixel(x, y, new Color(0, 0, 0, state == OpenRTS.Core.Visibility.CellVisibility.Unknown ? 1 : state == OpenRTS.Core.Visibility.CellVisibility.Explored ? 0.65f : 0));
+        }
+        if (_fog is ImageTexture texture) texture.Update(image); else _fog = ImageTexture.CreateFromImage(image);
+        QueueRedraw();
     }
 
     internal static Texture2D CreateTerrainTexture(NavigationGrid grid, LocomotionCatalog locomotion)
@@ -79,6 +95,7 @@ public partial class TerminalMinimap : Control
         if (!map.HasArea()) return;
         var scale = map.Size / MapSize;
         DrawTextureRect(_terrain, map, false);
+        if (_fog is not null) DrawTextureRect(_fog, map, false);
         foreach (var (world, color, neutral) in _markers)
         {
             var point = map.Position + world * scale;

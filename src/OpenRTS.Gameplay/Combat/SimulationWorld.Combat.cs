@@ -13,6 +13,7 @@ public sealed partial class SimulationWorld
         target = -1;
         if (!_indices.TryGetValue(id, out target) || index == target || !IsOnMap(_entityHandles[target])) return false;
         uint owner = _entityHandles[index].Get<OwnershipState>().Owner;
+        if (!IsVisible(owner, id)) return false;
         if (owner == 0 || !WeaponAccepts(weapon, _entityHandles[target])) return false;
         ref var other = ref _entityHandles[target];
         var otherIdentity = other.Get<EntityIdentity>();
@@ -208,7 +209,7 @@ public sealed partial class SimulationWorld
                             else ObjectGeometry.DistanceSquared(sourceType, entitySpatial.Position, TypeOf(_entityHandles[target]), _entityHandles[target].Get<SpatialState>().Position, out muzzle, out impactPoint);
                             var hover = sourceType.Flight?.Mode == FlightMode.Hover ? HoverEndpoints.Source : HoverEndpoints.None;
                             if (!ground && TypeOf(_entityHandles[target]).Flight?.Mode == FlightMode.Hover) hover |= HoverEndpoints.Target;
-                            _events.Add(new(Tick, WorldEventKind.WeaponFired, entityIdentity.Id, impactPoint, entityIdentity.Type,
+                            EmitEvent(new(Tick, WorldEventKind.WeaponFired, entityIdentity.Id, impactPoint, entityIdentity.Type,
                                 state.Animation.Animation, state.Animation.DurationTicks, TargetEntity: state.Target, Mount: mountIndex, SourcePosition: muzzle) { Hover = hover });
                             if (weapon.Projectile == ProjectileKind.Hitscan) Impact(weapon, entityOwnership.Owner, state.Target, impactPoint, entityIdentity.Id, entityIdentity.Type, mountIndex);
                             else Launch(origin, target, mountIndex, weapon, ground ? point : null, entityIdentity.Type, hover);
@@ -234,7 +235,7 @@ public sealed partial class SimulationWorld
             ref var entitySpatial = ref carrier.Get<SpatialState>();
             var entityIdentity = entity.Get<EntityIdentity>(); ref var health = ref entity.Get<HealthState>(); int before = health.Current;
             _damage.TryGetValue(id, out long damage); health.Current = (int)Math.Max(0, health.Current - damage);
-            if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Damaged, id, entitySpatial.Position, entityIdentity.Type, Amount: before - health.Current));
+            if (before != health.Current) EmitEvent(new(Tick, WorldEventKind.Damaged, id, entitySpatial.Position, entityIdentity.Type, Amount: before - health.Current));
             if (health.Current == 0)
             {
                 if (_types[entityIdentity.Type].Destruction == DestructionPolicy.Neutralize)
@@ -246,7 +247,7 @@ public sealed partial class SimulationWorld
                 continue;
             }
             before = health.Current; _healing.TryGetValue(id, out long healing); health.Current = (int)Math.Min(_types[entityIdentity.Type].MaxHealth, health.Current + healing);
-            if (before != health.Current) _events.Add(new(Tick, WorldEventKind.Repaired, id, entitySpatial.Position, entityIdentity.Type, Amount: health.Current - before));
+            if (before != health.Current) EmitEvent(new(Tick, WorldEventKind.Repaired, id, entitySpatial.Position, entityIdentity.Type, Amount: health.Current - before));
         }
         foreach (var id in _dead) if (_indices.TryGetValue(id, out int index)) DestroyIndex(index);
         foreach (var id in _disabledTransports) _transport!.RemovePassengers(_entityHandles[_indices[id]]);

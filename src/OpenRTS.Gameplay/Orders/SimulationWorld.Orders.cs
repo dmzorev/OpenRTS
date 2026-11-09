@@ -12,18 +12,19 @@ public sealed partial class SimulationWorld
             if (command.Entity.Value == 0 && command.Kind == CommandKind.MoveGroup)
                 return Enumerable.Range(0, Count).Where(i => IsOnMap(_entityHandles[i])).OrderBy(i => _entityHandles[i].Get<EntityIdentity>().Id.Value).ToArray();
             if (_indices.TryGetValue(command.Entity, out int index)) return IsOnMap(_entityHandles[index]) ? [index] : [];
-            _events.Add(new(Tick, WorldEventKind.MissingEntity, command.Entity)); return [];
+            EmitEvent(new(Tick, WorldEventKind.MissingEntity, command.Entity)); return [];
         }
         var indices = new List<int>(command.Recipients.Count);
         foreach (var id in command.Recipients.Ids)
             if (_indices.TryGetValue(id, out int index)) { if (IsOnMap(_entityHandles[index])) indices.Add(index); }
-            else _events.Add(new(Tick, WorldEventKind.MissingEntity, id));
+            else EmitEvent(new(Tick, WorldEventKind.MissingEntity, id));
         return indices.ToArray();
     }
 
     private void IssueOrder(int index, UnitOrder order, bool queued)
     {
         if (!IsOnMap(_entityHandles[index])) return;
+        if (_fog is not null && order.Target.Value != 0 && !IsVisible(_entityHandles[index].Get<OwnershipState>().Owner, order.Target)) return;
         if (IsTransformationLocked(_entityHandles[index])) { RejectAction(_entityHandles[index].Get<EntityIdentity>().Id); return; }
         ref var entity = ref _entityHandles[index];
         var entityIdentity = entity.Get<EntityIdentity>();
@@ -31,7 +32,7 @@ public sealed partial class SimulationWorld
         if (queued && (entityOrders.HasOrder || entityOrders.PendingOrders is { Count: > 0 }))
         {
             entityOrders.PendingOrders ??= new();
-            if (entityOrders.PendingOrders.Count == MaximumQueuedOrders) _events.Add(new(Tick, WorldEventKind.QueueFull, entityIdentity.Id));
+            if (entityOrders.PendingOrders.Count == MaximumQueuedOrders) EmitEvent(new(Tick, WorldEventKind.QueueFull, entityIdentity.Id));
             else entityOrders.PendingOrders.Enqueue(order);
             return;
         }
@@ -40,6 +41,7 @@ public sealed partial class SimulationWorld
 
     private bool StartOrder(int index, UnitOrder order)
     {
+        if (_fog is not null && order.Target.Value != 0 && !IsVisible(_entityHandles[index].Get<OwnershipState>().Owner, order.Target)) return false;
         ref var entity = ref _entityHandles[index];
         var entityIdentity = entity.Get<EntityIdentity>();
         ref var entityPresentation = ref entity.Get<PresentationState>();
@@ -50,16 +52,16 @@ public sealed partial class SimulationWorld
         if ((ReadLocalConditions(entity) & GameplayConditions.Constructing) != 0 ||
             order.Kind == UnitActionKind.Build && _construction?.CanBuild(entity, order.Target) != true)
         {
-            _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
+            EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id));
             return false;
         }
         if (order.Kind == UnitActionKind.Capture && _capture?.CanStart(entity, order.Target) != true)
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        { EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Enter or UnitActionKind.UnloadAt && _transport?.CanStartOrder(entity, order) != true)
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        { EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Land or UnitActionKind.ReturnToBase)
         {
-            if (!StartFlightOrder(entity, order)) { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+            if (!StartFlightOrder(entity, order)) { EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
             entityOrders.ActiveOrder = order; entityOrders.HasOrder = true; entityOrders.OrderStarted = Tick;
             entityOrders.CombatTarget = default; CancelWindups(index); entityOrders.OrderPhase = OrderPhase.Approaching;
             return true;
@@ -69,7 +71,7 @@ public sealed partial class SimulationWorld
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove && !_types[entityIdentity.Type].Movable ||
             order.Kind is UnitActionKind.Attack or UnitActionKind.AttackMove or UnitActionKind.Repair && weapon is null ||
             order.Kind is UnitActionKind.Attack or UnitActionKind.Repair && !ValidTarget(index, order.Target, weapon!, out _))
-        { _events.Add(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
+        { EmitEvent(new(Tick, WorldEventKind.InvalidOrder, entityIdentity.Id)); return false; }
         if (order.Kind is UnitActionKind.Move or UnitActionKind.AttackMove)
         { if (!SetTarget(index, order.Position)) return false; entityNavigation.GroupMember = order.Group; entityNavigation.OrderGroup = order.Cohort; }
         else if (order.Kind == UnitActionKind.UnloadAt)

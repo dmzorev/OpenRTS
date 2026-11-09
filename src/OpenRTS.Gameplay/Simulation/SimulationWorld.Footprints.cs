@@ -108,7 +108,7 @@ public sealed partial class SimulationWorld
             if (entityNavigation.TerrainStranded)
             {
                 entityMotion.Moving = false; entityOrders.OrderPhase = OrderPhase.Waiting;
-                if (!wasStranded) _events.Add(new(Tick, WorldEventKind.TerrainStranded, entityIdentity.Id, entitySpatial.Position, entityIdentity.Type));
+                if (!wasStranded) EmitEvent(new(Tick, WorldEventKind.TerrainStranded, entityIdentity.Id, entitySpatial.Position, entityIdentity.Type));
             }
             else if ((wasStranded || entityMotion.Moving) && type.Movable)
             {
@@ -124,7 +124,7 @@ public sealed partial class SimulationWorld
         if (ReferenceEquals(candidateBase, _baseGrid)) return;
         var candidate = ComposeFootprints(candidateBase);
         if (!SafeGrid(candidate, out var occupant))
-        { _events.Add(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation!.Grid.Center(cell))); return; }
+        { EmitEvent(new(Tick, WorldEventKind.CellOccupied, occupant, _navigation!.Grid.Center(cell))); return; }
         _baseGrid = candidateBase; CommitGrid(candidate);
     }
 
