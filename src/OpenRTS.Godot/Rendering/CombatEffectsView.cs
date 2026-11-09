@@ -64,6 +64,6 @@ public sealed class CombatEffectsView
         var delta = to - from; if (delta.LengthSquared() < 0.00001f) return;
         _beams.Add((from + to) / 2, new(width, width, delta.Length()), MathF.Atan2(delta.X, delta.Z), color);
     }
-    private static Vector3 Position(WorldPosition p) => new(p.X / 1024f, p.Elevation / 1024f + 0.18f, p.Y / 1024f);
+    private static Vector3 Position(WorldPosition p) => new(p.X / 1024f, p.Elevation / 1024f + SpriteWorldView.OverlayHeight, p.Y / 1024f);
     private static Color Color(double[] c, float alpha = 1) => new((float)c[0], (float)c[1], (float)c[2], alpha);
 }

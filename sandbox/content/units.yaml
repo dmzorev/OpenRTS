@@ -179,7 +179,8 @@ fighter:
     Speed: 256
     MinimumSpeed: 160
     TurnRate: 12
-    CruiseAltitude: 2048
+    CruiseAltitude: 5120
+    VerticalSpeed: 160
     Ammo: 6
     ServiceType: fighter
     Categories: [air, airplane]
@@ -198,7 +199,8 @@ tiltrotor:
   Aircraft:
     Mode: Hover
     Speed: 192
-    CruiseAltitude: 1536
+    CruiseAltitude: 3584
+    VerticalSpeed: 144
     Ammo: 8
     ServiceType: rotorcraft
     Categories: [air, helicopter, tiltrotor]

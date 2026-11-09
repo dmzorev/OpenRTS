@@ -120,7 +120,8 @@ public sealed partial class SimulationWorld
                     _transport!.UpdateUnload(entity, entityOrders.ActiveOrder.Position);
                 continue;
             }
-            if (IsAircraft(entity) && (entityOrders.ActiveOrder.Kind is UnitActionKind.Land or UnitActionKind.ReturnToBase || entity.Get<FlightState>().ReturnRequested))
+            if (IsAircraft(entity) && (entity.Get<FlightState>().ReturnRequested ||
+                entityOrders.HasOrder && entityOrders.ActiveOrder.Kind is (UnitActionKind.Land or UnitActionKind.ReturnToBase)))
             { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityNavigation.TerrainStranded) { entityOrders.OrderPhase = OrderPhase.Waiting; continue; }
             if (entityOrders.HasOrder && !entityMotion.Moving && entityOrders.CombatTarget.Value == 0 && entityOrders.ActiveOrder.Kind is UnitActionKind.Move or UnitActionKind.AttackMove or UnitActionKind.Stop)

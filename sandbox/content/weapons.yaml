@@ -83,6 +83,7 @@ crane-repair:
 fighter-missile:
   Inherits: missile
   Weapon:
+    Range: 7168
     Targets: [ground, air]
     SpatialTrajectory: true
     Speed: 640

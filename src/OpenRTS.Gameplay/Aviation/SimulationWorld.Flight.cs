@@ -357,19 +357,25 @@ public sealed partial class SimulationWorld
             if (f.Phase == FlightPhase.Taxiing)
             {
                 var provider = _entityHandles[_indices[f.Base]]; var airbase = TypeOf(provider).Airbase!;
-                var point = BasePoint(provider, f.TaxiToParking ? airbase.Slots[f.Slot] : airbase.RunwayStart!.Value);
+                var start = BasePoint(provider, airbase.RunwayStart!.Value);
+                var point = f.TaxiToParking ? BasePoint(provider, airbase.Slots[f.Slot]) : start;
                 if (PreciseFlightMove(actor, point, definition.Speed / 2))
                 {
                     if (f.TaxiToParking) { f.Phase = FlightPhase.Servicing; ReleaseRunway(id, f); }
-                    else { f.Phase = FlightPhase.RunwayTakeoff; f.Heading = FlightMath.Heading(airbase.RunwayEnd!.Value.X - airbase.RunwayStart!.Value.X, airbase.RunwayEnd.Value.Y - airbase.RunwayStart.Value.Y); }
+                    else f.Phase = FlightPhase.RunwayTakeoff;
                 }
                 motion.Moving = true; continue;
             }
             if (f.Phase == FlightPhase.RunwayTakeoff)
             {
                 var provider = _entityHandles[_indices[f.Base]]; var end = BasePoint(provider, TypeOf(provider).Airbase!.RunwayEnd!.Value);
-                var target = end with { Elevation = end.Elevation + definition.CruiseAltitude };
-                if (PreciseFlightMove(actor, target, definition.Speed)) { f.Phase = FlightPhase.Flying; ReleaseAirAssignment(id, f); }
+                var liftOff = end with { Elevation = end.Elevation + Math.Min(768, definition.CruiseAltitude) };
+                if (PreciseFlightMove(actor, liftOff, definition.Speed, synchronize: true))
+                {
+                    f.Phase = FlightPhase.Flying;
+                    f.Speed = definition.MinimumSpeed;
+                    ReleaseAirAssignment(id, f);
+                }
                 motion.Moving = true; continue;
             }
             if (f.Phase == FlightPhase.TakingOff)
@@ -383,19 +389,7 @@ public sealed partial class SimulationWorld
             {
                 if (definition.NeedsRunway && f.ReturnRequested)
                 {
-                    var provider = _entityHandles[_indices[f.Base]]; var airbase = TypeOf(provider).Airbase!;
-                    var start = BasePoint(provider, airbase.RunwayStart!.Value); var end = BasePoint(provider, airbase.RunwayEnd!.Value);
-                    int heading = FlightMath.Heading(end.X - start.X, end.Y - start.Y);
-                    var approach = FlightMath.Forward(start, heading + 512, 3072) with { Elevation = start.Elevation + definition.CruiseAltitude };
-                    if (f.Phase == FlightPhase.RunwayLanding)
-                    {
-                        if (PreciseFlightMove(actor, start, definition.Speed))
-                        { f.Phase = FlightPhase.Taxiing; f.TaxiToParking = true; }
-                        motion.Moving = true; continue;
-                    }
-                    if (DistanceSquared(actor.Get<SpatialState>().Position, approach) < 1536L * 1536 && ReserveRunway(id, f))
-                    { f.Phase = FlightPhase.RunwayLanding; f.Heading = heading; }
-                    else { f.Phase = FlightPhase.Approaching; FlyAircraft(actor, approach, true); }
+                    UpdateRunwayReturn(actor, id, f, definition);
                     motion.Moving = true; continue;
                 }
                 if (DistanceSquared(actor.Get<SpatialState>().Position, f.LandingPoint) > 0)
@@ -429,16 +423,74 @@ public sealed partial class SimulationWorld
         f.RunwayReserved = false;
     }
 
-    private bool PreciseFlightMove(Entity actor, WorldPosition target, int speed)
+    private void UpdateRunwayReturn(Entity actor, EntityId id, FlightState f, FlightDefinition flight)
+    {
+        var provider = _entityHandles[_indices[f.Base]];
+        var airbase = TypeOf(provider).Airbase!;
+        var start = BasePoint(provider, airbase.RunwayStart!.Value);
+        var end = BasePoint(provider, airbase.RunwayEnd!.Value);
+        if (f.Phase == FlightPhase.RunwayLanding)
+        {
+            if (PreciseFlightMove(actor, end, flight.Speed, synchronize: true))
+            {
+                f.Phase = FlightPhase.Taxiing;
+                f.TaxiToParking = true;
+            }
+            return;
+        }
+
+        if (_runways.TryGetValue(f.Base, out var occupant) && occupant != id)
+        {
+            FlyAircraft(actor, start, false);
+            return;
+        }
+
+        var p = actor.Get<SpatialState>().Position;
+        var entry = RunwayEntry(start, end, TypeOf(actor).Body, flight);
+        entry = entry with { Elevation = Approach(p.Elevation, start.Elevation + flight.CruiseAltitude, flight.VerticalSpeed) };
+        f.Phase = FlightPhase.Approaching;
+        if (!PreciseFlightMove(actor, entry, flight.Speed) || !ReserveRunway(id, f)) return;
+        f.Phase = FlightPhase.RunwayLanding;
+    }
+
+    private WorldPosition RunwayEntry(WorldPosition start, WorldPosition end, BodyShape body, FlightDefinition flight)
+    {
+        long dx = (long)end.X - start.X, dy = (long)end.Y - start.Y;
+        long length = (long)SquareRoot((ulong)(dx * dx + dy * dy));
+        long distance = Math.Max(3072, ((flight.CruiseAltitude + flight.VerticalSpeed - 1) / flight.VerticalSpeed) * flight.Speed);
+        // Shorten along the runway axis so the approach stays reachable even at the map edge.
+        if (dx > 0) distance = Math.Min(distance, (start.X - body.HalfWidth) * length / dx);
+        if (dx < 0) distance = Math.Min(distance, (Width - body.HalfWidth - start.X) * length / -dx);
+        if (dy > 0) distance = Math.Min(distance, (start.Y - body.HalfHeight) * length / dy);
+        if (dy < 0) distance = Math.Min(distance, (Depth - body.HalfHeight - start.Y) * length / -dy);
+        distance = Math.Max(0, distance);
+        return new(start.X - (int)(dx * distance / length), start.Y - (int)(dy * distance / length), start.Elevation);
+    }
+
+    private bool PreciseFlightMove(Entity actor, WorldPosition target, int speed, bool synchronize = false)
     {
         var p = actor.Get<SpatialState>().Position; var f = actor.Get<FlightState>();
-        var definition = TypeOf(actor).Flight!;
-        var next = StepTowards(p, target, Math.Max(1, speed));
-        next = next with { Elevation = Approach(p.Elevation, target.Elevation, definition.VerticalSpeed) };
+        int vertical = TypeOf(actor).Flight!.VerticalSpeed;
+        speed = Math.Max(1, speed);
+        if (synchronize)
+        {
+            int distance = (int)SquareRoot((ulong)DistanceSquared(p, target));
+            int height = Math.Abs(p.Elevation - target.Elevation);
+            int ticks = Math.Max(1, Math.Max((distance + speed - 1) / speed, (height + vertical - 1) / vertical));
+            speed = Math.Max(1, distance / ticks);
+            vertical = Math.Max(1, (height + ticks - 1) / ticks);
+        }
+        var next = StepTowards(p, target, speed) with { Elevation = Approach(p.Elevation, target.Elevation, vertical) };
         if (!LandingClear(actor, p, next, f.Base)) return false;
-        f.Heading = p.X == target.X && p.Y == target.Y ? f.Heading : FlightMath.Heading(target.X - p.X, target.Y - p.Y);
+        if (p.X != next.X || p.Y != next.Y) FaceFlight(actor, f, FlightMath.Heading(target.X - p.X, target.Y - p.Y));
         actor.Get<SpatialState>().Position = next;
         return next == target;
+    }
+
+    private static void FaceFlight(Entity actor, FlightState f, int heading)
+    {
+        f.Heading = heading;
+        actor.Get<PresentationState>().BodyFacing = FlightMath.Direction(heading);
     }
 
     private bool LandingClear(Entity actor, WorldPosition from, WorldPosition to, EntityId provider)
@@ -468,7 +520,8 @@ public sealed partial class SimulationWorld
         var p = actor.Get<SpatialState>().Position;
         ref var motion = ref actor.Get<MotionState>(); var orders = actor.Get<OrderState>();
         bool forward = definition.Mode == FlightMode.ForwardFlight;
-        if (forward && orders.CombatTarget.Value != 0 && TryGetEntity(orders.CombatTarget, out var enemy))
+        if (forward && !f.ReturnRequested && !f.LandRequested &&
+            orders.CombatTarget.Value != 0 && TryGetEntity(orders.CombatTarget, out var enemy))
         {
             var ep = enemy.Get<SpatialState>().Position;
             if (f.ExitPoint != default && DistanceSquared(p, f.ExitPoint) > 512L * 512) target = f.ExitPoint;

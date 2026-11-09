@@ -165,6 +165,47 @@ internal static class AviationChecks
             NavigationChecks.Check(Pose(w, a).Flight.Phase == FlightPhase.Landed && Pose(w, a).Flight.Airbase == b && Pose(w, a).Current.Elevation == 0,
                 $"Runway return remained in {Pose(w, a).Flight.Phase} at {Pose(w, a).Current}");
         });
+        test("Aviation: high aircraft align with a runway whose approach meets the map edge", () =>
+        {
+            var field = new UnitDefinition("edge-field", 1000, movable: false, footprint: Base().Footprint,
+                airbase: new([new(-2048, 0)], runwayStart: new(0, -3072), runwayEnd: new(0, 2048), keepsParking: true));
+            var flight = new FlightDefinition(FlightMode.ForwardFlight, speed: 320, minimumSpeed: 192, turnRate: 20,
+                cruiseAltitude: 5120, verticalSpeed: 160, needsRunway: true);
+            using var world = new SimulationWorld([field, Aircraft(flight)], 32768, 24576);
+            world.AddInitialUnit(0, new(4096, 4096), 1);
+            var parking = new WorldPosition(2048, 4096);
+            var aircraft = world.AddInitialUnit(1, parking, 1);
+            world.Step([new(1, 0, 1, CommandKind.Move, aircraft, new(20000, 17000))]);
+
+            bool tookOff = false;
+            for (int i = 0; i < 150 && Pose(world, aircraft).Current.Elevation < flight.CruiseAltitude; i++)
+            {
+                var before = Pose(world, aircraft);
+                world.Step();
+                var after = Pose(world, aircraft);
+                if (before.Flight.Phase != FlightPhase.RunwayTakeoff) continue;
+                tookOff = true;
+                NavigationChecks.Check(after.Current.X == before.Current.X && after.Current.Y > before.Current.Y && after.Presentation.BodyFacing.Y > 0,
+                    "Takeoff moved off-axis, hovered or showed the wrong facing");
+            }
+            NavigationChecks.Check(tookOff && Pose(world, aircraft).Current.Elevation == flight.CruiseAltitude, "The plane did not climb to cruise altitude");
+            world.Step([new(world.Tick + 1, 0, 1, CommandKind.ReturnToBase, aircraft)]);
+
+            bool descended = false;
+            for (int i = 0; i < 400 && Pose(world, aircraft).Flight.Phase != FlightPhase.Landed; i++)
+            {
+                var before = Pose(world, aircraft);
+                world.Step();
+                var after = Pose(world, aircraft);
+                if (before.Flight.Phase != FlightPhase.RunwayLanding) continue;
+                descended = true;
+                NavigationChecks.Check(after.Current.X == 4096 && after.Current.Y > before.Current.Y && after.Presentation.BodyFacing.Y > 0,
+                    "The final approach moved off-axis, hovered or showed the wrong facing");
+                NavigationChecks.Check(before.Current.Elevation - after.Current.Elevation <= flight.VerticalSpeed, "Descent exceeded the vertical speed limit");
+            }
+            NavigationChecks.Check(descended && Pose(world, aircraft).Current == parking && Pose(world, aircraft).Flight.Phase == FlightPhase.Landed,
+                $"The plane did not land at the edge runway: {Pose(world, aircraft).Flight} at {Pose(world, aircraft).Current}");
+        });
         test("Aviation: 1000 aircraft have bounded avoidance and no steady tick allocations", () =>
         {
             using var w = new SimulationWorld([Aircraft()], 131072, 131072, initialCapacity: 1000);

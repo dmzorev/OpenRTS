@@ -19,17 +19,30 @@ public sealed class SpriteWorldView
         }
     }
     private sealed record Part(ModelPart Definition, Sequence[]?[] Sequences, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation);
-    private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed);
+    private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed,
+        ModelDrawLayer DrawLayer, int DrawLayers, double SortOffset, int PartLayerCount);
+    private readonly record struct DrawItem(int Index, int Layer, double Y, uint Id) : IComparable<DrawItem>
+    {
+        public int CompareTo(DrawItem other)
+        {
+            int layer = Layer.CompareTo(other.Layer);
+            if (layer != 0) return layer;
+            int y = Y.CompareTo(other.Y);
+            return y != 0 ? y : Id.CompareTo(other.Id);
+        }
+    }
+    private const int ModelLayers = 3, PreviewLayer = 3, AirLayer = 4, LayerCount = AirLayer + 1;
+    private const float LayerStep = 0.4f, LayerSpan = 0.32f, ShadowHeight = 0.38f;
+    public const float OverlayHeight = 2f;
     private readonly Model[] _models;
     private readonly SortedDictionary<EntityId, EntityPose> _wrecks = new(Comparer<EntityId>.Create((a, b) => a.Value.CompareTo(b.Value)));
     private EntityPose[] _ordered = [];
     private readonly IComparer<EntityPose> _poseOrder = Comparer<EntityPose>.Create((a, b) => a.Id.Value.CompareTo(b.Id.Value));
-    private readonly Dictionary<EntityId, float> _depthRanks = new();
-    private readonly Dictionary<long, List<(WorldBox Box, float Depth)>> _depthRegions = new();
-    private ulong _depthSignature;
+    private DrawItem[] _drawOrder = [];
+    private (float Height, float Stride)[] _drawDepths = [];
     private readonly HashSet<EntityId> _liveIds = [];
     public int WreckCount => _wrecks.Count;
-    public void ClearWrecks() { _wrecks.Clear(); _depthSignature = 0; }
+    public void ClearWrecks() => _wrecks.Clear();
     public void Accept(WorldEvent value)
     {
         if (value.Kind == WorldEventKind.Removed) { _wrecks.Remove(value.Entity); return; }
@@ -89,7 +102,10 @@ public sealed class SpriteWorldView
                 parts[p] = new(part, sequences, animations, part.Mount is null ? -1 : type.Weapons.ToList().FindIndex(m => m.Id == part.Mount),
                     Mask(part.VisibleWhen), Mask(part.HiddenWhen), State(part.SpinWhen), State(part.LoopWhen), part.LoopAnimation is null ? -1 : type.AnimationIndex(part.LoopAnimation));
             }
-            _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState), type.States.Contains("nearly-destroyed") ? type.StateMask("nearly-destroyed") : 0);
+            int drawLayers = 0;
+            foreach (var part in definition.Parts) drawLayers |= 1 << (int)(part.DrawLayer ?? definition.DrawLayer);
+            _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState), type.States.Contains("nearly-destroyed") ? type.StateMask("nearly-destroyed") : 0,
+                definition.DrawLayer, drawLayers, definition.SortOffset, definition.Parts.Max(part => part.Layer) + 1);
             MaximumParts = Math.Max(MaximumParts, parts.Length);
         }
     }
@@ -164,22 +180,53 @@ public sealed class SpriteWorldView
                 new(type.IdleAnimation, tick, 0), AnimationPlayback.None, states);
             _ordered[at++] = new(id, project.UnitType, project.Position, project.Position, presentation) { QuarterTurns = project.QuarterTurns };
         }
-        count = at;
-        bool sorted = true; for (int i = 1; i < count; i++) if (_ordered[i - 1].Id.Value > _ordered[i].Id.Value) { sorted = false; break; }
-        if (!sorted) Array.Sort(_ordered, 0, count, _poseOrder);
-        PrepareDepth(_ordered.AsSpan(0, count));
-        foreach (var pose in _ordered.AsSpan(0, count))
+        bool idOrdered = true;
+        for (int i = 1; i < at; i++)
+            if (_ordered[i - 1].Id.Value > _ordered[i].Id.Value) { idOrdered = false; break; }
+        if (!idOrdered) Array.Sort(_ordered, 0, at, _poseOrder);
+        if (_drawDepths.Length < at * LayerCount)
         {
+            Array.Resize(ref _drawOrder, _ordered.Length * ModelLayers);
+            Array.Resize(ref _drawDepths, _ordered.Length * LayerCount);
+        }
+        Span<int> layerCounts = stackalloc int[LayerCount];
+        layerCounts.Clear();
+        bool sorted = true;
+        int drawCount = 0;
+        for (int i = 0; i < at; i++)
+        {
+            var pose = _ordered[i];
+            var model = _models[pose.UnitType];
+            int mask = _ghostIds.Contains(pose.Id) ? 1 << PreviewLayer : pose.Flight.Airborne ? 1 << AirLayer : model.DrawLayers;
+            double sortY = (pose.Previous.Y + ((long)pose.Current.Y - pose.Previous.Y) * (double)alpha) / 1024 + model.SortOffset;
+            while (mask != 0)
+            {
+                int layer = System.Numerics.BitOperations.TrailingZeroCount(mask);
+                mask &= mask - 1;
+                _drawOrder[drawCount] = new(i, layer, sortY, pose.Id.Value);
+                layerCounts[layer]++;
+                if (drawCount > 0 && _drawOrder[drawCount - 1].CompareTo(_drawOrder[drawCount]) > 0) sorted = false;
+                drawCount++;
+            }
+        }
+        if (!sorted) Array.Sort(_drawOrder, 0, drawCount);
+        Span<int> ranks = stackalloc int[LayerCount];
+        ranks.Clear();
+        foreach (var item in _drawOrder.AsSpan(0, drawCount))
+        {
+            float stride = LayerSpan / layerCounts[item.Layer];
+            _drawDepths[item.Index * LayerCount + item.Layer] = (0.04f + item.Layer * LayerStep + ranks[item.Layer]++ * stride, stride);
+        }
+        for (int i = 0; i < at; i++)
+        {
+            var pose = _ordered[i];
             var model = _models[pose.UnitType]; var view = pose.Presentation;
             if (model.Damaged != 0 && pose.Health > 0 && (long)pose.Health * 2 <= model.Unit.MaxHealth) view = view with { States = view.States | model.Damaged };
             if (model.NearlyDestroyed != 0 && pose.Health > 0 && (long)pose.Health * 4 <= model.Unit.MaxHealth) view = view with { States = view.States | model.NearlyDestroyed };
-            float depth = model.Unit.Footprint is not null ? _depthRanks[pose.Id] : DepthAt(pose.Current) + (_depthRanks.Count > 0 ? 0.0001f : 0);
-            float layerStep = _depthRanks.Count > 0 ? 0.00005f : 0.015f;
+            bool ghost = _ghostIds.Contains(pose.Id);
             Vector2 origin = new(Lerp(pose.Previous.X, pose.Current.X, alpha), Lerp(pose.Previous.Y, pose.Current.Y, alpha));
             float elevation = Lerp(pose.Previous.Elevation, pose.Current.Elevation, alpha);
             float body = Angle(view.PreviousBodyFacing, view.BodyFacing, alpha), weapon = Angle(view.PreviousWeaponFacing, view.WeaponFacing, alpha);
-            bool ghost = _ghostIds.Contains(pose.Id);
-            if (ghost && model.Unit.Footprint is null) depth += 0.015f;
             int construct = pose.Upgrade.Active ? model.Unit.AnimationIndex("construct") : -1;
             Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : Colors.White;
             float scale = 1, stateFlash = 0;
@@ -249,42 +296,17 @@ public sealed class SpriteWorldView
                 var frame = directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate);
                 if (model.Unit.Flight is not null && part.Parent < 0 && elevation > 0.25f && !ghost)
                 {
-                    frame.Add(new(center.X + 0.15f, 0.025f, center.Y + 0.15f), drawAngle, size * 0.9f, new(0, 0, 0, 0.3f), Colors.Transparent);
+                    float shadowOffset = elevation * 0.28f;
+                    frame.Add(new(center.X + shadowOffset, ShadowHeight, center.Y + shadowOffset * 0.65f), drawAngle, size * 0.9f, new(0, 0, 0, 0.3f), Colors.Transparent);
                     SpriteCount++;
                 }
-                frame.Add(new(center.X, elevation + 0.035f + depth + part.Layer * layerStep, center.Y), drawAngle, size, partTint, team);
+                int layer = ghost ? PreviewLayer : pose.Flight.Airborne ? AirLayer : (int)(part.DrawLayer ?? model.DrawLayer);
+                var (depth, stride) = _drawDepths[i * LayerCount + layer];
+                frame.Add(new(center.X, elevation + depth + part.Layer * (stride / model.PartLayerCount), center.Y), drawAngle, size, partTint, team);
                 SpriteCount++;
             }
         }
         foreach (var batch in _batches) batch.Publish();
-    }
-
-    private static long DepthKey(int x, int y) => ((long)x << 32) | (uint)y;
-    private void PrepareDepth(ReadOnlySpan<EntityPose> poses)
-    {
-        ulong signature = 14695981039346656037;
-        foreach (var pose in poses) if (_models[pose.UnitType].Unit.Footprint is not null)
-        { signature = (signature ^ pose.Id.Value) * 1099511628211; signature = (signature ^ (uint)pose.Current.X) * 1099511628211; signature = (signature ^ (uint)pose.Current.Y) * 1099511628211; signature = (signature ^ (uint)pose.QuarterTurns) * 1099511628211; }
-        if (signature == _depthSignature) return; _depthSignature = signature; _depthRanks.Clear(); _depthRegions.Clear();
-        int rank = 0;
-        foreach (var pose in poses)
-        {
-            var footprint = _models[pose.UnitType].Unit.WithRotation(pose.QuarterTurns).Footprint; if (footprint is null) continue;
-            float depth = ++rank * 0.001f; _depthRanks.Add(pose.Id, depth);
-            foreach (var cell in footprint.Cells)
-            {
-                var box = footprint.Bounds(cell, pose.Current);
-                for (int y = box.MinY / 1024; y <= (box.MaxY - 1) / 1024; y++) for (int x = box.MinX / 1024; x <= (box.MaxX - 1) / 1024; x++)
-                { long key = DepthKey(x, y); if (!_depthRegions.TryGetValue(key, out var list)) _depthRegions.Add(key, list = []); list.Add((box, depth)); }
-            }
-        }
-    }
-    private float DepthAt(WorldPosition point)
-    {
-        if (!_depthRegions.TryGetValue(DepthKey(point.X / 1024, point.Y / 1024), out var list)) return 0;
-        for (int i = list.Count - 1; i >= 0; i--)
-        { var (b, depth) = list[i]; if (point.X >= b.MinX && point.X < b.MaxX && point.Y >= b.MinY && point.Y < b.MaxY) return depth; }
-        return 0;
     }
 
     public static float Angle(FacingDirection previous, FacingDirection current, float alpha)

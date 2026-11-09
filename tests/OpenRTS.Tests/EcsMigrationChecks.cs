@@ -51,14 +51,14 @@ internal static class EcsMigrationChecks
             });
     }
 
-    // Format 28/catalog 13: named categories and aviation definitions. Ground behavior was compared to 3ae082f separately.
+    // Format 28/catalog 13 with the higher aviation profiles. Normalized ground traces still match 3ae082f.
     private static readonly Dictionary<string, string> Expected = new()
     {
-        ["direct"] = "64632FC41A8B55C4B091AC9CC3FB6829F4EEC88A199F2870170F713376A9F45A",
-        ["navigation"] = "11477F6A028375EDF3C0BFDD79BF174CB7EDE742BACA123789ACCE9371B209A1",
-        ["combat"] = "6265F012EEBA23D7D4CE0276975F57C3045C82896F2036128E0642AA827154E9",
-        ["buildings"] = "F11C17D8F62038263447DD61FF7215871688291DCBF267F099354CCBD070E49B",
-        ["production"] = "73FFC62DEABE3F90CB83161D092E8A19C2DDD7B294573338AE046662E226FF39"
+        ["direct"] = "8C1F6760F09485F80DC743124CB606EDE6C4BE8613713C01525803C98A7EF682",
+        ["navigation"] = "094E28BF5F2FE380BCADB5B2F438B9BC0406FD69B1FCF3F8DDFA450D2439187E",
+        ["combat"] = "5145E06628186DED27756A7C1842375E611A44083FA09B660F61908BFFBF7692",
+        ["buildings"] = "49F633653BB408E0D31F9FD269B33C2B3AC871F7088FB9C549A3C664B8EF53BE",
+        ["production"] = "849694E8162F694FC255D9F704FE9A9B6DC06A5B98BABB40ED0036306F1F44F0"
     };
 
     internal static readonly JsonSerializerOptions TraceOptions = new() { Converters = { new EntitySetWriter() } };

@@ -420,7 +420,8 @@ public partial class Sandbox
             _ringBuffer[at] = ((type.Footprint?.HalfWidth ?? type.Body.HalfWidth) / 1024f + 0.2f) / 0.88f;
             _ringBuffer[at + 10] = ((type.Footprint?.HalfHeight ?? type.Body.HalfHeight) / 1024f + 0.2f) / 0.88f; _ringBuffer[at + 5] = 1;
             _ringBuffer[at + 3] = (p.Previous.X + ((long)p.Current.X - p.Previous.X) * alpha) / 1024;
-            _ringBuffer[at + 7] = 0.015f; _ringBuffer[at + 11] = (p.Previous.Y + ((long)p.Current.Y - p.Previous.Y) * alpha) / 1024;
+            _ringBuffer[at + 7] = SpriteWorldView.OverlayHeight + (p.Previous.Elevation + ((long)p.Current.Elevation - p.Previous.Elevation) * alpha) / 1024;
+            _ringBuffer[at + 11] = (p.Previous.Y + ((long)p.Current.Y - p.Previous.Y) * alpha) / 1024;
             var color = p.Presentation.Owner switch
             {
                 1 => new Color(0.6f, 1, 0.6f),

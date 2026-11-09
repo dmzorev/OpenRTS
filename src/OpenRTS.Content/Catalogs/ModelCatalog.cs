@@ -5,13 +5,15 @@ using DeclarativeContent;
 namespace OpenRTS.Content;
 
 public enum ModelFacing { Body, Weapon }
+public enum ModelDrawLayer { Surface, World, Foreground }
 public sealed record ModelPart(string Id, int Parent, string Resource, ModelFacing Facing,
     double Width, double Height, double PivotX, double PivotY, double OffsetX, double OffsetY, int Layer, string? Mount = null, ReadOnlyCollection<string>? VisibleWhen = null, ReadOnlyCollection<string>? HiddenWhen = null,
-    double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null, int Facings = 0);
+    double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null, int Facings = 0, ModelDrawLayer? DrawLayer = null);
 public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0, ModelFacing? Facing = null);
 public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity, double Pulse = 0);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
-    ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null);
+    ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null,
+    ModelDrawLayer DrawLayer = ModelDrawLayer.World, double SortOffset = 0);
 
 /// <summary>Adapter declarations, loaded separately from UnitCatalog; never used by World.Step.</summary>
 public sealed class ModelCatalog
@@ -28,6 +30,8 @@ public sealed class ModelCatalog
         {
             var options = registry.Compile(id, node).Create(id).Single<ModelOptions>();
             if (options.Kind != "Sprite") throw node.Error(id + ".Model.Kind", "This adapter currently supports Sprite models.");
+            if (!Enum.IsDefined(options.DrawLayer) || !double.IsFinite(options.SortOffset))
+                throw node.Error(id + ".Model", "DrawLayer and SortOffset must be valid sprite ordering values.");
             if (options.Parts.Count is < 1 or > 8) throw node.Error(id + ".Model.Parts", "A model requires 1..8 parts.");
             var ordered = new List<ModelPart>(); var pending = options.Parts.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToList();
             while (pending.Count > 0)
@@ -41,8 +45,10 @@ public sealed class ModelCatalog
                     if (part.Parent is not null && !options.Parts.ContainsKey(part.Parent)) throw node.Error(id + ".Model.Parts." + name, "Unknown parent: " + part.Parent);
                     int parent = part.Parent is null ? -1 : ordered.FindIndex(p => p.Id == part.Parent);
                     if (part.Parent is not null && parent < 0) continue;
+                    if (part.DrawLayer is { } layer && !Enum.IsDefined(layer))
+                        throw node.Error(id + ".Model.Parts." + name + ".DrawLayer", "Unknown sprite layer.");
                     ValidateVector(part.Size, 0.01, 32, "Size"); ValidateVector(part.Pivot, 0, 1, "Pivot"); ValidateVector(part.Offset, -32, 32, "Offset");
-                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount, Array.AsReadOnly(part.VisibleWhen), Array.AsReadOnly(part.HiddenWhen), part.Spin, part.SpinWhen, part.LoopWhen, part.LoopAnimation, part.Facings));
+                    ordered.Add(new(name, parent, part.Resource, part.Facing, part.Size[0], part.Size[1], part.Pivot[0], part.Pivot[1], part.Offset[0], part.Offset[1], part.Layer, part.Mount, Array.AsReadOnly(part.VisibleWhen), Array.AsReadOnly(part.HiddenWhen), part.Spin, part.SpinWhen, part.LoopWhen, part.LoopAnimation, part.Facings, part.DrawLayer));
                     pending.RemoveAt(i--); progress = true;
                 }
                 if (!progress) throw node.Error(id + ".Model.Parts", "Part parent cycle.");
@@ -62,7 +68,8 @@ public sealed class ModelCatalog
                     throw node.Error(id + ".Model.States." + name, "State tint requires three values in 0..2.");
                 states.Add(name, new(state.Tint[0], state.Tint[1], state.Tint[2], state.Scale, state.Opacity, state.Pulse));
             }
-            models.Add(id, new(id, Array.AsReadOnly(ordered.ToArray()), new(animations), new(states), options.DamagedState, options.DestroyedState));
+            models.Add(id, new(id, Array.AsReadOnly(ordered.ToArray()), new(animations), new(states), options.DamagedState, options.DestroyedState,
+                options.DrawLayer, options.SortOffset));
             void ValidateVector(double[] value, double min, double max, string name)
             {
                 if (value.Length != 2 || value.Any(v => v < min || v > max)) throw node.Error(id + ".Model.Parts." + name, $"Requires two values in {min}..{max}.");
@@ -96,6 +103,8 @@ public sealed class ModelCatalog
         public string? DamagedState { get; set; }
         public string? DestroyedState { get; set; }
         public string Kind { get; set; } = "Sprite";
+        public ModelDrawLayer DrawLayer { get; set; } = ModelDrawLayer.World;
+        [Range(-32.0, 32.0)] public double SortOffset { get; set; }
         public Dictionary<string, PartOptions> Parts { get; set; } = new();
         public Dictionary<string, AnimationOptions> Animations { get; set; } = new();
         public Dictionary<string, StateOptions> States { get; set; } = new();
@@ -117,6 +126,7 @@ public sealed class ModelCatalog
         public double[] Pivot { get; set; } = [0.5, 0.5];
         public double[] Offset { get; set; } = [0, 0];
         [Range(0, 16)] public int Layer { get; set; }
+        public ModelDrawLayer? DrawLayer { get; set; }
     }
     private sealed class AnimationOptions
     {

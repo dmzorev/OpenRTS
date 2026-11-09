@@ -42,10 +42,12 @@ power-plant:
 barracks:
   Inherits: ^building-model
   Model:
+    SortOffset: 1.35
     Parts:
       body:
         {
           Resource: res://resources/buildings/barracks.tres,
+          DrawLayer: Surface,
           Size: [4.5061, 3.3103],
         }
       ruins: { Size: [4.4, 3.3] }
@@ -76,6 +78,7 @@ factory:
 supply-center:
   Inherits: factory
   Model:
+    SortOffset: 1.8
     Parts:
       body:
         {
@@ -540,6 +543,7 @@ bunker-upgradable:
 airfield:
   Inherits: ^building-model
   Model:
+    DrawLayer: Surface
     Parts:
       body:
         Resource: res://resources/buildings/airfield.tres
@@ -549,6 +553,7 @@ airfield:
 helipad:
   Inherits: ^building-model
   Model:
+    DrawLayer: Surface
     Parts:
       body:
         Resource: res://resources/buildings/helipad.tres
