@@ -1,0 +1,6 @@
+tools/dev.sh text eol=lf
+libs/DeclarativeContent/** text eol=lf
+docs/vendor/frent-license.txt text eol=crlf
+
+# Published scene maps record SHA-256 hashes of their Godot dependencies.
+sandbox/** text=auto eol=lf

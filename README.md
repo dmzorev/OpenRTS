@@ -6,13 +6,22 @@ OpenRTS — движок для desktop RTS на C# с независимой с
 
 ## Быстрый старт
 
-Понадобятся Bash, .NET SDK 10.0.105 или более новый patch той же feature band и Godot 4.7.2 .NET для графического запуска и редактора. Если Godot установлен по нестандартному пути, задайте `OPENRTS_GODOT`. [Настройка окружения](docs/development.md#окружение).
+Понадобятся Bash на macOS и Linux или PowerShell 7.3+ на Windows, а также .NET SDK 10.0.105 или более новый patch той же feature band. Для графического запуска и редактора нужен Godot 4.7.2 .NET. [Настройка окружения](docs/development.md#окружение).
 
-```sh
+Команды для macOS и Linux.
+
+```bash
 ./tools/dev.sh run       # Главное меню 2D-полигона
-./tools/dev.sh headless  # Симуляция без Godot
+./tools/dev.sh headless --mod=sandbox/game.yaml  # Симуляция без Godot
 ./tools/dev.sh editor    # Редактор карт Godot
 ./tools/dev.sh test      # Сборка и тесты
+```
+
+Команды для Windows.
+
+```powershell
+pwsh -File .\tools\dev.ps1 run
+pwsh -File .\tools\dev.ps1 test
 ```
 
 ## Документация

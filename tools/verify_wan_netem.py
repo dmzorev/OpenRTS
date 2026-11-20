@@ -2,9 +2,7 @@
 """Real kernel TCP loss/reordering in a disposable NET_ADMIN namespace, TLS end-to-end."""
 import argparse
 import json
-import os
 from pathlib import Path
-import select
 import socket
 import sys
 import subprocess
@@ -36,6 +34,18 @@ def percentile(values, q):
     values = sorted(v for v in values if v is not None)
     return round(values[min(len(values)-1, int((len(values)-1)*q+0.99999))], 3) if values else None
 
+
+def wait_for_log(process, log, marker, timeout):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if marker in log.read_text(encoding='utf-8').splitlines():
+            return
+        if process.poll() is not None:
+            break
+        time.sleep(0.05)
+    raise RuntimeError(f'{marker} was not reported. See {log}')
+
+
 results = []
 profiles = [(150, 20, 1, 8)] if a.quick else [(0, 0, 0, 2), (50, 20, 0, 4), (150, 20, 1, 8), (300, 0, 0, 12), (300, 80, 5, 12)]
 for rtt, jitter, loss, delay in profiles:
@@ -47,30 +57,23 @@ for rtt, jitter, loss, delay in profiles:
     procs, logs = [], []
     host_port, relay_port = free_port(), free_port()
     try:
-        def start(command, logname, pipe=False):
+        def start(command, logname):
             log = (folder / logname).open('w')
             logs.append(log)
-            process = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE if pipe else log, stderr=log, text=True)
+            process = subprocess.Popen(command, cwd=root, stdout=log, stderr=log)
             procs.append(process)
             return process
         def peer(role, address, port):
             return ['dotnet', str(dll), '--tls-peer', '--' + role + '=' + address, '--port=' + str(port),
                     '--delay=' + str(delay), '--ticks=' + str(200 if loss == 1 else 100), '--pin-file=' + str(pin),
                     '--journal=' + str(folder / (role + '.journal')), '--metrics=' + str(folder / (role + '.json'))]
-        host = start(peer('host', '0.0.0.0', host_port), 'host.log', True)
-        if not select.select([host.stdout], [], [], 10)[0] or host.stdout.readline().strip() != f'LISTEN {host_port}':
-            raise RuntimeError('Host did not start; see ' + str(folder))
+        host = start(peer('host', '0.0.0.0', host_port), 'host.log')
+        wait_for_log(host, folder / 'host.log', f'LISTEN {host_port}', 10)
         host_gateway = ['--add-host=host.docker.internal:host-gateway'] if sys.platform.startswith('linux') else []
         relay = start(['docker', 'run', '--rm', '--name', name, '--cap-add', 'NET_ADMIN', *host_gateway,
                        '-p', f'127.0.0.1:{relay_port}:7000', a.image, '--upstream-port', str(host_port),
                        '--rtt', str(rtt), '--jitter', str(jitter), '--loss', str(loss)], 'relay.log')
-        deadline = time.monotonic() + 15
-        while 'READY' not in (folder / 'relay.log').read_text() and time.monotonic() < deadline:
-            if relay.poll() is not None:
-                raise RuntimeError('netem relay failed; see ' + str(folder))
-            time.sleep(0.05)
-        if 'READY' not in (folder / 'relay.log').read_text():
-            raise TimeoutError('netem relay startup')
+        wait_for_log(relay, folder / 'relay.log', 'READY', 15)
         kernel = subprocess.check_output(['docker', 'exec', name, 'uname', '-r'], text=True).strip()
         join = start(peer('join', '127.0.0.1', relay_port), 'join.log')
         host.wait(timeout=55)

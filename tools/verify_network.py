@@ -108,7 +108,7 @@ try:
         processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT))
     if args.reconnect:
         deadline = time.monotonic() + 35
-        while 'OPENRTS_NETWORK_BREAK:requested' not in (output / 'join.log').read_text():
+        while 'OPENRTS_NETWORK_BREAK:requested' not in (output / 'join.log').read_text(encoding='utf-8'):
             if time.monotonic() > deadline or any(p.poll() is not None for p in processes): raise RuntimeError('Guest did not reach the disconnect boundary')
             time.sleep(.05)
         with relay_lock:
@@ -120,7 +120,7 @@ try:
     hashes = []
     map_identities = []
     for role, process in zip(roles, processes):
-        text = (output / (role + '.log')).read_text()
+        text = (output / (role + '.log')).read_text(encoding='utf-8')
         if process.returncode or 'OPENRTS_NETWORK_INPUT:' not in text or 'OPENRTS_NETWORK_MENU:' not in text:
             raise RuntimeError(role + ' failed:\n' + text)
         results = [line.split(':', 1)[1] for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_PASS:')]
@@ -130,19 +130,19 @@ try:
             raise RuntimeError(role + ' did not observe agreed pause')
         hashes.extend(results)
         map_identities.append(next(line for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_MAP:')))
-    if args.lan_address and ('OPENRTS_LAN_JOIN:' + ('' if args.lan_address == 'auto' else args.lan_address)) not in (output / 'join.log').read_text():
+    if args.lan_address and ('OPENRTS_LAN_JOIN:' + ('' if args.lan_address == 'auto' else args.lan_address)) not in (output / 'join.log').read_text(encoding='utf-8'):
         raise RuntimeError('Guest did not enter the locked room via the requested address')
     if len(set(hashes)) != 1:
         raise RuntimeError('Final hashes differ: ' + str(hashes))
     if len(set(map_identities)) != 1:
         raise RuntimeError('Map identities differ: ' + str(map_identities))
     if args.reconnect:
-        text = (output / 'join.log').read_text()
+        text = (output / 'join.log').read_text(encoding='utf-8')
         if 'OPENRTS_NETWORK_RECONNECT_BUTTON:pressed' not in text or 'OPENRTS_NETWORK_REJOIN:2' not in text:
             raise RuntimeError('Guest did not return through the native reconnect button:\n' + text)
         journals = []
         for role in roles:
-            paths = [line.split(':', 1)[1] for line in (output / (role + '.log')).read_text().splitlines() if line.startswith('OPENRTS_NETWORK_JOURNAL:')]
+            paths = [line.split(':', 1)[1] for line in (output / (role + '.log')).read_text(encoding='utf-8').splitlines() if line.startswith('OPENRTS_NETWORK_JOURNAL:')]
             if len(paths) != 1: raise RuntimeError(role + ' did not report exactly one completed journal')
             journals.append(Path(paths[0]).read_bytes())
         if journals[0] != journals[1]: raise RuntimeError('Rejoined guest did not retain the common journal')

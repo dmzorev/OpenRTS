@@ -50,7 +50,7 @@ try:
     for process in processes[1:]: process.wait(timeout=55)
     hashes = []
     for role, process in zip(('host', 'join'), processes[1:]):
-        text = (output / (role + '.log')).read_text()
+        text = (output / (role + '.log')).read_text(encoding='utf-8')
         if process.returncode or 'OPENRTS_NETWORK_PASS:' not in text: raise RuntimeError(role + ' failed:\n' + text)
         if role == 'join' and 'OPENRTS_DIRECTORY_UI_JOIN:' not in text: raise RuntimeError('Guest bypassed directory controls')
         if role == 'join' and 'OPENRTS_DIRECTORY_CAPACITY:2/8 disabled' not in text: raise RuntimeError('Unsupported capacities were not checked in the browser')

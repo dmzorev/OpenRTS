@@ -69,7 +69,11 @@ if (args.Contains("--tls-peer"))
     Console.WriteLine($"RESULT {result.Tick} {result.StateHash}");
     return;
 }
-if (args.Contains("--wan")) { WanChecks.Profiles(Value("--output=") ?? "/tmp/openrts-wan-results.json"); return; }
+if (args.Contains("--wan"))
+{
+    WanChecks.Profiles(Value("--output=") ?? Path.Combine(Path.GetTempPath(), "openrts-wan-results.json"));
+    return;
+}
 if (Value("--host=") is { } host || Value("--join=") is not null)
 {
     bool hosting = Value("--host=") is not null;

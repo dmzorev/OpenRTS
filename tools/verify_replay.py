@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 parser = argparse.ArgumentParser()
@@ -16,13 +17,13 @@ root = Path(__file__).resolve().parent.parent
 output = (args.output or Path(tempfile.mkdtemp(prefix='openrts-replay-'))).resolve()
 output.mkdir(parents=True, exist_ok=True)
 with (output / 'record.log').open('w') as log:
-    network = ['python3', str(root / 'tools/verify_network.py'), args.godot, '--host-fog-hold=7', '--output=' + str(output / 'match')]
+    network = [sys.executable, str(root / 'tools/verify_network.py'), args.godot, '--host-fog-hold=7', '--output=' + str(output / 'match')]
     if args.map:
         network += ['--map=' + args.map]
     subprocess.run(network,
                    cwd=root, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90)
-text = (output / 'match/host.log').read_text()
-paths = [line.split(':', 1)[1] for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_JOURNAL:')]
+host = (output / 'match/host.log').read_text(encoding='utf-8')
+paths = [line.split(':', 1)[1] for line in host.splitlines() if line.startswith('OPENRTS_NETWORK_JOURNAL:')]
 if len(paths) != 1:
     raise RuntimeError('Recorded match did not publish its journal path')
 command = [args.godot]
@@ -37,10 +38,9 @@ if args.visible:
     command += ['--capture=' + str(output / 'replay.png')]
 with (output / 'replay.log').open('w') as log:
     result = subprocess.run(command, cwd=root, stdout=log, stderr=subprocess.STDOUT, timeout=45)
-text = (output / 'replay.log').read_text()
+text = (output / 'replay.log').read_text(encoding='utf-8')
 if result.returncode or 'OPENRTS_REPLAY_PASS:' not in text:
     raise RuntimeError('Godot replay failed:\n' + text)
-host = (output / 'match/host.log').read_text()
 expected = next(line.split(':', 1)[1] for line in host.splitlines() if line.startswith('OPENRTS_NETWORK_PASS:'))
 if f'OPENRTS_REPLAY_PASS:{expected}' not in text:
     raise RuntimeError('Godot final replay hash differs from the network match')

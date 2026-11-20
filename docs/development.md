@@ -2,19 +2,31 @@
 
 ## Окружение
 
-Установите .NET SDK 10.0.105 или более новый patch той же feature band, Godot 4.7.2 .NET и Bash. Для сквозных проверок нужен Python 3. Первый запуск восстанавливает зависимости из NuGet. [Версия SDK](../global.json) · [Версия Godot SDK](../sandbox/OpenRTS.Sandbox.csproj).
+Установите .NET SDK 10.0.105 или более новый patch той же feature band и Godot 4.7.2 .NET. Скрипт для macOS и Linux использует Bash, для Windows нужен PowerShell 7.3 или новее (`pwsh`). Для сквозных проверок и команд сборки карт нужен Python 3.9+. Для `verify-wan --netem` нужен Docker с Linux-контейнерами. Первый запуск восстанавливает зависимости из NuGet. [Версия SDK](../global.json) · [Версия Godot SDK](../sandbox/OpenRTS.Sandbox.csproj).
 
-`tools/dev.sh` сначала ищет `OPENRTS_GODOT`, затем `godot` в `PATH`, затем исполняемый файл в соседнем `Godot_mono.app`. Для установки по другому адресу задайте `OPENRTS_GODOT` полным путём к исполняемому файлу. При работе с локальным NuGet feed задайте `OPENRTS_NUGET_SOURCE`. Godot SDK должен быть доступен SDK resolver через NuGet или локальный кэш `.packages`.
+Оба скрипта сначала используют `OPENRTS_GODOT`, затем ищут Godot в `PATH` под именами `godot-mono`, `godot4-mono`, `godot` или `godot4`. На macOS скрипт также ищет соседний `Godot_mono.app` и приложения Godot в `/Applications` и `~/Applications`. На Windows скрипт использует консольный `*_console.exe`, если он лежит рядом с указанным `.exe`. Для установки по другому адресу задайте `OPENRTS_GODOT` полным путём к исполняемому файлу.
+
+При работе с локальным NuGet feed задайте `OPENRTS_NUGET_SOURCE`. Godot SDK должен быть доступен SDK resolver через NuGet или локальный кэш `.packages`.
 
 ## Команды разработки
 
 ```sh
 ./tools/dev.sh build
 ./tools/dev.sh test
-./tools/dev.sh headless
+./tools/dev.sh headless --mod=sandbox/game.yaml
 ./tools/dev.sh verify
 ./tools/dev.sh editor
 ./tools/dev.sh run
+```
+
+В PowerShell на Windows используются те же команды и аргументы.
+
+```powershell
+$env:OPENRTS_GODOT = 'C:\Tools\Godot\Godot.exe'
+pwsh -File .\tools\dev.ps1 build
+pwsh -File .\tools\dev.ps1 test
+pwsh -File .\tools\dev.ps1 run --buildings
+pwsh -File .\tools\dev.ps1 scene-map-pack 'C:\Temp\openrts.pck'
 ```
 
 - `test` собирает решение и запускает три исполняемых проекта проверок. Используйте эту команду для запуска набора целиком.

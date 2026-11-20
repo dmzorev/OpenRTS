@@ -7,11 +7,31 @@ export DOTNET_NOLOGO=1
 export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 export NUGET_PACKAGES="$PWD/.packages"
 
-godot_bin="${OPENRTS_GODOT:-}"
-if [[ -z "$godot_bin" ]]; then
-  if command -v godot >/dev/null 2>&1; then godot_bin="$(command -v godot)"
-  else godot_bin="$PWD/../Godot_mono.app/Contents/MacOS/Godot"; fi
-fi
+resolve_godot() {
+  local name candidate
+  godot_bin="${OPENRTS_GODOT:-}"
+  if [[ -z "$godot_bin" ]]; then
+    for name in godot-mono godot4-mono godot godot4; do
+      if godot_bin="$(type -P "$name")"; then break; fi
+    done
+    if [[ -z "$godot_bin" && "$(uname -s)" == Darwin ]]; then
+      for candidate in "$PWD/../Godot_mono.app" /Applications/Godot_mono.app "${HOME:-}/Applications/Godot_mono.app" \
+                       /Applications/Godot.app "${HOME:-}/Applications/Godot.app"; do
+        if [[ -x "$candidate/Contents/MacOS/Godot" ]]; then
+          godot_bin="$candidate/Contents/MacOS/Godot"
+          break
+        fi
+      done
+    fi
+  elif [[ "$godot_bin" != */* && ! -x "$godot_bin" ]]; then
+    godot_bin="$(type -P "$godot_bin")" || godot_bin=""
+  fi
+  if [[ ! -f "$godot_bin" || ! -x "$godot_bin" ]]; then
+    echo 'Godot .NET executable not found. Set OPENRTS_GODOT to its executable path.' >&2
+    exit 1
+  fi
+  if [[ "$godot_bin" != /* ]]; then godot_bin="$PWD/$godot_bin"; fi
+}
 
 build() {
   local target="${1:-OpenRTS.sln}"
@@ -28,51 +48,23 @@ import_assets() {
   "$godot_bin" --headless --editor --path "$PWD/${1:-sandbox}" --import
 }
 
-build_map() {
-  local scene="$1" output
-  shift
-  if ! output="$("$godot_bin" --headless --editor --path "$PWD/sandbox" --max-fps 60 --quit-after 7200 "$scene" -- "--build-map=$scene" "$@")"; then
-    printf '%s\n' "$output" >&2
-    return 1
-  fi
-  printf '%s\n' "$output"
-  if ! rg -q '^OPENRTS_MAP_BUILD:' <<< "$output"; then
-    echo 'Map authoring did not report a published build.' >&2
-    return 1
-  fi
-}
-
-export_map_pack() {
-  local project="$1" output="$2" log="$3"
-  "$godot_bin" --headless --path "$project" -- --check-scene-maps || return 1
-  if ! "$godot_bin" --headless --editor --path "$project" --export-pack "Scene Map Pack" "$output" >"$log" 2>&1 ||
-     rg -q '^ERROR:' "$log" || [[ ! -s "$output" ]]; then
-    cat "$log" >&2
-    return 1
-  fi
-}
-
-check_map_run() {
-  local marker="$1" output
-  shift
-  if ! output="$("$godot_bin" --headless --max-fps 60 --quit-after 1800 "$@")" ||
-     ! rg -q "^$marker" <<< "$output"; then
-    printf '%s\n' "$output" >&2
-    return 1
-  fi
-  rg "^$marker" <<< "$output"
+run_tests() {
+  build
+  dotnet run --project tests/OpenRTS.Network.Tests --no-build --no-launch-profile
+  dotnet run --project tests/DeclarativeContent.Tests --no-build --no-launch-profile
+  dotnet run --project tests/OpenRTS.Tests --no-build --no-launch-profile -- "$@"
 }
 
 action="${1:-build}"
 if [[ $# -gt 0 ]]; then shift; fi
 case "$action" in
+  run|editor|run3d|editor3d|verify3d|map-build|scene-map|scene-map-pack|verify-map-export|verify-authoring|verify-directory|verify-replay|verify-menu|verify-network|verify)
+    resolve_godot ;;
+esac
+
+case "$action" in
   build) build ;;
-  test)
-    build
-    dotnet run --project tests/OpenRTS.Network.Tests --no-build --no-launch-profile
-    dotnet run --project tests/DeclarativeContent.Tests --no-build --no-launch-profile
-    dotnet run --project tests/OpenRTS.Tests --no-build --no-launch-profile -- "$@"
-    ;;
+  test) run_tests "$@" ;;
   match-directory) build tools/OpenRTS.MatchDirectory/OpenRTS.MatchDirectory.csproj; exec dotnet run --project tools/OpenRTS.MatchDirectory --no-build --no-launch-profile -- "$@" ;;
   headless) build; dotnet run --project tools/OpenRTS.Headless --no-build --no-launch-profile -- "$@" ;;
   replay) build tools/OpenRTS.Replay/OpenRTS.Replay.csproj; exec dotnet run --project tools/OpenRTS.Replay --no-build --no-launch-profile -- "$@" ;;
@@ -99,104 +91,8 @@ case "$action" in
     fi
     exec "$godot_bin" --path "$PWD/sandbox3d" -- "$@"
     ;;
-  map-build|scene-map)
-    if [[ "${1:-}" != res://*.tscn || ( "$action" == scene-map && $# -ne 1 ) ]]; then
-      echo 'Usage: tools/dev.sh map-build res://path/to/map.tscn [--format=compiled|bundle] [--verify [--start=slot ...] [--start-set=path]]' >&2
-      echo '       tools/dev.sh scene-map res://path/to/map.tscn' >&2
-      exit 2
-    fi
-    if ! rg -q '^enabled=.*"res://addons/openrts_editor/plugin.cfg"' sandbox/project.godot; then
-      echo 'Enable OpenRTS Map Authoring before building a map.' >&2
-      exit 1
-    fi
-    if [[ "$action" == scene-map ]]; then set -- "$1" --format=bundle; fi
-    build sandbox/OpenRTS.Sandbox.csproj; import_assets
-    build_map "$@"
-    ;;
-  scene-map-pack)
-    if [[ $# -ne 1 || "$1" != /*.pck ]]; then
-      echo 'Usage: tools/dev.sh scene-map-pack /absolute/output.pck' >&2
-      exit 2
-    fi
-    build; import_assets
-    staging="$(mktemp -d "$(dirname "$1")/.scene-map-pack.XXXXXX")"
-    trap 'rm -rf -- "$staging"' EXIT
-    export_map_pack "$PWD/sandbox" "$staging/maps.pck" "$staging/export.log"
-    mv -f -- "$staging/maps.pck" "$1"
-    printf '%s\n' "$1"
-    ;;
-  verify-map-export)
-    staging="$(mktemp -d "${TMPDIR:-/tmp}/openrts-map-export.XXXXXX")"
-    trap 'rm -rf -- "$staging"' EXIT
-    source="$staging/source"
-    mkdir -p "$source"
-    rsync -a --exclude='.godot/' --exclude='bin/' --exclude='obj/' --exclude='artifacts/' \
-      --exclude='sandbox/Controls/Shared/*.cs' global.json Directory.Build.props NuGet.Config src libs sandbox "$source/"
-    rsync -aR docs/vendor/ "$source/"
-    (
-      cd "$source"
-      build sandbox/OpenRTS.Sandbox.csproj
-      import_assets
-      build_map res://examples/maps/RockyPass.tscn --format=compiled --verify > "$staging/compiled.log"
-      cat "$staging/compiled.log"
-    )
-    project="$source/sandbox"
-    mv "$project/artifacts/maps/rocky-pass.ortmap.json" "$project/content/scene-maps/"
-    sed 's|"res://addons/openrts_editor/plugin.cfg"||' "$project/project.godot" > "$staging/project.godot"
-    mv "$staging/project.godot" "$project/project.godot"
-    mv "$project/.godot" "$staging/authoring-cache"
-    mkdir -p "$project/.godot/mono"
-    mv "$staging/authoring-cache/mono/temp" "$project/.godot/mono/"
-    "$godot_bin" --headless --editor --path "$project" --import
-
-    check_map_run 'OPENRTS_SCENE_MAP_MENU:PASS' --path "$project" -- --verify-scene-map-menu
-    compiled_args=(-- --map=res://content/scene-maps/rocky-pass.ortmap.json --mod=res://rocky-pass-game.yaml --verify-simulation --ticks=8)
-    loose_report="$(check_map_run 'OPENRTS_SIMULATION:' --path "$project" "${compiled_args[@]}")"
-    printf '%s\n' "$loose_report"
-
-    dependency="$project/examples/maps/SceneDecoration.gd"
-    mv "$dependency" "$staging/SceneDecoration.gd"
-    if "$godot_bin" --headless --path "$project" -- --check-scene-maps >"$staging/missing.log" 2>&1 ||
-       ! rg 'missing dependency res://examples/maps/SceneDecoration.gd' "$staging/missing.log"; then
-      cat "$staging/missing.log" >&2
-      exit 1
-    fi
-    mv "$staging/SceneDecoration.gd" "$dependency"
-
-    run="$staging/run"
-    mkdir -p "$run/.godot/mono/temp/bin"
-    export_map_pack "$project" "$run/maps.pck" "$staging/export.log"
-    # The editor binary's standalone project runner looks for a Debug directory.
-    # Fill it with the ExportRelease assemblies actually built by export.
-    cp -R "$project/.godot/mono/temp/bin/ExportRelease/osx-arm64" "$run/.godot/mono/temp/bin/Debug"
-    (
-      cd "$run"
-      check_map_run 'OPENRTS_SCENEMAP_CHECK:' --main-pack maps.pck -- --check-scene-maps
-      check_map_run 'OPENRTS_SCENE_MAP_MENU:PASS' --main-pack maps.pck -- --verify-scene-map-menu
-      check_map_run 'OPENRTS_MAP_PROPERTIES:PASS' --main-pack maps.pck -- --verify-initial-properties
-      pack_report="$(check_map_run 'OPENRTS_SIMULATION:' --main-pack maps.pck "${compiled_args[@]}")"
-      if [[ "$pack_report" != "$loose_report" ]]; then
-        printf 'Compiled map differs after export.\nLoose %s\nPacked %s\n' "$loose_report" "$pack_report" >&2
-        exit 1
-      fi
-      printf '%s\n' "$pack_report"
-    )
-    echo 'OPENRTS_MAP_EXPORT:PASS addon disabled, 3D bundles and 2D compiled map'
-    ;;
-  verify-authoring)
-    if ! grep -q '^enabled=.*"res://addons/openrts_editor/plugin.cfg"' sandbox/project.godot; then
-      echo 'Enable OpenRTS Map Authoring in Sandbox Project Settings > Plugins before verify-authoring.' >&2
-      exit 1
-    fi
-    build sandbox/OpenRTS.Sandbox.csproj; import_assets
-    "$godot_bin" --headless --path "$PWD/sandbox" res://Verification/MapAuthoringChecks.tscn
-    "$godot_bin" --headless --editor --path "$PWD/sandbox" res://examples/maps/AuthoringMap.tscn -- --verify-map-editor
-    build_map res://examples/maps/RockyPass.tscn --format=compiled --verify
-    build_map res://examples/maps/AuthoringMap.tscn --format=bundle --verify --start=west --start-set=content/start-sets/infantry.yaml
-    if build_map res://examples/maps/RockyPass.tscn --format=bundle; then
-      echo '2D authoring incorrectly published a scene-map bundle.' >&2
-      exit 1
-    fi
+  map-build|scene-map|scene-map-pack|verify-map-export|verify-authoring)
+    exec python3 tools/dev_maps.py "$godot_bin" "$action" "$@"
     ;;
   verify-wan)
     build
@@ -219,6 +115,6 @@ case "$action" in
     fi
     ;;
   verify-network) build; import_assets; python3 tools/verify_network.py "$godot_bin" "$@" ;;
-  verify) "$0" test; import_assets; python3 tools/verify.py "$godot_bin" ;;
+  verify) run_tests; import_assets; python3 tools/verify.py "$godot_bin" ;;
   *) echo 'Usage: tools/dev.sh [build|test|headless|replay|benchmark|run|editor|run3d|editor3d|verify3d|map-build|scene-map|scene-map-pack|verify|verify-authoring|verify-map-export|verify-network|verify-menu|verify-replay|verify-wan|match-directory|verify-directory]' >&2; exit 2 ;;
 esac

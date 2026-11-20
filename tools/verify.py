@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(command, expected=0):
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, cwd=ROOT, encoding='utf-8', capture_output=True, timeout=60)
     if result.returncode != expected:
         raise RuntimeError(f"Command returned {result.returncode}, expected {expected}: {command}\n{result.stdout}\n{result.stderr}")
     return result
