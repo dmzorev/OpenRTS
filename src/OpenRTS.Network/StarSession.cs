@@ -94,9 +94,7 @@ public sealed partial class StarSession : IDisposable
         X509Certificate2? certificate = null;
         if (host)
         {
-            using var key = ECDsa.Create();
-            certificate = new CertificateRequest("CN=openrts.local", key, HashAlgorithmName.SHA256)
-                .CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+            certificate = MatchCertificate.Create();
             Fingerprint = Convert.ToHexString(SHA256.HashData(certificate.RawData));
         }
         else
