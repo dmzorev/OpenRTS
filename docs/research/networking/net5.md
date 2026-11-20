@@ -1,6 +1,6 @@
 # NET5: поиск матча и допуск
 
-**Статус:** первый самостоятельный сервис реализован. [Контракт044](../../decisions/044-net5-match-directory-admission.md), [проверки](../../verification/044-net5-directory.md), [roadmap](roadmap.md).
+Для обычных игр действует StarProtocol 6 с выдачей места хостом. Ниже описан первоначальный сервис с отдельным issuer. [Актуальный сценарий](../../../src/OpenRTS.Network/README.md#net5-поиск-матча-и-допуск). [Контракт044](../../decisions/044-net5-match-directory-admission.md), [проверки](../../verification/044-net5-directory.md), [roadmap](roadmap.md).
 
 Цель — найти совместимый матч и получить конкретную роль, сохранив прямой клиентский lockstep и необязательность сервера. Реализация: ASP.NET Core CLI `OpenRTS.MatchDirectory`, bounded in-memory catalogue, HTTP client/publisher, Gate внутри StarSession и Godot browser. Новых NuGet-зависимостей нет; HTTP отсутствует в Core/Gameplay и в tick barrier.
 
@@ -16,4 +16,4 @@ Direct endpoint пробуется первым, затем настроенны
 
 Пределы: только ephemeral key accounts и in-memory directory; restart не сохраняет reservations. Не проверены публичный HTTPS deployment, физический WAN/NAT и большая нагрузка. Долговечные аккаунты/leases, внешний login provider, NAT backend и операционные лимиты требуют отдельных измерений/решений. Trusted filtered simulation остаётся последним optional NET8/NET9.
 
-Аудит046: Confirm после reservation_missing продолжает очередь, transient ошибки повторяются; capacity включена в metadata/ticket v2 и bootstrap. Проверены2/4/8мест с AI/closed и spectator, подмена grant и несовместимые native кнопки sandbox. Текущий StarProtocol5 несовместим с4; обновляются обе стороны и каталог. [Контракт046](../../decisions/046-network-directory-diagnostics.md), [проверки046](../../verification/046-network-directory-diagnostics.md).
+Аудит046: Confirm после reservation_missing продолжает очередь, transient ошибки повторяются; capacity включена в metadata/ticket v2 и bootstrap. Проверены2/4/8мест с AI/closed и spectator, подмена grant и несовместимые native кнопки sandbox. StarProtocol5 на этапе аудита несовместим с4; обновляются обе стороны и каталог. [Контракт046](../../decisions/046-network-directory-diagnostics.md), [проверки046](../../verification/046-network-directory-diagnostics.md).

@@ -36,9 +36,20 @@ public partial class Sandbox
         if (_networkChatLabel is not null) _networkChatLabel.Text = string.Join("\n", _networkMessages);
     }
     private LanGames? _networkAdvertiser;
-    private DirectoryListing? _directoryPublication;
-    private sealed record NetworkLobby(string Name, MatchDirectoryClient? Directory, MatchJoinGrant? Grant,
-        bool Publish, string PublicAddress, bool Private, MatchEndpoint? Relay);
+    private LanRegistry? _lanRegistry;
+    private readonly List<(MatchDirectoryClient Client, DirectoryListing Publication)> _publications = [];
+    private void ClosePublications()
+    {
+        foreach (var item in _publications) item.Publication.Stop();
+        foreach (var (client, publication) in _publications) { publication.Dispose(); client.Dispose(); }
+        _publications.Clear();
+    }
+    private sealed record NetworkLobby(string Name, string? PublicAddress, string Password,
+        (string Url, string? Peer)[] Sources, MatchEndpoint[]? Endpoints, bool RequestSeat)
+    {
+        public override string ToString() => Name;
+    }
+    private Func<LanGame?>? _advertisement;
     private NetworkLobby? _networkLobby;
     private void StartNetworkSession(MapMatch map)
     {
@@ -67,29 +78,28 @@ public partial class Sandbox
             var commands = ai.Plan(world); policies[player] = (ai, world.Tick, commands); return commands;
         }
         if (_matchSetup is { } setup)
-            _networkLobby = new(setup.NetworkGameName, setup.DirectoryClient, setup.DirectoryGrant, setup.PublishDirectory,
-                setup.PublishDirectory ? setup.PublicEndpoint : "", setup.PrivateDirectory, setup.PublishDirectory ? setup.RelayEndpoint : null);
+            _networkLobby = new(setup.NetworkGameName, setup.AdvertiseHost, setup.MatchPassword,
+                setup.NetworkMode == 1 ? setup.PublicationSources() : [], setup.SelectedEndpoints, setup.RequestSeat);
         var lobby = _networkLobby ?? throw new InvalidOperationException("Нет параметров подключения к матчу.");
         var network = new StarSession(_networkMode == 1, _networkAddress, _networkPort, _networkPin, Descriptor(ownerOptions, map),
             () => CreateConfiguredWorld(map, ownerOptions), path, playerCount: 4, player: _networkPlayer,
             aiPlayers: _networkAiPlayers, planAi: Plan, lobbySettings: ownerOptions.Serialize(), prepareSettings: Prepare,
             closedPlayers: ownerOptions.Seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.None).Select(p => (uint)p.i + 1).ToArray(), resumeCredential: _networkResume,
-            admissionPolicy: _networkMode == 1 && lobby.Publish ? new(lobby.Directory!.Info!.SigningKey) : null,
-            admission: _networkMode == 2 && _networkResume is null ? lobby.Grant : null,
-            accountIdentity: lobby.Directory?.Identity,
-            endpoints: _networkResume is not null ? lobby.Grant?.Endpoints : null);
+            endpoints: lobby.Endpoints, password: lobby.Password, requestSeat: _networkResume is null && lobby.RequestSeat);
         _session = new SandboxSession(network);
-        _directoryPublication?.Dispose(); _directoryPublication = null;
-        if (network.IsHost && lobby.Publish)
-            _directoryPublication = new(lobby.Directory!, network, lobby.Name, lobby.PublicAddress, _networkPort,
-                () => MatchSetupOptions.Parse(network.LobbySettings).Map, lobby.Private, lobby.Relay);
-        _networkAdvertiser?.Dispose(); _networkAdvertiser = null;
-        if (network.IsHost && !lobby.Publish)
+        ClosePublications();
+        string Map() => MatchSetupOptions.Parse(network.LobbySettings).Map;
+        System.Threading.Volatile.Write(ref _advertisement, network.IsHost ? () => LanGames.Advertisement(network, _networkPort, lobby.Name, Map) : null);
+        if (network.IsHost)
         {
-            try { _networkAdvertiser = new LanGames(() => network.State.Phase != MatchPhase.Lobby ? null :
-                new LanGame("", _networkPort, lobby.Name, MatchSetupOptions.Parse(network.LobbySettings).Map,
-                    network.State.Slots.Count(s => s.Connected), network.State.Slots.Count(s => s.Controller == SlotController.Human && !s.Connected), network.State.Spectators, network.Fingerprint, network.State.Slots.Where(s => s.Controller == SlotController.Human && !s.Connected).Select(s => s.Player).ToArray())); }
-            catch (System.Net.Sockets.SocketException error) { GD.Print("LAN discovery: " + error.Message); }
+            var sources = lobby.Sources.AsEnumerable();
+            if (_lanRegistry is null) sources = sources.Append(("http://127.0.0.1:17773", "127.0.0.1"));
+            foreach (var (url, peer) in sources.Distinct())
+            {
+                var client = new MatchDirectoryClient(url, "Игрок");
+                var listing = new DirectoryListing(client, network, lobby.Name, lobby.PublicAddress, _networkPort, Map, peerAddress: peer);
+                _publications.Add((client, listing));
+            }
         }
     }
     private SimulationWorld CreateNetworkWorld(MapMatch map) => CreateConfiguredWorld(map, _configuredOptions!);

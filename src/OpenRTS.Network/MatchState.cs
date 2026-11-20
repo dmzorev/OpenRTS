@@ -25,7 +25,9 @@ public sealed record MatchChat(uint Player, string Text);
 
 internal static class StarProtocol
 {
-    internal const int Version = 5;
+    internal const int Version = 6;
+    internal const byte PasswordChallenge = 42, PasswordProof = 43, SeatAssigned = 44;
+    internal const uint AnySeat = uint.MaxValue;
     internal const byte Waiting = 39, Pong = 41;
     internal static byte[] Probe(byte kind, long nonce) => Wire.Pack(w => {
         if (kind is not (Ping or Pong) || nonce < 1) throw new InvalidDataException("Invalid latency probe.");

@@ -11,7 +11,12 @@ public sealed partial class MatchSetupScreen
     private VBoxContainer _gameRows = null!;
     private Label _gameStatus = null!;
     private double _refreshAt;
-    private readonly LineEdit _gameFilter = new() { PlaceholderText = "Название или карта…" };
+    private readonly LineEdit _roomPassword = new() { Name = "CreatePassword", Secret = true, MaxLength = 64, PlaceholderText = "Пароль (по желанию)" };
+    private readonly LineEdit _passwordEntry = new() { Name = "JoinPassword", Secret = true, MaxLength = 64, PlaceholderText = "Пароль матча" };
+    private readonly ConfirmationDialog _passwordDialog = new() { Name = "JoinPasswordDialog", Title = "Вход в игру", OkButtonText = "Войти" };
+    private Action? _afterPassword;
+    private string _joinPassword = "";
+    public string MatchPassword => _joinPassword;
     private readonly LineEdit _mapFilter = new() { Name = "MapFilter", PlaceholderText = "Найти карту…" };
     private GridContainer _mapTiles = null!;
 
@@ -40,17 +45,18 @@ public sealed partial class MatchSetupScreen
         _page = key;
         foreach (var pair in _pages) pair.Value.Visible = pair.Key == key;
         if (key == "replays") RefreshReplays();
-        if (key == "browser" && _browser is null)
+        if (key == "browser")
         {
-            try { _browser = new LanGames(); } catch (System.Net.Sockets.SocketException error) { _gameStatus.Text = "Поиск недоступен: " + error.Message; }
+            try { _browser ??= new LanGames(); BrowseDirectory(); } catch (System.Net.Sockets.SocketException error) { _gameStatus.Text = "Поиск недоступен: " + error.Message; }
         }
     }
     private void Back(string key)
     {
+        if (key == "create") { _pendingBrowserAction = null; _directoryCancellation?.Cancel(); ShowPage("browser"); return; }
         if (key == "maps" || key == "advanced") { ShowPage("lobby"); return; }
-        if (key == "lobby") { if (_networkSession is not null) { CancelNetwork?.Invoke(); _networkSession = null; _busy = false; } ShowPage(NetworkMode == 0 ? "main" : "browser"); return; }
+        if (key == "lobby") { if (NetworkMode != 0 && (_busy || _networkSession is not null)) { CancelNetwork?.Invoke(); _networkSession = null; _busy = false; } ShowPage(NetworkMode == 0 ? "main" : "browser"); return; }
         if (key == "replays" && _busy) CancelNetwork?.Invoke();
-        _directoryCancellation?.Cancel();
+        _pendingBrowserAction = null; _directoryCancellation?.Cancel();
         ShowPage("main");
     }
     private void BuildMain()
@@ -74,19 +80,12 @@ public sealed partial class MatchSetupScreen
         var box = Page("lobby", "Лобби");
         var heading = new HBoxContainer(); box.AddChild(heading); _title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; heading.AddChild(_title); heading.AddChild(_viewers);
         var body = new HBoxContainer(); body.AddThemeConstantOverride("separation", 20); box.AddChild(body);
-        var invitePanel = new VBoxContainer(); box.AddChild(invitePanel); _directoryInvitePanel = invitePanel; invitePanel.AddChild(_publicationStatus);
-        var invitation = new HBoxContainer(); invitePanel.AddChild(invitation); _ownInvite.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        invitation.AddChild(_ownInvite);
-        invitation.AddChild(Button("Показать приглашение", () => _ownInvite.Secret = !_ownInvite.Secret));
-        invitation.AddChild(Button("Скопировать", () => { if (_ownInvite.Text.Length != 0) DisplayServer.ClipboardSet(_ownInvite.Text); }));
+        box.AddChild(_publicationStatus);
         var left = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; body.AddChild(left);
         left.AddChild(_players);
         var fill = new Control { CustomMinimumSize = new(0, 150), SizeFlagsVertical = Control.SizeFlags.ExpandFill }; left.AddChild(fill);
         left.AddChild(new Label { Text = "Одинаковый альянс — союзники. Фракция пока одна: OpenRTS.", Modulate = new("#9ba98e") });
         left.AddChild(_status);
-        var connection = new HBoxContainer(); _connectionPanel = connection; left.AddChild(connection);
-        connection.AddChild(new Label { Text = "Отпечаток хоста", Modulate = new("#9ba98e") });
-        var fingerprint = new LineEdit { Editable = false, Name = "HostFingerprint", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, PlaceholderText = "Появится при создании сетевой игры" }; connection.AddChild(fingerprint); _fingerprintView = fingerprint;
         var right = new VBoxContainer { CustomMinimumSize = new(260, 0) }; body.AddChild(right);
         right.AddChild(_preview); _preview.GuiInput += input => { if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } && Editable) ShowPage("maps"); };
         _mapButton = Button("Карта", () => ShowPage("maps"), "ChooseMap"); right.AddChild(_mapButton); right.AddChild(_details);
@@ -101,29 +100,27 @@ public sealed partial class MatchSetupScreen
         _advanced.AddChild(new Label { Text = "Больше буфер — устойчивее соединение, дольше отклик команд.", Modulate = new("#9ba98e") });
         _advanced.AddChild(Button("Вернуться в лобби", () => ShowPage("lobby")));
     }
-    private LineEdit? _fingerprintView;
-    private Control? _connectionPanel;
     private void BuildBrowser()
     {
-        var box = Page("browser", "Multiplayer"); BuildDirectory(box);
-        var top = new HBoxContainer(); box.AddChild(top); _gameFilter.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; top.AddChild(_gameFilter);
-        top.AddChild(Button("Обновить", RefreshGames));
-        var headers = new Label { Text = "ИГРА                                      КАРТА                         ИГРОКИ       СВОБОДНО       ЗРИТЕЛИ", Modulate = new("#b5bc93") }; box.AddChild(headers);
-        var scroll = new ScrollContainer { CustomMinimumSize = new(0, 220) }; box.AddChild(scroll); _gameRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; scroll.AddChild(_gameRows);
-        _gameStatus = new Label { Text = "Поиск игр в локальной сети…", Modulate = new("#b5bc93") }; box.AddChild(_gameStatus);
-        var create = new HBoxContainer(); box.AddChild(create); create.AddChild(_gameName); create.AddChild(Button("Создать игру", () => OpenNetworkLobby(true), "CreateGame"));
-        box.AddChild(new HSeparator()); box.AddChild(new Label { Text = "Прямое подключение" });
-        var direct = new HBoxContainer(); box.AddChild(direct); _address.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; direct.AddChild(_address); direct.AddChild(_port); _joinRole.AddItem("Игрок"); _joinRole.AddItem("Зритель"); direct.AddChild(_joinRole); direct.AddChild(_networkPlayer);
-        _joinRole.ItemSelected += index => _networkPlayer.Visible = index == 0;
-        box.AddChild(_pin);
-        box.AddChild(Button("Подключиться", () => OpenNetworkLobby(false), "JoinGame"));
-        box.AddChild(new Label { Text = "Для игры через интернет используйте адрес хоста. Зритель подключается до старта матча.", Modulate = new("#9ba98e") });
-    }
-    private void OpenNetworkLobby(bool host)
-    {
-        _directoryGrant = null;
-        if (host && _publishDirectory.ButtonPressed) { PrepareDirectoryHost(); return; }
-        BeginNetworkLobby(host);
+        LoadSources();
+        var box = Page("browser", "Сетевая игра");
+        var address = new HBoxContainer(); box.AddChild(address); address.AddChild(_source);
+        address.AddChild(Button("Соединить", BrowseDirectory, "ConnectSource"));
+        _source.TextSubmitted += _ => BrowseDirectory();
+        box.AddChild(_directoryStatus);
+        var scroll = new ScrollContainer { CustomMinimumSize = new(0, 220) }; box.AddChild(scroll);
+        _gameRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; scroll.AddChild(_gameRows);
+        _gameStatus = new Label { Modulate = new("#b5bc93") }; box.AddChild(_gameStatus);
+        var actions = new HBoxContainer(); box.AddChild(actions);
+        actions.AddChild(Button("Обновить", BrowseDirectory, "RefreshGames"));
+        actions.AddChild(Button("Найти в LAN", FindLocalGames, "FindLan"));
+        actions.AddChild(Button("Создать игру", () => { _roomPassword.Clear(); ShowPage("create"); }, "CreateGame"));
+
+        var create = Page("create", "Создать игру"); Field(create, "Название", _gameName);
+        Field(create, "Пароль", _roomPassword); create.AddChild(Button("Создать", CreateNetworkGame, "ConfirmCreate"));
+        _root.AddChild(_passwordDialog); _passwordDialog.AddChild(_passwordEntry);
+        _passwordDialog.Confirmed += () => { _joinPassword = _passwordEntry.Text; _passwordEntry.Clear(); var action = _afterPassword; _afterPassword = null; action?.Invoke(); };
+        _passwordDialog.Canceled += () => { _afterPassword = null; _passwordEntry.Clear(); };
     }
     private void BeginNetworkLobby(bool host)
     {
@@ -131,20 +128,52 @@ public sealed partial class MatchSetupScreen
         if (host) _address.Text = "0.0.0.0";
         ShowPage("lobby"); RefreshControls(); LaunchMatch();
     }
+    private void EnterLobby(string address, int port, string pin, uint player)
+    {
+        _pendingBrowserAction = null; _directoryCancellation?.Cancel();
+        RequestSeat = player != 0;
+        _address.Text = address; _port.Value = port; _pin.Text = pin; _joinRole.Select(player == 0 ? 1 : 0);
+        if (player != 0) _networkPlayer.Value = player;
+        BeginNetworkLobby(false);
+    }
+    private void AddGameRow(string title, string map, int players, int open, int spectators, bool locked, string status,
+        bool joinable, bool watchable, Action<bool> enter, string? joinName = null, string? watchName = null)
+    {
+        var row = new HBoxContainer(); _gameRows.AddChild(row);
+        string mapName = _mapChoices.FirstOrDefault(m => m.Map.Id == map).Title ?? map;
+        row.AddChild(new Label { Text = $"{title}{(locked ? " · пароль" : "")}   ·   {mapName}\n{status}   ·   Игроки {players}   ·   Места {Math.Max(0, open)}   ·   Зрители {spectators}",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+        void Join(bool watch)
+        {
+            if (!locked) { _joinPassword = ""; enter(watch); return; }
+            _afterPassword = () => enter(watch); _passwordEntry.Clear(); _passwordDialog.PopupCentered(new(330, 110)); _passwordEntry.GrabFocus();
+        }
+        var join = Button("Войти", () => Join(false), joinName); join.Disabled = !joinable || open <= 0; row.AddChild(join);
+        var watch = Button("Смотреть", () => Join(true), watchName); watch.Disabled = !watchable; row.AddChild(watch);
+    }
+    private static string PhaseLabel(MatchPhase phase) => phase switch { MatchPhase.Lobby => "В лобби", MatchPhase.Paused => "Пауза", _ => "Игра идёт" };
     private void RefreshGames()
     {
         foreach (var child in _gameRows.GetChildren()) { _gameRows.RemoveChild(child); child.QueueFree(); }
-        var games = _browser?.Games ?? [];
-        foreach (var game in games.Where(g => (g.Title + " " + g.Map).Contains(_gameFilter.Text, StringComparison.OrdinalIgnoreCase)))
-        {
-            string title = _mapChoices.FirstOrDefault(m => m.Map.Id == game.Map).Title ?? game.Map;
-            var row = new HBoxContainer(); _gameRows.AddChild(row);
-            foreach (var cell in new[] { game.Title, title, game.Players.ToString(), game.OpenSlots.ToString(), game.Spectators.ToString() }) row.AddChild(new Label { Text = cell, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, CustomMinimumSize = new(90, 34), VerticalAlignment = VerticalAlignment.Center });
-            row.AddChild(Button("Войти", () => { _address.Text = game.Address; _port.Value = game.Port; _pin.Text = game.Fingerprint; _joinRole.Select(0); _networkPlayer.Show(); if (game.AvailablePlayers is { Length: > 0 }) _networkPlayer.Value = game.AvailablePlayers[0]; OpenNetworkLobby(false); }));
-            row.AddChild(Button("Смотреть", () => { _address.Text = game.Address; _port.Value = game.Port; _pin.Text = game.Fingerprint; _joinRole.Select(1); _networkPlayer.Hide(); OpenNetworkLobby(false); }));
-        }
+        if (_browser is not null) LocalRegistry?.Remember(_browser.Entries);
         AddDirectoryGames();
-        _gameStatus.Text = games.Count == 0 ? "Игр в локальной сети пока нет. Создайте свою или подключитесь по адресу." : $"Найдено игр: {games.Count}";
+        var listed = _results.SelectMany(r => r.Games).Where(m => m.Expires > DateTimeOffset.UtcNow).Select(m => m.Game.Match).ToHashSet();
+        var fromAddress = _results.SelectMany(r => r.LiveEntries).Select(e => e.Game).ToArray();
+        var lan = fromAddress.Concat(_nearby.SelectMany(r => r.LiveEntries).Select(e => e.Game)).Concat(_browser?.Games ?? []).Concat(LocalRegistry?.LocalGames ?? [])
+            .DistinctBy(g => (g.Fingerprint, g.Port)).Where(g => !listed.Contains(g.Match));
+        foreach (var game in lan)
+        {
+            bool compatible = game.Capacity == 4 && game.Protocol == StarSession.ProtocolVersion &&
+                (game.Rules is null || game.Rules == MatchSetupOptions.Rules) && (game.Content is null || game.Content == _directoryContent);
+            AddGameRow(game.Title, game.Map, game.Players, game.OpenSlots, game.Spectators, game.PasswordRequired, compatible ? PhaseLabel(game.Phase) : "Несовместимая версия игры или контента",
+                compatible && game.Phase == MatchPhase.Lobby, compatible && game.Spectators < 8 && game.Phase is MatchPhase.Lobby or MatchPhase.Paused, watch => {
+                    SelectedEndpoints = null;
+                    EnterLobby(game.Address, game.Port, game.Fingerprint, watch ? 0u : 2u);
+                }, fromAddress.Contains(game) ? "AddressJoin" : "LanJoin", "LanWatch");
+        }
+        int count = _gameRows.GetChildCount();
+        var idle = _browser?.IdlePeers ?? [];
+        _gameStatus.Text = count > 0 ? $"Найдено игр: {count}" : idle.Length == 0 ? "Игр пока нет" : $"Клиенты на связи · игр нет ({string.Join(", ", idle.Take(4))})";
     }
     private void BuildMaps()
     {
@@ -176,10 +205,9 @@ public sealed partial class MatchSetupScreen
     }
     public override void _Process(double delta)
     {
-        UpdateDirectory(delta);
-        if (_fingerprintView is not null && _fingerprintView.Text != _pin.Text) _fingerprintView.Text = _pin.Text;
+        if (_page == "browser" && !_working && _results.Length != 0 && (_directoryRefresh -= delta) <= 0) BrowseDirectory();
         if (_mapTiles is not null) _mapTiles.Columns = GetViewport().GetVisibleRect().Size.X < 1100 ? 2 : 3;
         if (_page == "browser" && (_refreshAt -= delta) <= 0) { _refreshAt = 1; RefreshGames(); }
     }
-    public override void _ExitTree() { _directoryCancellation?.Cancel(); _directoryClient?.Dispose(); _browser?.Dispose(); }
+    public override void _ExitTree() { _pendingBrowserAction = null; _directoryCancellation?.Cancel(); _browser?.Dispose(); }
 }

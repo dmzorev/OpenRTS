@@ -16,7 +16,7 @@ public sealed record AccountSession(DirectoryAccount Account, string Token, Date
 { public override string ToString() => $"Account={Account.Id}, Expires={Expires}, Token=<redacted>"; }
 public sealed record MatchAdvertisement(Guid Match, long Revision, int Protocol, int PlayerCount, string Rules, string ContentHash,
     string Title, string Map, string Fingerprint, MatchPhase Phase, uint[] AvailablePlayers, int Players, int Spectators,
-    MatchEndpoint[] Endpoints, bool Private = false, string Mode = "client-lockstep");
+    MatchEndpoint[] Endpoints, bool Private = false, string Mode = "client-lockstep", bool PasswordRequired = false, bool HostAdmission = true);
 public sealed record DirectoryMatch(MatchAdvertisement Game, DateTimeOffset Expires, int ReservedPlayers, int ReservedSpectators)
 { public string Trust => "peer-hosted"; }
 public sealed record DirectoryLease(Guid Match, string Token, string? Invite, DateTimeOffset Expires)

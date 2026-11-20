@@ -73,6 +73,7 @@ public partial class Sandbox : Node3D
                 if (arg == "--verify") continue;
                 if (arg == "--ramps") { _ramps = _showcase = true; continue; }
                 if (arg == "--verify-ramps") { _verifyRamps = _paused = true; continue; }
+                if (arg.StartsWith("--lan-test=", StringComparison.Ordinal)) { _networkVerifyLan = arg[11..]; continue; }
                 if (arg.StartsWith("--directory-test=", StringComparison.Ordinal)) { _networkVerifyDirectoryUrl = arg[17..]; continue; }
                 if (arg.StartsWith("--verify-network=", StringComparison.Ordinal)) { _verifyNetwork = true; _networkVerifyRole = arg[17..]; continue; }
                 if (arg.StartsWith("--network-port=", StringComparison.Ordinal)) { _networkVerifyPort = int.Parse(arg[15..]); continue; }
@@ -347,6 +348,7 @@ public partial class Sandbox : Node3D
 
     public override void _Process(double delta)
     {
+        if (_networkAdvertiser is not null && _lanRegistry is null && (_registryRetry -= delta) <= 0) ListenForGameLists();
         if (_playtestStop?.IsCompleted == true)
         {
             try
@@ -370,7 +372,7 @@ public partial class Sandbox : Node3D
         {
             if (_session.Network is { } network && _networkLabel is not null)
             {
-                _networkLabel.Text = $"{(network.Player == 0 ? "Зритель" : "Игрок " + network.Player)} · {NetworkStatusText(network)}" + (_directoryPublication is null ? "" : " · " + _directoryPublication.Status);
+                _networkLabel.Text = $"{(network.Player == 0 ? "Зритель" : "Игрок " + network.Player)} · {NetworkStatusText(network)}" + (_publications.Count == 0 ? "" : " · " + _publications[0].Publication.Status);
                 UpdateNetworkChat(network);
             }
             UpdateReplayControls();
@@ -690,12 +692,13 @@ public partial class Sandbox : Node3D
 
     public override void _ExitTree()
     {
-        _directoryPublication?.Dispose(); _directoryPublication = null;
+        ClosePublications();
+        System.Threading.Volatile.Write(ref _advertisement, null); _lanRegistry?.Dispose(); _lanRegistry = null;
         _networkAdvertiser?.Dispose(); _networkAdvertiser = null;
         if (_showcase) Input.MouseMode = Input.MouseModeEnum.Visible;
         _session?.Dispose();
         _session = null;
-        _networkLobby?.Directory?.Dispose(); _networkLobby = null;
+        _networkLobby = null;
     }
 
     private void BuildScene(int count, UnitCatalog catalog)

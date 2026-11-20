@@ -1,174 +1,196 @@
-using System;
+using System.Diagnostics;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using OpenRTS.Network;
+using YamlDotNet.Serialization;
 
 public sealed partial class MatchSetupScreen
 {
-    private readonly LineEdit _directoryUrl = new() { Name = "DirectoryUrl", Text = "http://127.0.0.1:17773", PlaceholderText = "HTTPS адрес каталога", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-    private readonly LineEdit _directoryName = new() { Name = "DirectoryName", Text = "Игрок", CustomMinimumSize = new(140, 0), MaxLength = 40, PlaceholderText = "Имя в каталоге" };
-    private readonly CheckButton _publishDirectory = new() { Name = "PublishDirectory", Text = "Опубликовать в каталоге" };
-    private readonly CheckButton _privateDirectory = new() { Name = "PrivateDirectory", Text = "Только по приглашению" };
-    private readonly LineEdit _publicEndpoint = new() { Name = "PublicEndpoint", Text = "127.0.0.1", PlaceholderText = "Адрес хоста для других игроков" };
-    private readonly LineEdit _relayEndpoint = new() { Name = "RelayEndpoint", PlaceholderText = "Relay host:port · если настроен" };
-    private readonly LineEdit _inviteCode = new() { Name = "InviteCode", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, PlaceholderText = "Приглашение в приватную игру", MaxLength = 97, Secret = true };
-    private readonly LineEdit _ownInvite = new() { Name = "OwnInvite", Editable = false, PlaceholderText = "Приглашение появится после публикации", Secret = true };
-    private readonly Label _directoryStatus = new() { Text = "Каталог необязателен · прямые и LAN игры доступны отдельно", AutowrapMode = TextServer.AutowrapMode.WordSmart };
-    private Control? _directoryInvitePanel;
+    public sealed class DiscoverySettings
+    {
+        public string[] Servers { get; set; } = [];
+        public string? AdvertiseHost { get; set; }
+    }
+    private DiscoverySettings _discovery = new();
+    private readonly LineEdit _source = new() { Name = "ServerAddress", MaxLength = 256,
+        PlaceholderText = "IP или имя сервера", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+    private readonly Label _directoryStatus = new() { AutowrapMode = TextServer.AutowrapMode.WordSmart };
     private readonly Label _publicationStatus = new() { AutowrapMode = TextServer.AutowrapMode.WordSmart };
-    private MatchDirectoryClient? _directoryClient;
-    private string _directoryConfiguration = "", _directoryContent = "";
-    private DirectoryMatch[] _directoryGames = [];
-    private MatchJoinGrant? _directoryGrant;
-    private bool _directoryShowingInvite;
-    private Task<Action>? _directoryWork;
+    private sealed record SearchResult(DirectoryMatch[] Games, LanRegistry.Entry[] Lan, string Status)
+    {
+        private readonly long _received = Stopwatch.GetTimestamp();
+        public IEnumerable<LanRegistry.Entry> LiveEntries => Lan.Select(e => e with {
+            RemainingMs = e.RemainingMs - (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(_received).TotalMilliseconds)
+        }).Where(e => e.RemainingMs > 0);
+    }
+    private SearchResult[] _results = [];
+    private SearchResult[] _nearby = [];
+    public MatchEndpoint[]? SelectedEndpoints { get; private set; }
+    public bool RequestSeat { get; private set; }
+    private string _directoryContent = "";
     private CancellationTokenSource? _directoryCancellation;
+    internal LanRegistry? LocalRegistry { get; set; }
+    private bool _working;
     private double _directoryRefresh;
-    public MatchDirectoryClient? DirectoryClient => _directoryClient;
-    public MatchJoinGrant? DirectoryGrant => _directoryGrant;
-    public bool PublishDirectory => NetworkMode == 1 && _publishDirectory.ButtonPressed;
-    public bool PrivateDirectory => _privateDirectory.ButtonPressed;
-    public string PublicEndpoint => _publicEndpoint.Text.Trim();
-    public MatchEndpoint? RelayEndpoint
+    public string? AdvertiseHost => _discovery.AdvertiseHost;
+    // NetworkLobby owns fresh publication clients independently of the browser lifetime.
+    public (string Url, string? Peer)[] PublicationSources()
     {
-        get
+        var sources = new List<(string, string?)>();
+        foreach (var source in SourceAddresses())
         {
-            if (string.IsNullOrWhiteSpace(_relayEndpoint.Text)) return null;
-            if (!Uri.TryCreate("tcp://" + _relayEndpoint.Text.Trim(), UriKind.Absolute, out var uri) || uri.Port is < 1 or > 65535 || uri.UserInfo.Length != 0 || uri.AbsolutePath != "/")
-                throw new ArgumentException("Relay указывается как host:port.");
-            return new(MatchEndpointKind.Relay, uri.Host, uri.Port);
+            try { sources.Add((CatalogueUrl(source), Uri.CheckHostName(source) != UriHostNameType.Unknown ? source : null)); }
+            catch (ArgumentException) { /* The browser displays the address error. LAN remains available. */ }
         }
+        return sources.Distinct().ToArray();
     }
-    public void ShowDirectoryPublication(string status, string? invite)
-    { _directoryStatus.Text = status; _publicationStatus.Text = status; _ownInvite.Text = invite ?? ""; }
-    private MatchDirectoryClient GetDirectoryClient()
+    public void ShowDirectoryPublication(string status) => _publicationStatus.Text = status;
+    private void LoadSources()
     {
-        string configuration = _directoryUrl.Text.Trim() + "\n" + _directoryName.Text.Trim();
-        if (_directoryClient is null || configuration != _directoryConfiguration)
-        {
-            _directoryClient?.Dispose(); _directoryClient = new(_directoryUrl.Text.Trim(), _directoryName.Text.Trim());
-            _directoryConfiguration = configuration; _directoryGames = [];
-        }
-        return _directoryClient;
-    }
-    private void BuildDirectory(VBoxContainer box)
-    {
-        var account = new HBoxContainer(); box.AddChild(account); account.AddChild(_directoryUrl); account.AddChild(_directoryName);
-        account.AddChild(Button("Каталог", BrowseDirectory, "BrowseDirectory"));
-        box.AddChild(_directoryStatus);
-        var access = new HBoxContainer(); box.AddChild(access); access.AddChild(_inviteCode);
-        access.AddChild(Button("По приглашению", ResolveDirectoryInvite, "ResolveInvite"));
-        var publishing = new HBoxContainer(); box.AddChild(publishing); publishing.AddChild(_publishDirectory); publishing.AddChild(_privateDirectory);
-        var endpoints = new HBoxContainer { Visible = false }; box.AddChild(endpoints);
-        _publicEndpoint.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; _relayEndpoint.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        endpoints.AddChild(_publicEndpoint); endpoints.AddChild(_relayEndpoint);
-        _publishDirectory.Toggled += enabled => endpoints.Visible = enabled;
-    }
-    private void QueueDirectory(Func<CancellationToken, Task<Action>> operation)
-    {
-        if (_directoryWork is not null) return;
-        _directoryCancellation?.Dispose(); _directoryCancellation = new();
-        _directoryStatus.Text = "Запрос к каталогу…";
-        try { _directoryWork = operation(_directoryCancellation.Token); }
-        catch (Exception e) { _directoryStatus.Text = e.Message; }
-    }
-    private void BrowseDirectory()
-    {
-        if (_directoryWork is not null) return;
+        string path = Godot.FileAccess.FileExists("user://network.yaml") ? "user://network.yaml" : "res://network.yaml";
         try
         {
-            _directoryShowingInvite = false;
-            var client = GetDirectoryClient(); string content = _directoryContent;
-            QueueDirectory(async cancellation => {
-                var games = await client.FindAsync(MatchSetupOptions.Rules, content, cancellation);
-                return () => { _directoryGames = games; _directoryStatus.Text = $"Каталог · найдено {games.Length} · прямые игры с хостом-игроком"; RefreshGames(); };
-            });
+            using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read) ?? throw new IOException("Файл недоступен.");
+            var settings = new DeserializerBuilder().WithDuplicateKeyChecking().Build().Deserialize<DiscoverySettings>(file.GetAsText());
+            if (settings?.Servers is null || settings.Servers.Length > 16 || settings.Servers.Any(s => string.IsNullOrWhiteSpace(s) || s.Length > 256))
+                throw new InvalidDataException("Ожидается список Servers до 16 адресов.");
+            _discovery = settings;
         }
-        catch (Exception e) { _directoryStatus.Text = e.Message; }
+        catch (Exception e) { _directoryStatus.Text = "network.yaml · " + e.Message; }
     }
-    private void PrepareDirectoryHost()
+    private string[] SourceAddresses() => _discovery.Servers.Append(_source.Text).Select(s => s.Trim())
+        .Where(s => s.Length != 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    private static string CatalogueUrl(string source)
     {
-        try
+        if (!source.Contains("://", StringComparison.Ordinal))
         {
-            var client = GetDirectoryClient(); _ = RelayEndpoint;
-            QueueDirectory(async cancellation => { await client.ConnectAsync(cancellation); return () => BeginNetworkLobby(true); });
+            if (!Uri.TryCreate("https://" + source, UriKind.Absolute, out var uri)) throw new ArgumentException("Введите IP или имя сервера.");
+            source = uri.IsDefaultPort ? new UriBuilder(uri) { Port = 17773 }.Uri.AbsoluteUri : uri.AbsoluteUri;
         }
-        catch (Exception e) { _directoryStatus.Text = e.Message; }
+        return MatchDirectoryClient.ServiceAddress(source).AbsoluteUri;
     }
-    private void ResolveDirectoryInvite()
+
+    private async Task<SearchResult> Search(string source, CancellationToken ct)
     {
-        try
+        LanRegistry.Entry[] lan = [];
+        if (Uri.CheckHostName(source) != UriHostNameType.Unknown)
         {
-            var client = GetDirectoryClient(); string invite = _inviteCode.Text.Trim();
-            QueueDirectory(async cancellation => {
-                var game = await client.ResolveInviteAsync(invite, cancellation);
-                return () => { _directoryShowingInvite = true; _directoryGames = [game]; _directoryStatus.Text = "Приватный матч найден. Выберите роль."; RefreshGames(); };
-            });
-        }
-        catch (Exception e) { _directoryStatus.Text = e.Message; }
-    }
-    private void JoinDirectory(DirectoryMatch match, MatchAccessRole role)
-    {
-        if (_directoryWork is not null) return;
-        if (match.Game.PlayerCount != 4) { _directoryStatus.Text = "Эта версия клиента поддерживает лобби на четыре стороны."; return; }
-        var client = _directoryClient!; string? invite = match.Game.Private ? _inviteCode.Text.Trim() : null;
-        Guid request = Guid.NewGuid();
-        QueueDirectory(async cancellation => {
             try
             {
-                var grant = await client.JoinAsync(match.Game.Match, new(request, role, Invite: invite), cancellation);
-                if (grant.PlayerCount != 4) throw new System.IO.InvalidDataException("Неподдерживаемое число сторон матча.");
-                return () => {
-                    _directoryGrant = grant; var endpoint = grant.Endpoints.OrderBy(e => e.Kind).First();
-                    _address.Text = endpoint.Address; _port.Value = endpoint.Port; _pin.Text = grant.Fingerprint;
-                    _joinRole.Select(role == MatchAccessRole.Player ? 0 : 1); _networkPlayer.Visible = role == MatchAccessRole.Player;
-                    if (role == MatchAccessRole.Player) _networkPlayer.Value = grant.Player;
-                    BeginNetworkLobby(false);
-                };
+                lan = await LanRegistry.FindAsync(source, ct);
+                return new([], lan, $"{source} · связь установлена · игр {lan.Length}");
             }
-            catch
+            catch (Exception e) when (!ct.IsCancellationRequested && e is SocketException or IOException or InvalidDataException or System.Text.Json.JsonException or OperationCanceledException) { }
+        }
+        try
+        {
+            using var client = new MatchDirectoryClient(CatalogueUrl(source), "Игрок");
+            var games = await client.FindAsync(MatchSetupOptions.Rules, _directoryContent, ct);
+            return new(games, lan, $"{source} · связь установлена · игр {games.Length + lan.Length}");
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            return new([], lan, $"{source} · нет связи ({e.Message})");
+        }
+    }
+
+    private Action? _pendingBrowserAction;
+    private async void RunBrowser(Func<CancellationToken, Task> action)
+    {
+        if (_working) { _directoryCancellation?.Cancel(); _pendingBrowserAction = () => RunBrowser(action); return; }
+        _working = true;
+        using var cancel = new CancellationTokenSource();
+        _directoryCancellation = cancel;
+        try { await action(cancel.Token); }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested) { }
+        catch (Exception e) { if (!cancel.IsCancellationRequested) _directoryStatus.Text = e.Message; }
+        finally
+        {
+            _directoryCancellation = null; _working = false; _directoryRefresh = 8;
+            var pending = _pendingBrowserAction; _pendingBrowserAction = null; pending?.Invoke();
+        }
+    }
+
+    private void BrowseDirectory()
+    {
+        var sources = SourceAddresses(); _browser?.Refresh();
+        if (sources.Length == 0) { _directoryCancellation?.Cancel(); _pendingBrowserAction = null; _results = []; _directoryStatus.Text = ""; RefreshGames(); return; }
+        RunBrowser(async ct => {
+            _directoryStatus.Text = "Поиск игр…";
+            var results = await Task.WhenAll(sources.Select(s => Search(s, ct))); ct.ThrowIfCancellationRequested();
+            foreach (var result in results)
             {
-                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                try { await client.CancelAsync(match.Game.Match, request, deadline.Token); } catch { }
-                throw;
+                LocalRegistry?.Remember(result.LiveEntries);
+                foreach (var match in result.Games)
+                {
+                    var game = match.Game;
+                    var endpoint = game.Endpoints.FirstOrDefault(e => e.Kind == MatchEndpointKind.Direct);
+                    if (endpoint is null || !game.HostAdmission || game.Private) continue;
+                    int ttl = (int)Math.Clamp((match.Expires - DateTimeOffset.UtcNow).TotalMilliseconds, 0, 12000);
+                    LocalRegistry?.Remember([new(new(endpoint.Address, endpoint.Port, game.Title, game.Map, game.Players,
+                        game.AvailablePlayers.Length, game.Spectators, game.Fingerprint, game.AvailablePlayers, game.PasswordRequired,
+                        game.Match, game.PlayerCount, game.Protocol, game.Rules, game.ContentHash, game.Phase), ttl, false)]);
+                }
             }
+            _results = results; _directoryStatus.Text = string.Join("\n", results.Select(r => r.Status));
+            RefreshGames();
         });
     }
+    private void FindLocalGames()
+    {
+        if (_browser is not { } browser) return;
+        RunBrowser(async ct => {
+            _directoryStatus.Text = "Поиск в локальной сети…"; browser.Refresh();
+            await Task.Delay(400, ct);
+            var addresses = browser.IdlePeers.Select(ip => ip.ToString()).Concat(browser.Games.Select(g => g.Address))
+                .Distinct().Take(32).ToArray();
+            var results = new List<SearchResult>();
+            foreach (var batch in addresses.Chunk(8))
+            {
+                var replies = await Task.WhenAll(batch.Select(async address => {
+                    try { return await LanRegistry.FindAsync(address, ct); }
+                    catch (Exception e) when (!ct.IsCancellationRequested && e is SocketException or IOException or InvalidDataException or System.Text.Json.JsonException or OperationCanceledException) { return []; }
+                }));
+                ct.ThrowIfCancellationRequested();
+                foreach (var entries in replies)
+                {
+                    LocalRegistry?.Remember(entries);
+                    results.Add(new([], entries, ""));
+                }
+            }
+            _nearby = results.ToArray();
+            _directoryStatus.Text = addresses.Length == 0 ? "Клиенты OpenRTS пока не ответили" : $"Клиенты OpenRTS на связи: {addresses.Length}";
+            RefreshGames();
+        });
+    }
+    private void CreateNetworkGame()
+    {
+        _pendingBrowserAction = null; _directoryCancellation?.Cancel();
+        _publicationStatus.Text = "";
+        _joinPassword = _roomPassword.Text; SelectedEndpoints = null; RequestSeat = false;
+        BeginNetworkLobby(true);
+    }
+
     private void AddDirectoryGames()
     {
-        foreach (var match in _directoryGames.Where(m => m.Expires > DateTimeOffset.UtcNow && (m.Game.Title + " " + m.Game.Map).Contains(_gameFilter.Text, StringComparison.OrdinalIgnoreCase)))
+        foreach (var match in _results.SelectMany(r => r.Games).Where(m => m.Expires > DateTimeOffset.UtcNow).OrderByDescending(m => m.Game.Revision).DistinctBy(m => m.Game.Match))
         {
-            var game = match.Game; var row = new HBoxContainer(); _gameRows.AddChild(row);
-            string map = _mapChoices.FirstOrDefault(m => m.Map.Id == game.Map).Title ?? game.Map;
-            string phase = game.Phase switch { MatchPhase.Lobby => "Ожидание", MatchPhase.Paused => "Пауза", _ => "Игра" };
+            var game = match.Game;
             bool supported = game.PlayerCount == 4;
-            row.AddChild(new Label { Text = $"[Каталог] {game.Title} · {map} · {game.Players}/{game.PlayerCount} игр. · {phase}\n" +
-                (supported ? $"Свободно: {Math.Max(0, game.AvailablePlayers.Length - match.ReservedPlayers)} · Хост игрока" : "Эта версия клиента поддерживает лобби на четыре стороны"), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-            var join = Button("Войти", () => JoinDirectory(match, MatchAccessRole.Player), supported ? "DirectoryJoinMatch" : "DirectoryUnsupportedJoin" + game.PlayerCount); join.Disabled = !supported || game.Phase != MatchPhase.Lobby || game.AvailablePlayers.Length <= match.ReservedPlayers; row.AddChild(join);
-            var watch = Button("Смотреть", () => JoinDirectory(match, MatchAccessRole.Spectator), supported ? "DirectoryWatchMatch" : "DirectoryUnsupportedWatch" + game.PlayerCount); watch.Disabled = !supported || game.Phase is not (MatchPhase.Lobby or MatchPhase.Paused); row.AddChild(watch);
+            AddGameRow(game.Title, game.Map, game.Players, game.AvailablePlayers.Length - match.ReservedPlayers, game.Spectators, game.PasswordRequired,
+                supported ? PhaseLabel(game.Phase) : "Для этой игры нужен клиент на " + game.PlayerCount + " сторон",
+                supported && game.HostAdmission && game.Phase == MatchPhase.Lobby, supported && game.HostAdmission && game.Phase is MatchPhase.Lobby or MatchPhase.Paused,
+                watch => {
+                    var local = _browser?.Games.FirstOrDefault(g => g.Match == game.Match && g.Fingerprint == game.Fingerprint);
+                    SelectedEndpoints = local is null ? game.Endpoints : game.Endpoints.Prepend(new(MatchEndpointKind.Direct, local.Address, local.Port)).Distinct().Take(3).ToArray();
+                    var endpoint = SelectedEndpoints.OrderBy(e => e.Kind).First();
+                    EnterLobby(endpoint.Address, endpoint.Port, game.Fingerprint, watch ? 0u : 2u);
+                },
+                supported ? "DirectoryJoinMatch" : "DirectoryUnsupportedJoin" + game.PlayerCount,
+                supported ? "DirectoryWatchMatch" : "DirectoryUnsupportedWatch" + game.PlayerCount);
         }
-    }
-    public void CancelDirectoryJoin()
-    {
-        var grant = _directoryGrant; var client = _directoryClient; _directoryGrant = null;
-        if (grant is not null && client is not null) _ = ReleaseDirectoryJoin(client, grant);
-    }
-    private static async Task ReleaseDirectoryJoin(MatchDirectoryClient client, MatchJoinGrant grant)
-    {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        try { await client.CancelAsync(grant.Match, grant.Request, deadline.Token); } catch { }
-    }
-    private void UpdateDirectory(double delta)
-    {
-        if (_directoryWork is { IsCompleted: true } work)
-        {
-            _directoryWork = null;
-            try { var apply = work.GetAwaiter().GetResult(); _directoryCancellation?.Token.ThrowIfCancellationRequested(); apply(); }
-            catch (OperationCanceledException) { _directoryStatus.Text = "Запрос каталога отменён."; }
-            catch (Exception e) { _directoryStatus.Text = "Каталог: " + e.Message; }
-        }
-        if (_page == "browser" && !_directoryShowingInvite && _directoryClient?.Info is not null && (_directoryRefresh -= delta) <= 0)
-        { _directoryRefresh = 5; BrowseDirectory(); }
     }
 }

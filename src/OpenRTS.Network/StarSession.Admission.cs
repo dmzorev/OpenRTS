@@ -10,6 +10,24 @@ namespace OpenRTS.Network;
 public sealed partial class StarSession
 {
     public const int ProtocolVersion = StarProtocol.Version;
+    private readonly string _password;
+    internal bool HostAdmission => _admissionGate is null;
+    public bool PasswordRequired => _password.Length != 0;
+    private byte[] PasswordProof(byte[] challenge)
+    {
+        byte[] message = [.. Convert.FromHexString(Fingerprint), .. challenge];
+        return HMACSHA256.HashData(Encoding.UTF8.GetBytes(_password), message);
+    }
+    private void CheckPassword(HelloData hello, PeerPipeline pipe)
+    {
+        if (!PasswordRequired || hello.Resume is not null) return;
+        byte[] challenge = RandomNumberGenerator.GetBytes(32);
+        pipe.Send([StarProtocol.PasswordChallenge, .. challenge]);
+        var proof = pipe.Read(TimeSpan.FromSeconds(5));
+        if (proof.Length != 33 || proof[0] != StarProtocol.PasswordProof ||
+            !CryptographicOperations.FixedTimeEquals(PasswordProof(challenge), proof.AsSpan(1)))
+            throw new InvalidDataException("Неверный пароль матча.");
+    }
     private readonly MatchAdmissionGate? _admissionGate;
     private readonly MatchJoinGrant? _joinGrant;
     private readonly DirectoryIdentity? _accountIdentity;

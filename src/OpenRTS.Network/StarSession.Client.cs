@@ -14,7 +14,7 @@ public sealed partial class StarSession
         using var connection = ConnectClient(address, port);
         var tls = connection.Tls;
         using var pipe = new PeerPipeline(tls, _timeout, _stop.Token);
-        pipe.Send(Wire.Pack(w => { w.Write(StarProtocol.Hello); w.Write(StarProtocol.Version); w.Write(Player); w.Write(State.Slots.Count);
+        pipe.Send(Wire.Pack(w => { w.Write(StarProtocol.Hello); w.Write(StarProtocol.Version); w.Write(_requestSeat ? StarProtocol.AnySeat : Player); w.Write(State.Slots.Count);
             Wire.Text(w, Wire.Hash(DirectMatch.Descriptor(Descriptor))); Wire.Text(w, world.Report().StateHash); Wire.Text(w, Descriptor.Rules); Wire.Text(w, Descriptor.ContentHash);
             w.Write(ResumeCredential is not null);
             if (ResumeCredential is { } credential) { byte[] data = CredentialFrame(credential); w.Write(data.Length); w.Write(data); }
@@ -97,6 +97,15 @@ public sealed partial class StarSession
                 {
                     case StarProtocol.Rejected:
                         throw new InvalidDataException(Wire.Unpack(frame, r => { r.ReadByte(); return Wire.Text(r); }));
+                    case StarProtocol.SeatAssigned:
+                        uint seat = Wire.Unpack(frame, r => { r.ReadByte(); return r.ReadUInt32(); });
+                        if (!_requestSeat || State.Match != Guid.Empty || ResumeCredential is not null || seat < 2 || seat > State.Slots.Count)
+                            throw new InvalidDataException("Некорректное место в лобби.");
+                        Volatile.Write(ref _player, seat); break;
+                    case StarProtocol.PasswordChallenge:
+                        if (State.Match != Guid.Empty || frame.Length != 33) throw new InvalidDataException("Некорректный запрос пароля.");
+                        pipe.Send([StarProtocol.PasswordProof, .. PasswordProof(frame[1..])]);
+                        break;
                     case StarProtocol.AdmissionChallenge:
                         if (_joinGrant is null || _accountIdentity is null || log is not null) throw new InvalidDataException("Unexpected admission challenge.");
                         string nonce = Wire.Unpack(frame, r => { r.ReadByte(); return Wire.Text(r); });

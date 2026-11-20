@@ -56,6 +56,10 @@ string Session(HttpContext c)
 }
 string Lease(HttpContext c) => c.Request.Headers["X-OpenRTS-Lease"].ToString();
 async Task<T> Body<T>(HttpContext c) => await JsonSerializer.DeserializeAsync<T>(c.Request.Body, json, c.RequestAborted) ?? throw new MatchDirectoryException("invalid_request", "Пустой запрос.");
+app.MapGet("/v1/host-address", (HttpContext c) => {
+    var address = c.Connection.RemoteIpAddress ?? throw new MatchDirectoryException("address_unknown", "Не удалось определить адрес хоста.");
+    return Results.Json((address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString());
+});
 app.MapGet("/v1/info", () => catalogue.Info);
 app.MapPost("/v1/challenges", (Delegate)(async (HttpContext c) => catalogue.Challenge(await Body<AccountChallengeRequest>(c))));
 app.MapPost("/v1/sessions", (Delegate)(async (HttpContext c) => catalogue.Login(await Body<AccountLogin>(c))));
@@ -65,7 +69,6 @@ app.MapPost("/v1/matches", (Delegate)(async (HttpContext c) => catalogue.Registe
 app.MapPost("/v1/matches/{match:guid}/heartbeat", async (Guid match, HttpContext c) => { catalogue.Heartbeat(Session(c), match, Lease(c), await Body<MatchAdvertisement>(c)); return new { ok = true }; });
 app.MapDelete("/v1/matches/{match:guid}", (Guid match, HttpContext c) => { catalogue.Close(Session(c), match, Lease(c)); return new { ok = true }; });
 app.MapPost("/v1/matches/{match:guid}/join", async (Guid match, HttpContext c) => catalogue.Join(Session(c), match, await Body<MatchJoinRequest>(c)));
-app.MapPost("/v1/invites", (Delegate)(async (HttpContext c) => catalogue.ResolveInvite(Session(c), (await Body<InviteRequest>(c)).Invite)));
 app.MapDelete("/v1/matches/{match:guid}/reservations/{request:guid}", (Guid match, Guid request, HttpContext c) => { catalogue.Cancel(Session(c), match, request); return new { ok = true }; });
 app.MapPost("/v1/matches/{match:guid}/confirm", async (Guid match, HttpContext c) => { catalogue.Confirm(Session(c), match, Lease(c), await Body<MatchAdmissionReceipt>(c)); return new { ok = true }; });
 Console.WriteLine("OPENRTS_DIRECTORY_PROTOCOL:1");

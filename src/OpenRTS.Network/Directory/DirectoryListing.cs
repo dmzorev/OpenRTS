@@ -9,13 +9,14 @@ public sealed class DirectoryListing : IDisposable
     private DirectoryLease? _lease;
     public string Status => Volatile.Read(ref _status);
     public string? Invite => Volatile.Read(ref _lease)?.Invite;
-    public DirectoryListing(MatchDirectoryClient client, StarSession host, string title, string publicAddress, int publicPort,
-        Func<string> map, bool privateGame = false, MatchEndpoint? relay = null)
+    public DirectoryListing(MatchDirectoryClient client, StarSession host, string title, string? publicAddress, int publicPort,
+        Func<string> map, bool privateGame = false, MatchEndpoint? relay = null, string? peerAddress = null)
     {
-        if (!host.IsHost || client.Info is null) throw new ArgumentException("A connected directory account and player-host are required.");
+        if (!host.IsHost) throw new ArgumentException("A player-host is required.");
+        if (privateGame) throw new ArgumentException("Скрытые игры больше не публикуются.");
+        if (publicAddress is not null) DirectoryValidation.Endpoint(new(MatchEndpointKind.Direct, publicAddress, publicPort));
+        if (relay is not null) DirectoryValidation.Endpoint(relay);
         DirectoryValidation.Text(title, 64, "название");
-        MatchEndpoint[] endpoints = relay is null ? [new(MatchEndpointKind.Direct, publicAddress, publicPort)] : [new(MatchEndpointKind.Direct, publicAddress, publicPort), relay];
-        foreach (var endpoint in endpoints) DirectoryValidation.Endpoint(endpoint);
         _worker = Task.Run(async () => {
             var receipts = new Queue<MatchAdmissionReceipt>();
             try
@@ -24,10 +25,24 @@ public sealed class DirectoryListing : IDisposable
                 {
                     try
                     {
+                        if (peerAddress is not null && _lease is null && LanGames.Advertisement(host, publicPort, title, map) is { } entry)
+                        {
+                            try
+                            {
+                                await LanRegistry.RegisterAsync(peerAddress, entry, _stop.Token);
+                                Volatile.Write(ref _status, "Игра опубликована на " + peerAddress);
+                                await Task.Delay(TimeSpan.FromSeconds(4), _stop.Token);
+                                continue;
+                            }
+                            catch (Exception e) when (!_stop.IsCancellationRequested && e is IOException or InvalidDataException or System.Net.Sockets.SocketException or OperationCanceledException) { }
+                        }
+                        publicAddress ??= await client.GetHostAddressAsync(_stop.Token);
+                        MatchEndpoint[] endpoints = relay is null ? [new(MatchEndpointKind.Direct, publicAddress, publicPort)] :
+                            [new(MatchEndpointKind.Direct, publicAddress, publicPort), relay];
                         var state = host.State;
                         var game = new MatchAdvertisement(state.Match, state.Revision, StarSession.ProtocolVersion, state.Slots.Count, host.Descriptor.Rules, host.Descriptor.ContentHash,
                             title, map(), host.Fingerprint, state.Phase, state.Slots.Where(s => s.Controller == SlotController.Human && !s.Connected).Select(s => s.Player).ToArray(),
-                            state.Slots.Count(s => s.Connected), state.Spectators, endpoints, privateGame);
+                            state.Slots.Count(s => s.Connected), state.Spectators, endpoints, privateGame, PasswordRequired: host.PasswordRequired, HostAdmission: host.HostAdmission);
                         if (_lease is null) Volatile.Write(ref _lease, await client.RegisterAsync(game, _stop.Token));
                         else await client.HeartbeatAsync(_lease, game, _stop.Token);
                         while (receipts.Count < StarSession.MaximumAdmissionReceipts && host.TryReadAdmission(out var receipt)) receipts.Enqueue(receipt);
@@ -37,7 +52,7 @@ public sealed class DirectoryListing : IDisposable
                             catch (MatchDirectoryException e) when (e.Code == "reservation_missing") { /* This offline admission no longer has a catalogue reservation. */ }
                             receipts.Dequeue();
                         }
-                        Volatile.Write(ref _status, privateGame ? "Приватная игра опубликована · доступ по приглашению" : "Игра опубликована в каталоге");
+                        Volatile.Write(ref _status, "Игра опубликована в каталоге");
                     }
                     catch (MatchDirectoryException e) when (e.Code is "lease_invalid" or "match_expired") { Volatile.Write(ref _lease, null); Volatile.Write(ref _status, "Регистрация истекла; повторная публикация…"); }
                     catch (Exception e) when (e is HttpRequestException or MatchDirectoryException or IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException)
@@ -56,6 +71,7 @@ public sealed class DirectoryListing : IDisposable
             }
         });
     }
+    public void Stop() => _stop.Cancel();
     public void Dispose()
     {
         _stop.Cancel();

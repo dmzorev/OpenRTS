@@ -19,6 +19,19 @@ public partial class Sandbox
     private SkirmishAi? _opponent;
     private string[]? _opponentStarts;
 
+    private double _registryRetry;
+    private void ListenForGameLists()
+    {
+        _registryRetry = 5;
+        try
+        {
+            _lanRegistry = new(() => System.Threading.Volatile.Read(ref _advertisement)?.Invoke());
+            if (_matchSetup is not null) _matchSetup.LocalRegistry = _lanRegistry;
+        }
+        catch (System.Net.Sockets.SocketException e) when (e.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse) { /* Another local instance serves this machine. */ }
+        catch (System.Net.Sockets.SocketException e) { GD.PushWarning("LAN registry: " + e.Message); }
+    }
+
     private void OpenMatchSetup(UnitCatalog catalog)
     {
         GameMap Map(string path) => SceneMapBundle.IsPath(path) ? LoadSceneMap(path, catalog) : GameMap.Load(ReadMapSource(path), catalog);
@@ -49,7 +62,10 @@ public partial class Sandbox
         var modes = setChoices.Select(choice => (choice.Title, Set(choice.Path))).ToArray();
         _setupMaps = maps.ToDictionary(m => m.Item3.Id, m => m.Item3);
         _setupSets = modes.ToDictionary(m => m.Item2.Id, m => m.Item2);
-        _matchSetup = new();
+        try { _networkAdvertiser ??= new OpenRTS.Network.LanGames(() => System.Threading.Volatile.Read(ref _advertisement)?.Invoke()); }
+        catch (System.Net.Sockets.SocketException error) { GD.PushWarning("LAN discovery: " + error.Message); }
+        ListenForGameLists();
+        _matchSetup = new() { LocalRegistry = _lanRegistry };
         AddChild(_matchSetup);
         _matchSetup.Build(TerminalTheme(), catalog.Locomotion!, maps, modes,
             availableMaps.FindIndex(item => item.Choice.Path == settings.DefaultMap),
@@ -118,7 +134,7 @@ public partial class Sandbox
                 try { network.ConfigureLobby(pending, MatchSetupOptions.Parse(pending).Seats.Select(s => s.Controller).ToArray()); _pendingLobbySettings = null; }
                 catch (InvalidOperationException) { }
             }
-            if (_directoryPublication is { } publication) _matchSetup!.ShowDirectoryPublication(publication.Status, publication.Invite);
+            if (_publications.Count != 0) _matchSetup!.ShowDirectoryPublication(string.Join("\n", _publications.Select(p => p.Publication.Status).Distinct()));
             _matchSetup!.SetNetworkStatus(NetworkStatusText(network), network.Fingerprint);
             _matchSetup.UpdateNetworkLobby(network);
             if (_verifyNetwork && network.State.Match != Guid.Empty && network.State.Phase == OpenRTS.Network.MatchPhase.Lobby)
@@ -169,10 +185,9 @@ public partial class Sandbox
 
     private void MatchSetupFailed(Exception error, bool canRetry)
     {
-        if (_session?.Network?.ResumeCredential is null) _matchSetup?.CancelDirectoryJoin();
         _session?.Dispose();
-        _directoryPublication?.Dispose(); _directoryPublication = null;
-        _networkAdvertiser?.Dispose(); _networkAdvertiser = null;
+        ClosePublications();
+        System.Threading.Volatile.Write(ref _advertisement, null);
         _session = null;
         _pendingLobbySettings = null;
         _networkMode = 0;

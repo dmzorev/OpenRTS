@@ -11,6 +11,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('godot')
+parser.add_argument('--lan-address', help='Enter the host IPv4 address, or use auto for LAN discovery, through the locked-room browser')
 parser.add_argument('--visible', action='store_true')
 parser.add_argument('--host-fog-hold', type=int, default=0)
 parser.add_argument('--spectator', action='store_true', help='Add a spectator to the NET3 match')
@@ -21,6 +22,7 @@ parser.add_argument('--output', type=Path)
 parser.add_argument('--map', help='Use a compiled skirmish map or scene-map bundle for the match')
 args = parser.parse_args()
 if not 0 <= args.slow_client_ms <= 10000: parser.error('--slow-client-ms must be 0..10000')
+if args.lan_address and (args.net3 or args.reconnect or args.spectator): parser.error('--lan-address uses the two-player scenario')
 if args.map and args.net3: parser.error('--map uses the two-player scenario')
 root = Path(__file__).resolve().parent.parent
 output = (args.output or Path(tempfile.mkdtemp(prefix='openrts-network-'))).resolve()
@@ -74,7 +76,7 @@ if args.spectator:
     roles += ('watch',)
 try:
     for role in roles:
-        if role != 'host':
+        if role != 'host' and not args.lan_address:
             deadline = time.monotonic() + 20
             while (not pin.exists() or len(pin.read_text().strip()) != 64) and time.monotonic() < deadline:
                 if processes[0].poll() is not None:
@@ -89,6 +91,7 @@ try:
             command += ['--headless']
         command += ['--path', str(root / 'sandbox'), '--', '--verify-network=' + role,
                     '--network-port=' + str(relay_port if args.reconnect and role == 'join' else port), '--network-pin-file=' + str(pin)]
+        if args.lan_address: command += ['--lan-test=' + args.lan_address]
         if args.map: command += ['--network-map=' + args.map]
         if args.reconnect: command += ['--network-reconnect']
         if args.spectator: command += ['--network-spectators=1']
@@ -127,6 +130,8 @@ try:
             raise RuntimeError(role + ' did not observe agreed pause')
         hashes.extend(results)
         map_identities.append(next(line for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_MAP:')))
+    if args.lan_address and ('OPENRTS_LAN_JOIN:' + ('' if args.lan_address == 'auto' else args.lan_address)) not in (output / 'join.log').read_text():
+        raise RuntimeError('Guest did not enter the locked room via the requested address')
     if len(set(hashes)) != 1:
         raise RuntimeError('Final hashes differ: ' + str(hashes))
     if len(set(map_identities)) != 1:

@@ -32,7 +32,9 @@ public sealed partial class StarSession : IDisposable
     private NetworkTickSample? _statistics;
     private string _status = "Подключение…";
     public bool IsHost { get; }
-    public uint Player { get; }
+    private uint _player;
+    public uint Player => Volatile.Read(ref _player);
+    private readonly bool _requestSeat;
     public FrameExchange Frames { get; } = new();
     public Task<SimulationReport> Completion => _completion.Task;
     public MatchState State => Volatile.Read(ref _state);
@@ -54,8 +56,13 @@ public sealed partial class StarSession : IDisposable
         TimeSpan? timeout = null, string lobbySettings = "",
         Func<string, (MatchDescriptor Descriptor, SimulationWorld World)>? prepareSettings = null,
         IReadOnlyList<uint>? closedPlayers = null, MatchResumeCredential? resumeCredential = null, MatchAdmissionPolicy? admissionPolicy = null,
-        MatchJoinGrant? admission = null, DirectoryIdentity? accountIdentity = null, IReadOnlyList<MatchEndpoint>? endpoints = null)
+        MatchJoinGrant? admission = null, DirectoryIdentity? accountIdentity = null, IReadOnlyList<MatchEndpoint>? endpoints = null, string password = "", bool requestSeat = false)
     {
+        if (password.Length > 64 || password.Any(char.IsControl)) throw new ArgumentException("Пароль матча — до 64 символов.");
+        if (requestSeat && (host || player == 0 || resumeCredential is not null || admission is not null))
+            throw new ArgumentException("Новое место запрашивает только подключающийся игрок.");
+        _requestSeat = requestSeat;
+        _password = password;
         playerCount = admission?.PlayerCount ?? playerCount;
         if (port is < 1 or > 65535 || playerCount is < 2 or > 8 || !host && player != 0 && (player < 2 || player > playerCount))
             throw new ArgumentOutOfRangeException(nameof(playerCount));
@@ -80,7 +87,7 @@ public sealed partial class StarSession : IDisposable
         if (admission is not null) foreach (var endpoint in admission.Endpoints) DirectoryValidation.Endpoint(endpoint);
         _admissionGate = admissionPolicy is null ? null : new(admissionPolicy); _joinGrant = admission; _accountIdentity = accountIdentity;
         _resumeCredential = resumeCredential;
-        IsHost = host; Player = host ? 1u : player; _descriptor = descriptor; _prepare = prepareSettings; _settings = lobbySettings;
+        IsHost = host; _player = host ? 1u : player; _descriptor = descriptor; _prepare = prepareSettings; _settings = lobbySettings;
         if (prepareSettings is not null) ValidateSettings(lobbySettings); JournalPath = journalPath; _planAi = planAi;
         _state = new(host ? Guid.NewGuid() : Guid.Empty, 1, 0, MatchPhase.Lobby,
             Enumerable.Range(1, playerCount).Select(p => new MatchSlot((uint)p, closedPlayers?.Contains((uint)p) == true ? SlotController.None : ai.Contains((uint)p) ? SlotController.Ai : SlotController.Human, host && p == 1, false)), "Лобби");

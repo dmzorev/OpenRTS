@@ -140,11 +140,11 @@ internal static class Wire
         byte[] size = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(size, payload.Length);
         await s.WriteAsync(size, ct); await s.WriteAsync(payload, ct); await s.FlushAsync(ct);
     }
-    internal static async Task<byte[]> Receive(Stream s, CancellationToken ct)
+    internal static async Task<byte[]> Receive(Stream s, CancellationToken ct, int maxLength = MaximumFrame)
     {
         byte[] size = new byte[4]; await s.ReadExactlyAsync(size, ct);
         int n = BinaryPrimitives.ReadInt32LittleEndian(size);
-        if (n is < 1 or > MaximumFrame) throw new InvalidDataException("Frame limit.");
+        if (n < 1 || n > maxLength) throw new InvalidDataException("Frame limit.");
         var data = new byte[n]; await s.ReadExactlyAsync(data, ct); return data;
     }
     internal static byte[] Exchange(Stream s, byte[] payload, TimeSpan timeout, CancellationToken stop,

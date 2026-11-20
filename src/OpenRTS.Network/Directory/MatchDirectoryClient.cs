@@ -12,6 +12,20 @@ public sealed class MatchDirectoryClient : IDisposable
     private readonly string _name;
     private AccountSession? _session;
     public DirectoryIdentity Identity { get; } = new();
+    public static Uri ServiceAddress(string url) => DirectoryValidation.ServiceUri(url);
+    public async Task<string> GetHostAddressAsync(CancellationToken cancellation = default)
+    {
+        string value = await Request<string>(HttpMethod.Get, "v1/host-address", null, null, cancellation);
+        if (!System.Net.IPAddress.TryParse(value, out var observed)) throw new InvalidDataException("Каталог вернул неверный адрес.");
+        if (!System.Net.IPAddress.IsLoopback(observed)) return observed.ToString();
+        if (!_http.BaseAddress!.IsLoopback) throw new InvalidDataException("Каталог за прокси. Задайте AdvertiseHost в network.yaml.");
+        var local = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                n.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Ethernet or System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211)
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(a.Address));
+        return (local?.Address ?? observed).ToString();
+    }
     public DirectoryInfo? Info { get; private set; }
     public MatchDirectoryClient(string url, string name) : this(url, name, null) { }
     internal MatchDirectoryClient(string url, string name, HttpMessageHandler? handler)
@@ -51,7 +65,9 @@ public sealed class MatchDirectoryClient : IDisposable
     }
     public async Task<DirectoryMatch[]> FindAsync(string rules, string content, CancellationToken cancellation = default)
     {
-        var games = await Auth<DirectoryMatch[]>(HttpMethod.Get, "v1/matches?rules=" + Uri.EscapeDataString(rules) + "&content=" + Uri.EscapeDataString(content), null, cancellation);
+        var info = await Request<DirectoryInfo>(HttpMethod.Get, "v1/info", null, null, cancellation);
+        if (info.Version != 1 || info.MatchProtocol != StarProtocol.Version) throw new InvalidDataException("Каталог использует другую версию протокола.");
+        var games = await Request<DirectoryMatch[]>(HttpMethod.Get, "v1/matches?rules=" + Uri.EscapeDataString(rules) + "&content=" + Uri.EscapeDataString(content), null, null, cancellation);
         if (games.Length > 100) throw new InvalidDataException("Превышен размер каталога.");
         foreach (var game in games) DirectoryValidation.Advertisement(game.Game);
         return games;
@@ -65,7 +81,6 @@ public sealed class MatchDirectoryClient : IDisposable
     }
     public Task<object> HeartbeatAsync(DirectoryLease lease, MatchAdvertisement game, CancellationToken cancellation = default) => Auth<object>(HttpMethod.Post, $"v1/matches/{lease.Match:D}/heartbeat", game, cancellation, lease.Token);
     public Task<object> CloseAsync(DirectoryLease lease, CancellationToken cancellation = default) => Auth<object>(HttpMethod.Delete, $"v1/matches/{lease.Match:D}", null, cancellation, lease.Token);
-    public Task<DirectoryMatch> ResolveInviteAsync(string invite, CancellationToken cancellation = default) => Auth<DirectoryMatch>(HttpMethod.Post, "v1/invites", new InviteRequest(invite), cancellation);
     public async Task<MatchJoinGrant> JoinAsync(Guid match, MatchJoinRequest request, CancellationToken cancellation = default)
     {
         var grant = await Auth<MatchJoinGrant>(HttpMethod.Post, $"v1/matches/{match:D}/join", request, cancellation);

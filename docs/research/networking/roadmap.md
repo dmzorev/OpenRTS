@@ -45,7 +45,7 @@
 | P1 / NET3 | 3+ игроков, звезда, команды/слоты, согласованный disconnect/pause, AI policy | NET2 | Membership и контроль тика одинаковы на клиентах |
 | P1 / NET4 | Полный save/restore, checkpoints, resume и догоняющий режим | NET1 + работа в Gameplay/Core | Продолжение совпадает с непрерывным запуском |
 | P1 / NET4 | Replay UI, player POV, зрители с начала матча, позже mid-game join | Replay NET1; checkpoint для дешёвого mid-game | Зритель не тормозит игроков, цена истории ограничена |
-| P1 / NET5 | Поиск/создание матчей, account/session/ticket, version filtering, private invites | NET2 | Каталог приводит к нужному матчу с нужной ролью |
+| P1 / NET5 | Поиск/публикация матчей, фильтр версии, пароль и допуск на игровом хосте | NET2 | Каталог приводит к нужному матчу с нужной ролью |
 | P1 / NET5 | NAT traversal/relay, dedicated command relay, мониторинг | NET2/3, transport spike | Прямое подключение либо понятный relay fallback |
 | P1 / NET6 | Необязательный сервер-зритель, приём/replay журнала, статистика и анализ баланса | NET4/5; приём архивов может работать без каталога | Аналитика получает воспроизводимые данные, отказ сервиса не влияет на матч |
 | P1 / NET6 | Поиск признаков читерства, происхождение данных, сопоставление отчётов участников | NET6 сбор данных | Подозрения отделены от подтверждённых нарушений, неполная запись явно отмечена |
@@ -102,9 +102,11 @@ NET5/NET6 — дополнительные сервисы, не зависимо
 
 ## NET5 — поиск матча и допуск
 
-**Реализовано:** [первый сервис044](../../decisions/044-net5-match-directory-admission.md): TTL/lease, поиск совместимых публичных игр, private invite, key-bound account session, атомарный Join/request ID, signed ticket с TLS proof-of-possession и offline one-time admission, direct/configured-relay fallback и Godot UI. [Проверки](../../verification/044-net5-directory.md), [границы и продолжение](net5.md). Identity живёт в памяти приложения; каталог не durable. Cancel удерживает уже выданный capability до expiry≤30с. Автоматический NAT/backend и внешние account providers не реализованы.
+В обычном матче хост принимает запрос сразу по TLS, проверяет пароль и атомарно выдаёт фактическое место. Один матч может быть опубликован на нескольких узлах. Гость получает адрес и отпечаток из выбранной записи и может войти после отключения каталога. StarProtocol 6 требует обновления хоста, гостей и самостоятельного каталога. Первоначальная схема NET5 с отдельным issuer доступна через явно заданный admissionPolicy. [Сценарии и порты](../../../src/OpenRTS.Network/README.md#net5-поиск-матча-и-допуск)
 
-**Объём:** регистрация/TTL матча, протокол/версия/режим/слоты, private invites, account session и короткоживущий role-bound ticket, direct/relay endpoints. Не хранить доверенный результат лишь на основании заявлений P2P хоста; P2P матч в каталоге обозначен как доверительный.
+Клиент использует список игр, одно адресное поле и поиск LAN. Все зарегистрированные матчи опубликованы. Пароль запрашивается только при входе в закрытую паролем комнату. Адреса по умолчанию и необязательный адрес публикации задаются в [network.yaml](../../../sandbox/network.yaml). Копии объявлений имеют ограниченный срок. Задача физической проверки остаётся открытой для двух компьютеров, включая Wi-Fi с блокировкой broadcast и ручной ввод адреса при разрешённых входящих TCP-соединениях.
+
+В OpenRA LAN-объявления и результаты удалённого поиска объединены в одном списке. Steamworks описывает разрешение конфликтов владельцем лобби и дальнейшее соединение участников с игровым хостом. В OpenRTS владелец лобби и игровой хост совпадают. [OpenRA ServerListLogic](https://github.com/OpenRA/OpenRA/blob/9636b63eaee62fcb60ef2e896e7985bdf2f1ee68/OpenRA.Mods.Common/Widgets/Logic/ServerListLogic.cs) · [Steamworks Matchmaking & Lobbies](https://partner.steamgames.com/doc/features/multiplayer/matchmaking)
 
 **Проверки:** stale lobby/heartbeat, двойной ticket, ticket другой роли/матча, истёкший credential, недоступный endpoint и NAT fallback, rate limits. Credentials в логах отсутствуют. UPnP/port mapping не включать незаметно; выбранный NAT механизм и relay provider требуют отдельного решения по зависимости/эксплуатации.
 

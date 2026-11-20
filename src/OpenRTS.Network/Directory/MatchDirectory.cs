@@ -7,10 +7,9 @@ public sealed class MatchDirectory : IDisposable
 {
     private sealed record LoginChallenge(DirectoryAccount Account, AccountChallenge Value);
     private sealed record Session(DirectoryAccount Account, DateTimeOffset Expires);
-    private sealed class Listing(string owner, string lease, string? invite, MatchAdvertisement game, DateTimeOffset expires)
+    private sealed class Listing(string owner, string lease, MatchAdvertisement game, DateTimeOffset expires)
     {
         internal readonly string Owner = owner, Lease = lease;
-        internal readonly string? Invite = invite;
         internal MatchAdvertisement Game = game;
         internal DateTimeOffset Expires = expires;
         internal readonly Dictionary<Guid, Reservation> Reservations = [];
@@ -83,11 +82,12 @@ public sealed class MatchDirectory : IDisposable
         lock (_gate)
         {
             var account = Account(session); DirectoryValidation.Advertisement(advertisement);
+            if (advertisement.Private) throw Error("private_unsupported", "Все игры публикуются. Для ограничения входа используйте пароль матча.");
             if (_matches.ContainsKey(advertisement.Match)) throw Error("already_registered", "Матч уже зарегистрирован.");
             if (_matches.Count >= 512 || _matches.Values.Count(m => m.Owner == account.Id) >= 4) throw Error("capacity", "Лимит опубликованных матчей.", 429);
-            string token = DirectoryIdentity.Secret(), invite = DirectoryIdentity.Secret(); var expires = Now.AddSeconds(30);
-            _matches.Add(advertisement.Match, new(account.Id, Hash(token), advertisement.Private ? Hash(invite) : null, Copy(advertisement), expires));
-            return new(advertisement.Match, token, advertisement.Private ? advertisement.Match.ToString("N") + "." + invite : null, expires);
+            string token = DirectoryIdentity.Secret(); var expires = Now.AddSeconds(30);
+            _matches.Add(advertisement.Match, new(account.Id, Hash(token), Copy(advertisement), expires));
+            return new(advertisement.Match, token, null, expires);
         }
     }
     private Listing Owned(string session, Guid match, string lease)
@@ -103,7 +103,7 @@ public sealed class MatchDirectory : IDisposable
         {
             var listing = Owned(session, match, lease); DirectoryValidation.Advertisement(advertisement);
             if (advertisement.Match != match || advertisement.PlayerCount != listing.Game.PlayerCount || advertisement.Revision < listing.Game.Revision || advertisement.Private != listing.Game.Private ||
-                advertisement.Fingerprint != listing.Game.Fingerprint || advertisement.Rules != listing.Game.Rules || advertisement.ContentHash != listing.Game.ContentHash ||
+                advertisement.HostAdmission != listing.Game.HostAdmission || advertisement.PasswordRequired != listing.Game.PasswordRequired || advertisement.Fingerprint != listing.Game.Fingerprint || advertisement.Rules != listing.Game.Rules || advertisement.ContentHash != listing.Game.ContentHash ||
                 advertisement.Revision == listing.Game.Revision && !Same(advertisement, listing.Game)) throw Error("stale_revision", "Регистрация изменилась; устаревший heartbeat отклонён.");
             listing.Game = Copy(advertisement); listing.Expires = Now.AddSeconds(30);
         }
@@ -115,7 +115,7 @@ public sealed class MatchDirectory : IDisposable
         lock (_gate)
         {
             Prune(); DirectoryValidation.Text(rules, 128, "правила"); DirectoryValidation.Text(content, 128, "контент");
-            return _matches.Values.Where(m => m.Expires > Now && !m.Game.Private && m.Game.Rules == rules && m.Game.ContentHash == content)
+            return _matches.Values.Where(m => m.Expires > Now && m.Game.Rules == rules && m.Game.ContentHash == content)
                 .OrderBy(m => m.Game.Title, StringComparer.Ordinal).ThenBy(m => m.Game.Match).Take(100).Select(Public).ToArray();
         }
     }
@@ -124,30 +124,13 @@ public sealed class MatchDirectory : IDisposable
     private bool AwaitingPublication(Listing m, Reservation r) => r.Used && m.Game.Revision <= r.Revision;
     private DirectoryMatch Public(Listing listing) => new(Copy(listing.Game), listing.Expires,
         listing.Reservations.Values.Count(r => (Holds(r) || AwaitingPublication(listing, r)) && r.Grant.Role == MatchAccessRole.Player), listing.Reservations.Values.Count(r => (Holds(r) || AwaitingPublication(listing, r)) && r.Grant.Role == MatchAccessRole.Spectator));
-    public DirectoryMatch ResolveInvite(string session, string invite)
-    {
-        lock (_gate)
-        {
-            Account(session); var (match, secret) = Invite(invite);
-            if (!_matches.TryGetValue(match, out var listing) || listing.Expires <= Now || listing.Invite is null || !DirectoryIdentity.SecretEquals(listing.Invite, Hash(secret)))
-                throw Error("invite_invalid", "Приглашение недействительно или матч закрыт.", 404);
-            return Public(listing);
-        }
-    }
-    private static (Guid, string) Invite(string invite)
-    {
-        if (invite is null || invite.Length != 97 || invite[32] != '.' || !Guid.TryParseExact(invite[..32], "N", out var match) || !invite[33..].All(Uri.IsHexDigit))
-            throw Error("invite_invalid", "Некорректное приглашение.", 404);
-        return (match, invite[33..]);
-    }
     public MatchJoinGrant Join(string session, Guid match, MatchJoinRequest request)
     {
         lock (_gate)
         {
             var account = Account(session);
             if (!_matches.TryGetValue(match, out var listing) || listing.Expires <= Now) throw Error("match_expired", "Матч закрыт или heartbeat истёк.", 404);
-            if (listing.Invite is not null)
-            { var code = Invite(request.Invite!); if (code.Item1 != match || !DirectoryIdentity.SecretEquals(listing.Invite, Hash(code.Item2))) throw Error("invite_invalid", "Приглашение не даёт доступа к матчу.", 404); }
+            if (listing.Game.HostAdmission) throw Error("host_admission", "Место в этой игре выдаёт хост.");
             if (request.Request == Guid.Empty || !Enum.IsDefined(request.Role) || request.Player > 8 || request.Role == MatchAccessRole.Spectator && request.Player != 0)
                 throw Error("invalid_join", "Некорректная роль или место.", 400);
             if (listing.Reservations.TryGetValue(request.Request, out var previous))

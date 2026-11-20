@@ -55,20 +55,20 @@ internal static class StarChecks
         internal readonly int Port = StarChecks.Port();
         internal readonly List<StarSession> Sessions = [];
         internal readonly StarSession Host;
-        internal Match(Func<SimulationWorld, uint, IReadOnlyList<WorldCommand>>? ai = null)
+        internal Match(Func<SimulationWorld, uint, IReadOnlyList<WorldCommand>>? ai = null, string password = "")
         {
             System.IO.Directory.CreateDirectory(Directory);
             Host = new(true, "127.0.0.1", Port, null, Descriptor, () => World(), Path.Combine(Directory, "1.journal"),
-                playerCount: 4, aiPlayers: [4], planAi: ai ?? ((_, _) => []));
+                playerCount: 4, aiPlayers: [4], planAi: ai ?? ((_, _) => []), password: password);
             Sessions.Add(Host);
             // The listener is started before the owner's lobby publication.
             Wait(() => Host.Status.StartsWith("Лобби", StringComparison.Ordinal), Host);
         }
-        internal StarSession Join(uint player, string? pin = null, int? relayPort = null, MatchResumeCredential? resume = null)
+        internal StarSession Join(uint player, string? pin = null, int? relayPort = null, MatchResumeCredential? resume = null, string password = "")
         {
             var session = new StarSession(false, "127.0.0.1", relayPort ?? Port, pin ?? Host.Fingerprint, Descriptor, () => World(2),
                 Path.Combine(Directory, player + (resume is null ? "" : "-resume-" + Guid.NewGuid().ToString("N")) + ".journal"), playerCount: 4, player: player,
-                planAi: (_, _) => throw new Exception("A client attempted to run AI"), resumeCredential: resume);
+                planAi: (_, _) => throw new Exception("A client attempted to run AI"), resumeCredential: resume, password: password);
             Sessions.Add(session); return session;
         }
         internal void Start(StarSession two, StarSession three)
@@ -395,6 +395,38 @@ internal static class StarChecks
                 }
             }
             finally { Directory.Delete(directory, true); }
+        });
+        test("LAN directories accept own-source registrations and forward only one hop with expiry", () => {
+            using var origin = new LanRegistry(() => null, 0); using var mirror = new LanRegistry(() => null, 0);
+            using var next = new LanRegistry(() => null, 0);
+            var game = new LanGame("192.0.2.1", 17771, "LAN", "map", 1, 1, 0, new string('C', 64), [2], true, Guid.NewGuid());
+            LanRegistry.Entry[] List(LanRegistry node) => LanRegistry.FindAsync("localhost", default, node.Port).GetAwaiter().GetResult();
+            Check(List(origin).Length == 0);
+            LanRegistry.RegisterAsync("localhost", game, default, origin.Port).GetAwaiter().GetResult();
+            var seen = List(origin).Single(); Check(seen.Game.Address == "127.0.0.1" && seen.Game.Match == game.Match && !seen.Copy);
+            mirror.Remember([seen with { RemainingMs = 250 }]);
+            var copy = List(mirror).Single(); Check(copy.Copy && copy.RemainingMs <= 250);
+            next.Remember([copy]); Check(List(next).Length == 0);
+            Wait(() => List(mirror).Length == 0);
+        });
+        test("LAN client answers before hosting and unicast ignores an advertised source address", () => {
+            LanGame? entry = null;
+            using var node = new LanGames(() => Volatile.Read(ref entry));
+            Check(LanGames.QueryAsync("127.0.0.1").GetAwaiter().GetResult() is null);
+            Volatile.Write(ref entry, new("192.0.2.1", 17771, "LAN", "crossroads", 1, 1, 0, new string('B', 64), [2], true));
+            var found = LanGames.QueryAsync("localhost").GetAwaiter().GetResult();
+            Check(found is { Address: "127.0.0.1", PasswordRequired: true } && found.Fingerprint == entry.Fingerprint);
+        });
+        test("Room password guards both seats and spectators before admission", () => {
+            using var match = new Match(password: "пароль");
+            foreach (uint player in new uint[] { 2, 0 })
+            {
+                var bad = match.Join(player, password: "wrong");
+                Wait(() => bad.Completion.IsCompleted, match.Host);
+                Check(bad.Completion.IsFaulted && !match.Host.State.Slots[1].Connected && match.Host.State.Spectators == 0);
+            }
+            var guest = match.Join(2, password: "пароль"); var watch = match.Join(0, password: "пароль");
+            Wait(() => match.Host.State.Slots[1].Connected && match.Host.State.Spectators == 1, match.Host, guest, watch);
         });
         test("LAN directory discovers a real lobby and its TLS fingerprint", () => {
             var entry = new LanGame("", 17771, "LAN test", "crossroads", 1, 2, 0, new string('A', 64), [2, 3]);

@@ -1,0 +1,5 @@
+# Адреса клиентов OpenRTS и каталогов. Для каталога с нестандартным портом укажите HTTPS URL.
+# Локальное переопределение настроек установленной игры: user://network.yaml.
+Servers: []
+# Servers: [192.168.1.20, "https://games.example.org"]
+# AdvertiseHost: play.example.org   # Для хоста за reverse proxy или с несколькими сетевыми картами.

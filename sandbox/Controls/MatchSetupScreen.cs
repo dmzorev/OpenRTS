@@ -47,7 +47,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     public int NetworkPort => (int)_port.Value;
     public string NetworkPin => _pin.Text;
     public int NetworkInputDelay => (int)_delay.Value;
-    public uint NetworkPlayer => _joinRole.Selected == 1 ? 0 : (uint)_networkPlayer.Value;
+    public uint NetworkPlayer => _networkSession?.Player ?? (_joinRole.Selected == 1 ? 0 : (uint)_networkPlayer.Value);
     public uint[] NetworkAiPlayers => _seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.Ai).Select(p => (uint)p.i + 1).ToArray();
     public uint[] ClosedPlayers => _seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.None).Select(p => (uint)p.i + 1).ToArray();
     public SlotController[] Controllers => _seats.Select(s => s.Controller).ToArray();
@@ -76,8 +76,9 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         foreach (string s in new[] { "Точная сетка", "Круги обзора", "Круги и сетка" }) _fogStyle.AddItem(s); _fogStyle.Select(1);
         foreach (string s in new[] { "Иконки", "Модели зданий", "Все модели" }) _radarStyle.AddItem(s); _radarStyle.Select(1);
         foreach (string s in new[] { "Медленно · 15", "Обычно · 25", "Быстро · 40" }) _speed.AddItem(s); _speed.Select(1);
+        _joinRole.AddItem("Игрок"); _joinRole.AddItem("Зритель");
         // Hidden selectors keep diagnostic scenarios on the same public controls as the shell.
-        foreach (Control c in new Control[] { _network, _maps, _count, _networkAi, _opponent }) { _root.AddChild(c); c.Hide(); }
+        foreach (Control c in new Control[] { _network, _maps, _count, _networkAi, _opponent, _port, _pin, _networkPlayer, _joinRole, _address }) { _root.AddChild(c); c.Hide(); }
         BuildMain(); BuildBrowser(); BuildLobby(); BuildMaps(); BuildSettings(); BuildReplays();
         _maps.ItemSelected += _ => { SelectMap(); Changed(); };
         _count.ItemSelected += _ => {
@@ -144,7 +145,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     }
     private void RefreshControls()
     {
-        if (_directoryInvitePanel is not null) _directoryInvitePanel.Visible = NetworkMode == 1 && _publishDirectory.ButtonPressed;
+        _publicationStatus.Visible = NetworkMode == 1;
         _opponent.Disabled = NetworkMode != 0 || _modeChoices[_modes.Selected].Set.Id != "supply";
         _opponent.SetPressedNoSignal(_seats[1].Controller == SlotController.Ai);
         _title.Text = NetworkMode == 0 ? "Skirmish" : NetworkMode == 1 ? "Лобби · Host" : NetworkPlayer == 0 ? "Лобби · Зритель" : "Лобби · Игрок " + NetworkPlayer;
@@ -158,14 +159,13 @@ public sealed partial class MatchSetupScreen : CanvasLayer
             _starts[i].Disabled = _teams[i].Disabled = !Editable || _seats[i].Controller == SlotController.None;
             _readyLabels[i].Text = _seats[i].Controller == SlotController.None ? "—" : _seats[i].Controller == SlotController.Ai ? "✓" : NetworkMode == 0 ? "•" : _networkSession?.State.Slots[i].Ready == true ? "✓" : "…";
         }
-        if (_connectionPanel is not null) _connectionPanel.Visible = NetworkMode != 0;
         _launch.Visible = NetworkMode == 0 || _networkSession is null;
         _launch.Disabled = _busy;
         _readyNetwork.Visible = NetworkMode != 0 && _networkSession is not null && NetworkPlayer != 0 || NetworkMode == 1 && _networkSession is not null;
         _startNetwork.Visible = _networkSession?.IsHost == true;
         if (_networkSession is { } network)
         {
-            _readyNetwork.Disabled = network.State.Slots[(int)network.Player - 1 < 0 ? 0 : (int)network.Player - 1].Ready;
+            _readyNetwork.Disabled = network.State.Match == Guid.Empty || network.State.Slots[(int)network.Player - 1 < 0 ? 0 : (int)network.Player - 1].Ready;
             _startNetwork.Disabled = network.State.Slots.Any(s => s.Controller == SlotController.Human && (!s.Connected || !s.Ready));
         }
     }

@@ -48,7 +48,7 @@ internal static class DirectoryChecks
     { var challenge = service.Challenge(new("Player", identity.PublicKey)); return service.Login(new(challenge.Id, identity.SignLogin(challenge))); }
     private static MatchAdvertisement Game(Guid? match = null, bool hidden = false) => new(match ?? Guid.NewGuid(), 1, StarSession.ProtocolVersion, 2,
         "net5", "content", "Test match", "test-map", new string('A', 64), MatchPhase.Lobby, [2], 1, 0,
-        [new(MatchEndpointKind.Direct, "127.0.0.1", 17771)], hidden);
+        [new(MatchEndpointKind.Direct, "127.0.0.1", 17771)], hidden, HostAdmission: false);
     private static int Port()
     { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); int port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port; }
     private static void Wait(Func<bool> condition, params StarSession[] sessions)
@@ -88,6 +88,25 @@ internal static class DirectoryChecks
     }
     internal static void Run(Action<string, Action> test)
     {
+        test("Host admits after catalogue shutdown and serializes competing requests for the last seat", () => {
+            using var service = new Service(); using var owner = new MatchDirectoryClient(service.Url, "host");
+            var d = new MatchDescriptor("net5", "content", "host-admission", 42, EndTick: 0); int port = Port();
+            SimulationWorld World() => new([new("unit", 100)], 16384, 16384, 42);
+            using var host = new StarSession(true, "0.0.0.0", port, null, d, World, Path.Combine(service.Directory, "host"),
+                playerCount: 3, closedPlayers: [2], password: "test");
+            using var listing = new DirectoryListing(owner, host, "Locked", "127.0.0.1", port, () => "map");
+            Wait(() => listing.Status.StartsWith("Игра опубликована", StringComparison.Ordinal), host);
+            var game = owner.FindAsync(d.Rules, d.ContentHash).Result.Single().Game;
+            Check(game.HostAdmission && game.PasswordRequired);
+            Reject(() => owner.JoinAsync(game.Match, new(Guid.NewGuid(), MatchAccessRole.Player)).GetAwaiter().GetResult(), "host_admission");
+            service.Stop();
+            StarSession Join(string file) => new(false, game.Endpoints[0].Address, game.Endpoints[0].Port, game.Fingerprint, d, World,
+                Path.Combine(service.Directory, file), playerCount: game.PlayerCount, password: "test", requestSeat: true);
+            using var first = Join("first"); using var second = Join("second");
+            Wait(() => first.Completion.IsFaulted && second.ResumeCredential is not null || second.Completion.IsFaulted && first.ResumeCredential is not null, host);
+            var admitted = first.Completion.IsFaulted ? second : first;
+            Check(admitted.Player == 3 && admitted.ResumeCredential!.Player == 3 && host.State.Slots[2].Connected);
+        });
         foreach (int count in new[] { 2, 4, 8 })
             test($"NET5 signed capacity bootstraps {count} sides including AI and closed slots", () => {
                 using var service = new Service(); using var owner = new MatchDirectoryClient(service.Url, "Host");
@@ -178,10 +197,7 @@ internal static class DirectoryChecks
             Check(gate.Inspect(second.Ticket).Player == 2); // Close cannot revoke an offline capability.
             clock.Advance(30); Reject(() => gate.Inspect(second.Ticket)); service.Register(owner.Token, game);
             Check(service.Join(one.Token, game.Match, new(Guid.NewGuid(), MatchAccessRole.Player)).Player == 2);
-            var hidden = Game(hidden: true); var privateLease = service.Register(owner.Token, hidden);
-            service.Join(one.Token, hidden.Match, new(Guid.NewGuid(), MatchAccessRole.Spectator, Invite: privateLease.Invite));
-            service.Close(owner.Token, hidden.Match, privateLease.Token);
-            Reject(() => service.ResolveInvite(one.Token, privateLease.Invite!), "invite_invalid");
+            Reject(() => service.Register(owner.Token, Game(hidden: true)), "private_unsupported");
         });
         test("NET5 key-bound session, challenge replay, expiry and lease ownership", () => {
             using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256); var clock = new Clock(); using var service = new MatchDirectory(key, clock);
@@ -200,7 +216,7 @@ internal static class DirectoryChecks
             clock.Advance(3600); Reject(() => service.Register(session.Token, Game()), "session_expired");
             Check(!session.ToString().Contains(session.Token) && !lease.ToString().Contains(lease.Token), "Credentials escaped ToString");
         });
-        test("NET5 atomic last seat, idempotency, cancellation, private invite and stale heartbeat", () => {
+        test("NET5 atomic last seat, idempotency, cancellation, public locked room and stale heartbeat", () => {
             using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256); var clock = new Clock(); using var service = new MatchDirectory(key, clock);
             using var ownerKey = new DirectoryIdentity(); using var oneKey = new DirectoryIdentity(); using var twoKey = new DirectoryIdentity();
             var owner = Login(service, ownerKey); var one = Login(service, oneKey); var two = Login(service, twoKey);
@@ -219,11 +235,8 @@ internal static class DirectoryChecks
             service.Heartbeat(owner.Token, game.Match, lease.Token, game with { Revision = 2, Phase = MatchPhase.Paused });
             Reject(() => service.Heartbeat(owner.Token, game.Match, lease.Token, game), "stale_revision");
             Check(service.Find("other", "content").Length == 0);
-            var hidden = Game(hidden: true); var invitation = service.Register(owner.Token, hidden);
-            Check(service.Find("net5", "content").Length == 1);
-            Check(service.ResolveInvite(one.Token, invitation.Invite!).Game.Match == hidden.Match);
-            Reject(() => service.Join(one.Token, hidden.Match, new(Guid.NewGuid(), MatchAccessRole.Player)), "invite_invalid");
-            Check(service.Join(one.Token, hidden.Match, new(Guid.NewGuid(), MatchAccessRole.Player, Invite: invitation.Invite)).Player == 2);
+            var locked = Game() with { PasswordRequired = true }; service.Register(owner.Token, locked);
+            Check(service.Find("net5", "content").Single(m => m.Game.Match == locked.Match).Game.PasswordRequired);
         });
         test("NET5 confirmed seats and spectators wait for publication without changing a revision", () => {
             using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256); using var service = new MatchDirectory(key);

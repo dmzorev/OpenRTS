@@ -16,17 +16,17 @@ public partial class Sandbox
         button.CallDeferred(GodotObject.MethodName.EmitSignal, Button.SignalName.Pressed);
     }
     private bool _verifyNetwork;
-    private string? _networkVerifyDirectoryUrl;
+    private string? _networkVerifyDirectoryUrl, _networkVerifyLan;
     private System.Threading.Tasks.Task? _directoryCapacityFixtures;
     private void VerifyDirectoryCapacities(OpenRTS.Network.StarSession network)
     {
-        if (_networkVerifyDirectoryUrl is null || !network.IsHost || _directoryPublication?.Status.StartsWith("Игра опубликована", StringComparison.Ordinal) != true) return;
+        if (_networkVerifyDirectoryUrl is null || !network.IsHost || _publications.FirstOrDefault().Publication?.Status.StartsWith("Игра опубликована", StringComparison.Ordinal) != true) return;
         _directoryCapacityFixtures ??= Publish();
         if (_directoryCapacityFixtures.IsFaulted) { GD.PushError(_directoryCapacityFixtures.Exception!.ToString()); GetTree().Quit(1); }
         async System.Threading.Tasks.Task Publish()
         {
             foreach (int count in new[] { 2, 8 })
-                await _matchSetup!.DirectoryClient!.RegisterAsync(new(Guid.NewGuid(), 1, OpenRTS.Network.StarSession.ProtocolVersion, count,
+                await _publications[0].Client.RegisterAsync(new(Guid.NewGuid(), 1, OpenRTS.Network.StarSession.ProtocolVersion, count,
                     network.Descriptor.Rules, network.Descriptor.ContentHash, "Capacity fixture " + count, MatchSetupOptions.Parse(network.LobbySettings).Map,
                     network.Fingerprint, OpenRTS.Network.MatchPhase.Lobby, [2], 1, 0, [new(OpenRTS.Network.MatchEndpointKind.Direct, "127.0.0.1", _networkPort)]));
         }
@@ -66,13 +66,25 @@ public partial class Sandbox
         if (_networkVerifyRole == "watch") Choose("JoinRole", 1);
         if (_networkVerifyNet3 && _networkVerifyRole == "host") ((SpinBox)_matchSetup.FindChild("NetworkAi", owned: false)).Value = 1;
         ((SpinBox)_matchSetup!.FindChild("NetworkPort", owned: false)).Value = _networkVerifyPort;
-        if (_networkVerifyDirectoryUrl is not null)
+        if (_networkVerifyLan is not null)
         {
-            ((LineEdit)_matchSetup.FindChild("DirectoryUrl", owned: false)).Text = _networkVerifyDirectoryUrl;
+            ((Button)_matchSetup.FindChild("MainMultiplayer", owned: false)).EmitSignal(Button.SignalName.Pressed);
             if (_networkVerifyRole == "host")
             {
-                ((CheckButton)_matchSetup.FindChild("PublishDirectory", owned: false)).ButtonPressed = true;
                 ((Button)_matchSetup.FindChild("CreateGame", owned: false)).EmitSignal(Button.SignalName.Pressed);
+                ((LineEdit)_matchSetup.FindChild("CreatePassword", owned: false)).Text = "verify-lan";
+                ((Button)_matchSetup.FindChild("ConfirmCreate", owned: false)).EmitSignal(Button.SignalName.Pressed);
+            }
+            else _ = VerifyLanJoin();
+            return;
+        }
+        if (_networkVerifyDirectoryUrl is not null)
+        {
+            ((LineEdit)_matchSetup.FindChild("ServerAddress", owned: false)).Text = _networkVerifyDirectoryUrl;
+            if (_networkVerifyRole == "host")
+            {
+                ((Button)_matchSetup.FindChild("CreateGame", owned: false)).EmitSignal(Button.SignalName.Pressed);
+                ((Button)_matchSetup.FindChild("ConfirmCreate", owned: false)).EmitSignal(Button.SignalName.Pressed);
             }
             else _ = VerifyDirectoryJoin();
             return;
@@ -83,12 +95,36 @@ public partial class Sandbox
         if (_session?.Network is { } session && _networkVerifyRole == "host")
             File.WriteAllText(_networkVerifyPinFile, session.Fingerprint);
     }
+    private async System.Threading.Tasks.Task VerifyLanJoin()
+    {
+        try
+        {
+            var screen = _matchSetup!;
+            bool broadcast = _networkVerifyLan == "auto";
+            if (!broadcast) ((LineEdit)screen.FindChild("ServerAddress", owned: false)).Text = _networkVerifyLan;
+            ((Button)screen.FindChild(broadcast ? "FindLan" : "ConnectSource", owned: false)).EmitSignal(Button.SignalName.Pressed);
+            string join = broadcast ? "LanJoin" : "AddressJoin";
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (screen.FindChild(join, owned: false) is not Button { Disabled: false })
+            {
+                if (clock.Elapsed.TotalSeconds > 20) throw new TimeoutException("Не найден матч по адресу.");
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            ((Button)screen.FindChild(join, owned: false)).EmitSignal(Button.SignalName.Pressed);
+            var dialog = (ConfirmationDialog)screen.FindChild("JoinPasswordDialog", owned: false);
+            if (!dialog.Visible) throw new InvalidOperationException("Не запрошен пароль.");
+            ((LineEdit)screen.FindChild("JoinPassword", owned: false)).Text = "verify-lan";
+            dialog.EmitSignal(ConfirmationDialog.SignalName.Confirmed);
+            GD.Print("OPENRTS_LAN_JOIN:" + screen.NetworkAddress);
+        }
+        catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
+    }
     private async System.Threading.Tasks.Task VerifyDirectoryJoin()
     {
         try
         {
             ((Button)_matchSetup!.FindChild("MainMultiplayer", owned: false)).EmitSignal(Button.SignalName.Pressed);
-            ((Button)_matchSetup.FindChild("BrowseDirectory", owned: false)).EmitSignal(Button.SignalName.Pressed);
+            ((Button)_matchSetup.FindChild("RefreshGames", owned: false)).EmitSignal(Button.SignalName.Pressed);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (true)
             {

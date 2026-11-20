@@ -292,6 +292,7 @@ public sealed partial class StarSession
                         pipe = new PeerPipeline(tls, _timeout, acceptStop.Token);
                         var hello = ReadHello(pipe.Read(TimeSpan.FromSeconds(5)));
                         ProveAdmission(hello, pipe);
+                        CheckPassword(hello, pipe);
                         return (socket, pipe, hello);
                     }
                     catch (Exception error) { RejectPeer(pipe, error is InvalidDataException ? error.Message : "TLS handshake не завершён."); pipe?.Dispose(); tls?.Dispose(); socket.Dispose(); throw; }
@@ -306,6 +307,13 @@ public sealed partial class StarSession
                     uint p = hello.Player; int n = hello.Count;
                     string digest = hello.Digest, hash = hello.Hash, rules = hello.Rules, content = hello.Content;
                     var credential = hello.Resume;
+                    bool assignSeat = p == StarProtocol.AnySeat;
+                    if (assignSeat)
+                    {
+                        if (_admissionGate is not null || credential is not null || phase != MatchPhase.Lobby) throw new InvalidDataException("Приём игроков закрыт.");
+                        p = slots.Where(s => s.Player > 1 && s.Controller == SlotController.Human && !s.Connected).Select(s => s.Player).FirstOrDefault();
+                        if (p == 0) throw new InvalidDataException("Свободных мест больше нет.");
+                    }
                     if (phase != MatchPhase.Lobby && recovering.Count >= 2 || credential is not null && credential.Player != p || n != count || rules != Descriptor.Rules || content != Descriptor.ContentHash ||
                             p != 0 && (p < 2 || p > count || slots[p - 1].Connected || recovering.ContainsKey(p)) ||
                             phase != MatchPhase.Lobby && p == 0 && phase != MatchPhase.Paused ||
@@ -318,6 +326,7 @@ public sealed partial class StarSession
                     uint player = assigned;
                     var peer = new Peer(socket, pipe, new TickInbox(State.Match, player, Descriptor.InputDelay, window)) { ResumeWith = credential };
                     if (hello.Ticket is not null) peer.Admission = _admissionGate!.Redeem(hello.Ticket, State.Match, p, Fingerprint, Descriptor.Rules, Descriptor.ContentHash, count);
+                    if (assignSeat) peer.Pipe.Send(Wire.Pack(w => { w.Write(StarProtocol.SeatAssigned); w.Write(player); }));
                     if (_prepare is not null) peer.Pipe.Send(SettingsFrame());
                     if (phase == MatchPhase.Lobby)
                     {

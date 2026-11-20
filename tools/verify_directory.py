@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise a real optional HTTP directory and native Godot catalogue/ticket controls."""
+"""Exercise a real optional HTTP directory and native Godot catalogue and host admission."""
 import argparse
 from pathlib import Path
 import socket
@@ -56,7 +56,7 @@ try:
         if role == 'join' and 'OPENRTS_DIRECTORY_CAPACITY:2/8 disabled' not in text: raise RuntimeError('Unsupported capacities were not checked in the browser')
         hashes += [line.split(':', 1)[1] for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_PASS:')]
     if len(hashes) != 2 or len(set(hashes)) != 1: raise RuntimeError('Directory peers disagree')
-    print('PASS Godot NET5: publish, account session, catalogue UI, reserved ticket, TLS match, identical hashes and replay')
+    print('PASS Godot NET5: publish, account session, catalogue UI, host-assigned seat, TLS match, identical hashes and replay')
     print('Artifacts:', output)
 finally:
     for process in processes:
