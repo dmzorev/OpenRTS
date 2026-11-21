@@ -84,3 +84,4 @@ objects:
   - {id: cargo-tank-a, type: tank, position: [21504, 29696], owner: blue}
   - {id: cargo-tank-b, type: tank, position: [22528, 29696], owner: blue}
   - {id: capture-target, type: oil-derrick, position: [29184, 48640], owner: neutral}
+  - {id: missile-tiltrotor, type: missile-tiltrotor, position: [33792, 22528], owner: blue}

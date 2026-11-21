@@ -8,7 +8,7 @@ using OpenRTS.Core;
 
 try
 {
-    var path = "sandbox/content/units/units.yaml";
+    var path = "";
     string? mapPath = null, startSetPath = null, aiConfig = null, aiProfile = null, modPath = null, compileMapPath = null;
     LocalMapPlaytest? localPlaytest = null;
     bool fogRetentionBenchmark = false, fogGroupsBenchmark = false, fogBenchmark = false, fog = false, skirmishAi = false, ticksSpecified = false, aviation = false;

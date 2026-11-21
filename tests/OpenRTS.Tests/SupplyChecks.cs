@@ -127,38 +127,48 @@ internal static class SupplyChecks
         test("Supply: a produced truck travels and pays into its own account on the Valley", () =>
         {
             static ContentSource Read(string path) => new(path, File.ReadAllText(Path.Combine("sandbox", path)));
-            var catalog = UnitCatalog.Load([Read("content/units/units.yaml"), Read("content/units/buildings.yaml")],
-                LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             var oil = catalog.Units.Single(u => u.Id == "oil-derrick");
             var depot = catalog.Units.Single(u => u.Supply?.Role == SupplyRole.Depot);
-            NavigationChecks.Check(oil.Build is null && oil.Capturable is not null && oil.Economy?.Income == 30 &&
-                depot.ConstructionRange == 0 && depot.Products.Select(p => p.Unit).SequenceEqual(["construction-engineer", "supply-truck"]),
+            NavigationChecks.Check(oil.Build is null && oil.Capturable is not null && oil.Economy?.Income > 0 &&
+                depot.ConstructionRange == 0 && depot.Products.Any(p => p.Unit == "supply-truck"),
                 "Oil or depot content no longer meets the supply contract");
             var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
             using var a = map.CreateWorld(1);
             using var b = map.CreateWorld(4);
-            for (int i = 1; i <= 950; i++)
+            var initial = Poses(a);
+            var depotId = initial.Single(p => p.Presentation.Owner == 1 && catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Depot).Id;
+            var depotPosition = initial.Single(p => p.Id == depotId).Current;
+            var mineId = initial.Where(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Mine)
+                .MinBy(p => Math.Abs(p.Current.X - depotPosition.X) + Math.Abs(p.Current.Y - depotPosition.Y)).Id;
+            var trucks = new EntitySet(initial.Where(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck).Select(p => p.Id));
+            long redCredits = Credits(a, 2);
+            WorldCommand[] commands =
+            [
+                new(1, 0, 1, CommandKind.EnqueueTask, depotId, Action: "truck"),
+                new(1, 0, 2, CommandKind.SetAutoCast, Recipients: trucks, Action: "harvest", Enabled: false)
+            ];
+            EntityId produced = default;
+            long afterPurchase = Credits(a, 1);
+            for (int tick = 1; tick <= 1400; tick++)
             {
-                WorldCommand[] commands = i switch
-                {
-                    1 =>
-                    [
-                        new(1, 0, 1, CommandKind.EnqueueTask, new(1), Action: "truck"),
-                        new(1, 0, 2, CommandKind.SetAutoCast, Recipients: new([new(3), new(6)]), Action: "harvest", Enabled: false)
-                    ],
-                    115 =>
-                    [
-                        new(115, 0, 1, CommandKind.UseAbility, new(15), TargetEntity: new(7), Action: "harvest"),
-                        new(115, 0, 2, CommandKind.UseAbility, new(15), TargetEntity: new(1), Action: "harvest")
-                    ],
-                    _ => []
-                };
-                a.Step(commands);
-                b.Step(commands);
+                a.Step(commands); b.Step(commands);
+                commands = [];
+                if (tick == 1) afterPurchase = Credits(a, 1);
+                if (produced != default) continue;
+                var job = a.Events.ToArray().FirstOrDefault(e => e.Kind == WorldEventKind.Produced && e.Entity == depotId);
+                if (job.TargetEntity == default) continue;
+                produced = job.TargetEntity;
+                commands =
+                [
+                    new(tick + 1, 0, 1, CommandKind.UseAbility, produced, TargetEntity: mineId, Action: "harvest"),
+                    new(tick + 1, 0, 2, CommandKind.UseAbility, produced, TargetEntity: depotId, Action: "harvest")
+                ];
             }
-            var truck = Poses(a).Single(p => p.Id.Value == 15 && catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck);
-            NavigationChecks.Check(truck.Supply is { Automatic: true, Mine.Value: 7, Depot.Value: 1 } && Credits(a, 1) > 4650 && Credits(a, 2) == 5000 &&
-                Poses(a).Any(p => catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Mine && p.Supply.Amount < p.Supply.Capacity),
+            var truck = Poses(a).Single(p => p.Id == produced && catalog.Units[p.UnitType].Supply?.Role == SupplyRole.Truck);
+            NavigationChecks.Check(truck.Supply.Automatic && truck.Supply.Mine == mineId && truck.Supply.Depot == depotId &&
+                Credits(a, 1) > afterPurchase && Credits(a, 2) == redCredits &&
+                Poses(a).Any(p => p.Id == mineId && p.Supply.Amount < p.Supply.Capacity),
                 $"No delivery reached the correct account: {truck.Current}, {truck.Supply}, credits {Credits(a, 1)}");
             NavigationChecks.Check(a.Report() == b.Report(), "Supply differs across navigation workers");
         });

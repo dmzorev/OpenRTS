@@ -1,0 +1,11 @@
+rocketeer-missile:
+  Weapon:
+    Projectile: Missile
+    SpatialTrajectory: true
+    Range: 6144
+    Speed: 192
+    TravelLimit: 12288
+    Damage: 35
+    ReloadTicks: 48
+    WindupTicks: 4
+    AnimationTicks: 11

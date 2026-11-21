@@ -275,7 +275,8 @@ public sealed partial class SimulationWorld
                                 }
                                 Impact(weapon, entityOwnership.Owner, hit, impactPoint, entityIdentity.Id, entityIdentity.Type, mountIndex);
                             }
-                            else Launch(origin, target, mountIndex, weapon, muzzle, impactPoint, entityIdentity.Type, hover, departure, fan);
+                            else Launch(origin, target, mountIndex, weapon, muzzle, impactPoint, entityIdentity.Type, hover, departure, fan,
+                                _events[^1].Visibility?.Entities ?? 0);
                             if (manual && state.BurstRemaining == 0) { entityOrders.HasOrder = false; entityOrders.CombatTarget = default; entityOrders.OrderPhase = OrderPhase.Idle; }
                         }
                     }

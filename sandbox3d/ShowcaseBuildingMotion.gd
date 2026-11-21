@@ -23,6 +23,11 @@ extends Node3D
 @onready var air_defense_radar: Node3D = $WheeledAirDefense.find_child("RadarHead", true, false)
 @onready var mixed_gun: Node3D = $MixedTank.find_child("GunTurret", true, false)
 @onready var mixed_missiles: Node3D = $MixedTank.find_child("MissileRack", true, false)
+@onready var infantry_animation: AnimationPlayer = $Infantry.find_child("AnimationPlayer", true, false)
+@onready var sniper_animation: AnimationPlayer = $Sniper.find_child("AnimationPlayer", true, false)
+@onready var infantry_clips: OptionButton = $ShowcaseControls/InfantryClips
+@onready var rocketeer_animation: AnimationPlayer = $Rocketeer.find_child("AnimationPlayer", true, false)
+@onready var rocketeer_clips: OptionButton = $ShowcaseControls/RocketeerClips
 @onready var mixed_radar: Node3D = $MixedTank.find_child("RadarHead", true, false)
 
 var elapsed: float = 0.0
@@ -30,6 +35,25 @@ var elapsed: float = 0.0
 func _ready() -> void:
     bunker_mount.add_child(bunker_turret_scene.instantiate())
     truck_crane.rotation.y = PI
+    infantry_clips.item_selected.connect(play_infantry_clip)
+    rocketeer_clips.item_selected.connect(play_rocketeer_clip)
+    play_infantry_clip(0)
+    play_rocketeer_clip(0)
+
+func play_rocketeer_clip(index: int) -> void:
+    const CLIPS := ["RpgIdle", "RpgRun", "RpgFire"]
+    var clip: String = CLIPS[index]
+    rocketeer_animation.get_animation(clip).loop_mode = Animation.LOOP_NONE if index == 2 else Animation.LOOP_LINEAR
+    rocketeer_animation.stop()
+    rocketeer_animation.play(clip)
+
+func play_infantry_clip(index: int) -> void:
+    const CLIPS := ["MixIdle", "MixRunLowReady", "MixRunRaised", "MixWalk", "MixAim", "MixFire", "UALJog", "StockRun"]
+    var clip: String = CLIPS[index]
+    for player in [infantry_animation, sniper_animation]:
+        player.get_animation(clip).loop_mode = Animation.LOOP_NONE if clip == "MixFire" else Animation.LOOP_LINEAR
+        player.stop()
+        player.play(clip)
 
 func _process(delta: float) -> void:
     elapsed += delta

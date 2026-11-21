@@ -61,9 +61,24 @@ public sealed partial class CombatEffectsView
         var origin = Position(launch.Origin);
         if (style.MountedRocket is { } rocket)
             return MountedRocket(unit, mount, rocket, origin, body, weapon, 1, (float)style.Size);
+        if (LaunchAnimation(unit, mount) is { LaunchLocal: { } local } animation)
+        {
+            var part = _models[unit]!.Parts.First(p => animation.Parts.Contains(p.Id));
+            float angle = (animation.Facing ?? part.Facing) == ModelFacing.Body ? body : weapon;
+            if (part.Facings > 1)
+            {
+                float step = MathF.Tau / part.Facings;
+                angle = MathF.Floor(Mathf.PosMod(angle, MathF.Tau) / step + 0.5f) * step;
+            }
+            var offset = new Vector2((float)local.X, (float)local.Z).Rotated(angle);
+            return (direction, origin + new Vector3(offset.X, (float)local.Y, offset.Y));
+        }
         var socket = MountVisual(unit, mount, body, weapon, spatialOnly: false);
         return socket is { } anchor ? (direction, origin + anchor.Point) : null;
     }
+
+    private ModelAnimation? LaunchAnimation(int unit, int mount) =>
+        _models[unit]?.Animations.GetValueOrDefault(_units.Units[unit].Weapons[mount].Animation);
 
     private (Vector3 Point, float Angle)? MountVisual(int unit, int mount, float body, float weapon, bool spatialOnly)
     {
@@ -74,7 +89,8 @@ public sealed partial class CombatEffectsView
         for (int i = 0; i < model.Parts.Count; i++)
         {
             var part = model.Parts[i];
-            float angle = part.Facing == ModelFacing.Body ? body : weapon;
+            var facing = part.Mount == mountId && !spatialOnly ? LaunchAnimation(unit, mount)?.Facing ?? part.Facing : part.Facing;
+            float angle = facing == ModelFacing.Body ? body : weapon;
             if (part.Facings > 1)
             {
                 float step = MathF.Tau / part.Facings;

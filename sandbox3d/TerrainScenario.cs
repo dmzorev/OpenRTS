@@ -18,10 +18,11 @@ internal sealed class TerrainScenario(UnitCatalog catalog)
     private static readonly (string Type, float X, float Y)[] Starts =
     [
         ("scout", 5, 7.5f), ("scout", 5, 10), ("scout", 3, 8.5f),
-        ("tank", 7.5f, 6), ("apc", 7.5f, 9), ("engineer", 6, 12)
+        ("tank", 7.5f, 6), ("apc", 7.5f, 9), ("engineer", 6, 12), ("sniper", 3.5f, 11.5f),
+        ("rocketeer", 2.75f, 5.25f)
     ];
 
-    public static int UnitCount => Starts.Length;
+    public static int UnitCount => Starts.Length + 1;
     public NavigationGrid Grid { get; } = CreateGrid();
 
     private static NavigationGrid CreateGrid()
@@ -45,12 +46,14 @@ internal sealed class TerrainScenario(UnitCatalog catalog)
     public SimulationWorld CreateWorld()
     {
         var world = new SimulationWorld(catalog.Units, Width * CellSize, Depth * CellSize,
-            initialCapacity: Starts.Length, navigationGrid: Grid, players: [new PlayerDefinition(1, "Sandbox")]);
+            initialCapacity: UnitCount, navigationGrid: Grid,
+            players: [new PlayerDefinition(1, "Sandbox"), new PlayerDefinition(2, "Target")]);
         try
         {
             var types = catalog.Units.Select((unit, index) => (unit.Id, Index: index)).ToDictionary(x => x.Id, x => x.Index);
             foreach (var (type, x, y) in Starts)
                 world.AddInitialUnit(types[type], new WorldPosition((int)(x * CellSize), (int)(y * CellSize)), owner: 1);
+            world.AddInitialUnit(types["tank"], new WorldPosition(11 * CellSize, 4 * CellSize), owner: 2);
             return world;
         }
         catch { world.Dispose(); throw; }

@@ -16,18 +16,154 @@ public partial class MapAuthoringChecks : Node
     {
         try
         {
+            CheckIsometricGrenade();
+            if (OS.GetCmdlineUserArgs().Contains("--verify-grenade-release"))
+            {
+                GetTree().Quit();
+                return;
+            }
             Run();
             MapTerrainChecks.Run(Check);
             CheckVisualLayers2D();
             CheckDiagonalRelief();
             CheckDiagonalCliffMap();
             CheckAircraftOnReliefMaps();
+            CheckDirectFire();
             CheckIndirectFireMap();
             CheckIndirectFireMap(isometric: true);
             GD.Print($"OPENRTS_AUTHORING_CHECKS:{_checks} passed"); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
         finally { foreach (Node child in GetChildren()) child.Free(); }
+    }
+
+    private void CheckIsometricGrenade()
+    {
+        var manifest = GameManifest.Load(ProjectSettings.GlobalizePath("res://isometric-game.yaml"));
+        var catalog = manifest.LoadUnits();
+        var models = manifest.LoadModels();
+        int unit = catalog.Units.ToList().FindIndex(u => u.Id == "rifleman");
+        var type = catalog.Units[unit];
+        var position = new WorldPosition(4096, 4096);
+        var target = position with { X = position.X + 2048 };
+        var sprites = new SpriteWorldView(catalog, models);
+        var effectCatalog = EffectCatalog.Load(manifest.Effects);
+        var effects = new CombatEffectsView(catalog, effectCatalog, models);
+        AddChild(sprites.Node); AddChild(effects.Node);
+        var source = GD.Load<SpriteFrames>("res://resources/units/isometric/swat-rifleman.tres");
+        var projectiles = new ProjectilePose[1];
+        bool graphics = DisplayServer.GetName() != "headless";
+
+        Vector4 AtlasRegion(SimulationWorld world, string atlas, float alpha)
+        {
+            var poses = new EntityPose[world.Count];
+            var mounts = new WeaponPose[world.WeaponCount];
+            world.CopyPoses(poses); world.CopyWeaponPoses(mounts);
+            sprites.Apply(poses.AsSpan(0, 1), alpha, world.Tick, world.TickRate, mounts);
+            var batch = sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Single(n => n.Multimesh.VisibleInstanceCount == 1);
+            var material = (ShaderMaterial)batch.Multimesh.Mesh.SurfaceGetMaterial(0);
+            Check(material.GetShaderParameter("sprite_texture").As<Texture2D>().ResourcePath.EndsWith("/swat-" + atlas + ".png"),
+                $"Rifleman at tick {world.Tick} used the wrong atlas, expected {atlas}.");
+            return material.GetShaderParameter("uv_rect").AsVector4();
+        }
+
+        Vector4 FrameRegion(string clip, int frame)
+        {
+            var texture = (AtlasTexture)source.GetFrameTexture(clip, frame);
+            var rect = texture.Region;
+            var size = texture.Atlas.GetSize();
+            return new(rect.Position.X / size.X, rect.Position.Y / size.Y, rect.Size.X / size.X, rect.Size.Y / size.Y);
+        }
+
+        using var world = new SimulationWorld(catalog.Units, 12288, 12288);
+        var id = world.AddInitialUnit(unit, position, 1);
+        world.Step([new(1, 0, 1, CommandKind.UseAbility, id, target, Action: "grenade")]);
+        Check(world.ProjectileCount == 0 && AtlasRegion(world, "throw-windup", 0).IsEqualApprox(FrameRegion("throw-windup-2", 0)),
+            "The eastward throw did not begin on its first held-grenade frame.");
+        var mounts = new WeaponPose[type.Weapons.Count];
+        world.CopyWeaponPoses(mounts);
+        var grenade = mounts.Single(p => type.Weapons[p.Mount].Id == "grenade");
+        long release = grenade.WindupEndTick;
+        Check(release == 19, "The isometric throw must wind up for 18 ticks.");
+        while (world.Tick < release - 1)
+        {
+            world.Step();
+            Check(world.ProjectileCount == 0, "Grenade appeared before the release tick.");
+        }
+        Check(AtlasRegion(world, "throw-windup", 1).IsEqualApprox(
+            FrameRegion("throw-windup-2", source.GetFrameCount("throw-windup-2") - 1)),
+            "The last pre-release snapshot must still display the grenade in hand.");
+        world.Step();
+        Check(world.Tick == release && world.ProjectileCount == 1 && world.Events.ToArray().Count(e => e.Kind == WorldEventKind.WeaponFired) == 1 &&
+            AtlasRegion(world, "throw-release", 0).IsEqualApprox(FrameRegion("throw-release-2", 0)),
+            "The projectile and first empty-hand frame must appear on the same tick.");
+        world.CopyProjectilePoses(projectiles);
+        effects.Apply(projectiles, 0, world.Tick);
+        var shot = effects.Node.GetNode<MultiMeshInstance3D>("Projectiles").Multimesh;
+        var local = models.Models["infantry-rifleman"].Animations["throw"].LaunchLocal!.Value;
+        var expected = new Vector3(4 - (float)local.Z, (float)local.Y + SpriteWorldView.OverlayHeight, 4 + (float)local.X);
+        var projectile = projectiles[0];
+        var launch = effects.LaunchVisual(unit, projectile.Mount, projectile.Departure, effectCatalog.Weapons["iso-grenade"], Vector3.Right);
+        Check(shot.VisibleInstanceCount == 1 && launch is { } departure && departure.Center.IsEqualApprox(expected),
+            $"The projectile did not start at the east-facing release hand. Expected {expected}, got {launch?.Center}, visible count {shot.VisibleInstanceCount}.");
+        if (graphics) Check(shot.GetInstanceTransform(0).Origin.IsEqualApprox(expected), "The rendered grenade did not start in the hand.");
+
+        world.Step([new(release + 1, 0, 2, CommandKind.Move, id, position with { Y = position.Y + 96 })]);
+        AtlasRegion(world, "travel", 0);
+        var flight = new List<Vector3> { expected };
+        while (world.ProjectileCount > 0)
+        {
+            world.CopyProjectilePoses(projectiles);
+            effects.Apply(projectiles, 1, world.Tick);
+            if (graphics) flight.Add(shot.GetInstanceTransform(0).Origin);
+            world.Step();
+        }
+        Check(world.Events.ToArray().Any(e => e.Kind == WorldEventKind.ProjectileImpact && e.Position == target),
+            "The released grenade lost its original target after a move order.");
+        AtlasRegion(world, "stand", 0);
+        if (graphics)
+        {
+            float peak = flight.Max(p => p.Y);
+            Check(peak > expected.Y + 0.3f && flight[^1].Y < peak - 0.5f, "The grenade did not rise and then descend.");
+            Check(flight.Zip(flight.Skip(1)).All(pair => pair.First.X < pair.Second.X &&
+                MathF.Abs(pair.First.Y - pair.Second.Y) < 0.55f), "The grenade turned back or snapped vertically.");
+        }
+
+        using var cancelled = new SimulationWorld(catalog.Units, 12288, 12288);
+        id = cancelled.AddInitialUnit(unit, position, 1);
+        cancelled.Step([new(1, 0, 1, CommandKind.UseAbility, id, target, Action: "grenade")]);
+        cancelled.Step([new(2, 0, 2, CommandKind.Stop, id)]);
+        AtlasRegion(cancelled, "stand", 0);
+        while (cancelled.Tick <= release) cancelled.Step();
+        Check(cancelled.ProjectileCount == 0, "Cancelling windup left a ghost throw.");
+
+        using var shooting = new SimulationWorld(catalog.Units, 12288, 12288);
+        var shooter = shooting.AddInitialUnit(unit, position, 1);
+        var enemy = shooting.AddInitialUnit(unit, target, 2);
+        shooting.Step([new(1, 0, 1, CommandKind.AttackTarget, shooter, TargetEntity: enemy)]);
+        WorldEvent fired = default;
+        for (int tick = 1; tick <= 12; tick++)
+        {
+            fired = shooting.Events.ToArray().FirstOrDefault(e => e.Kind == WorldEventKind.WeaponFired && e.Entity == shooter);
+            if (fired.Departure.Tick > 0) break;
+            shooting.Step();
+        }
+        Check(fired.Departure.Tick > 0 && AtlasRegion(shooting, "shoot", 0).IsEqualApprox(FrameRegion("shoot-2", 0)),
+            "The first firing frame did not face the target.");
+        var muzzle = models.Models["infantry-rifleman"].Parts.Single(p => p.Id == "body").MuzzleLocal!.Value;
+        var muzzleEast = new Vector3(4 - (float)muzzle.Z, (float)muzzle.Y + SpriteWorldView.OverlayHeight, 4 + (float)muzzle.X);
+        var rifleLaunch = effects.LaunchVisual(unit, fired.Mount, fired.Departure, effectCatalog.Weapons["rifleman"], Vector3.Right);
+        Check(rifleLaunch is { } barrel && barrel.Center.IsEqualApprox(muzzleEast),
+            "The rifle launch point did not follow the firing direction independently of the body.");
+        if (graphics)
+        {
+            effects.Accept(fired); effects.Apply([], 0, shooting.Tick);
+            var tracers = effects.Node.GetNode<MultiMeshInstance3D>("Tracers").Multimesh;
+            var trace = tracers.GetInstanceTransform(0);
+            Check(tracers.VisibleInstanceCount == 1 && (trace.Origin + trace.Basis.Z / 2).IsEqualApprox(muzzleEast),
+                "The rendered tracer did not start at the muzzle.");
+        }
+        GD.Print("OPENRTS_GRENADE_RELEASE:PASS windup, release, arc, cancellation, movement and rifle muzzle");
     }
 
     private void CheckVisualLayers2D()
@@ -86,6 +222,79 @@ public partial class MapAuthoringChecks : Node
             after.DataFingerprint != before.DataFingerprint, "Visual styling of the upper triangle changed gameplay.");
     }
 
+    private void CheckDirectFire()
+    {
+        var manifest = GameManifest.Load(ProjectSettings.GlobalizePath("res://isometric-game.yaml"));
+        var catalog = manifest.LoadUnits();
+        var models = manifest.LoadModels();
+        var effects = EffectCatalog.Load(manifest.Effects);
+        var view = new CombatEffectsView(catalog, effects, models);
+        AddChild(view.Node);
+        var units = catalog.Units.ToList();
+        int targetType = units.FindIndex(unit => unit.Id == "rifleman");
+        var rounds = new ProjectilePose[1];
+        foreach (var name in new[] { "tank", "rocketeer" })
+        {
+            int type = units.FindIndex(unit => unit.Id == name);
+            var weapon = units[type].Weapons[0].Weapon;
+            var style = effects.Weapons[weapon.Id];
+            var batch = view.Node.GetChildren().OfType<MultiMeshInstance3D>().Single(node =>
+                (node.Multimesh.Mesh.SurfaceGetMaterial(0) as StandardMaterial3D)?.AlbedoTexture?.ResourcePath == style.ProjectileTexture)
+                .Multimesh;
+            view.Clear();
+            using var world = SimulationWorld.CreateWithMechanics(new() { FogCellSize = 1024 },
+                catalog.Units, 12288, 12288, players: [new(1, "Blue"), new(2, "Red"), new(3, "Green")]);
+            var source = world.AddInitialUnit(type, new(4096, 4096), 1);
+            var target = world.AddInitialUnit(targetType, new(8192, 4096), 2);
+            world.Step([new(1, 0, 1, CommandKind.AttackTarget, source, TargetEntity: target)]);
+            while (world.ProjectileCount == 0 && world.Tick <= 15) world.Step();
+            Check(world.ProjectileCount == 1, name + ": direct fire fixture must launch one shot.");
+            var fired = world.Events.ToArray().Single(e => e.Kind == WorldEventKind.WeaponFired && e.Entity == source);
+            world.CopyProjectilePoses(rounds);
+            var shot = rounds[0];
+            var muzzle = view.LaunchVisual(type, shot.Mount, shot.Departure, style, Vector3.Right);
+            view.Apply(rounds, 1, world.Tick);
+            var previous = Center();
+            Check(shot.Current == fired.SourcePosition && muzzle.HasValue && previous.IsEqualApprox(muzzle.Value.Center),
+                name + ": the first shot must use the simulated and rendered launch anchors.");
+
+            for (int i = 0; i < 5; i++)
+            {
+                world.Step();
+                world.CopyProjectilePoses(rounds);
+                view.Apply(rounds, 0, world.Tick);
+                Check(Center().IsEqualApprox(previous), name + ": the projectile jumped between published frames.");
+                view.Apply(rounds, 1, world.Tick);
+                var current = Center();
+                Check(current.X > previous.X, name + ": projectile moved away from its target in the initial flight.");
+                previous = current;
+            }
+            world.Step([new(world.Tick + 1, 0, 2, CommandKind.Remove, source),
+                new(world.Tick + 1, 0, 3, CommandKind.Spawn, Position: new(8192, 6144), UnitType: targetType, Owner: 3)]);
+            var exchange = new FrameExchange();
+            Check(exchange.TryPublish(world), "Could not publish the flight after its shooter was removed.");
+            using var observed = exchange.AcquireLatest(viewer: 2)!;
+            Check(!observed.Poses.ToArray().Any(p => p.Id == source) && observed.Projectiles.Length == 1 &&
+                observed.Projectiles[0].LaunchProjection is { } anchor && anchor.Origin == fired.SourcePosition,
+                name + ": the observer lost the previously seen launch anchor when the shooter disappeared.");
+            using var lateObserver = exchange.AcquireLatest(viewer: 3)!;
+            Check(lateObserver.Projectiles.Length == 1 && lateObserver.Projectiles[0].Departure == default &&
+                lateObserver.Projectiles[0].LaunchProjection is { Origin: null },
+                name + ": a viewer who missed the launch must receive altitude data without its origin.");
+            view.Apply(observed.Projectiles, 1, world.Tick);
+            float height = Center().Y;
+            view.Apply(lateObserver.Projectiles, 1, world.Tick);
+            Check(Mathf.IsEqualApprox(Center().Y, height),
+                name + ": the projectile altitude changed between visible and hidden launch views.");
+
+            Vector3 Center()
+            {
+                var data = batch.Buffer;
+                return new(data[3], data[7], data[11]);
+            }
+        }
+    }
+
     private void CheckIndirectFireMap(bool isometric = false)
     {
         var root = GD.Load<PackedScene>("res://examples/maps/IndirectFire.tscn").Instantiate<OpenRtsMap2D>();
@@ -119,6 +328,8 @@ public partial class MapAuthoringChecks : Node
         var departures = new HashSet<string>();
         var raised = new Dictionary<string, (Vector3 Position, Vector3 Direction)>();
         var pitched = new HashSet<string>();
+        var flightSamples = new Dictionary<long, (int Tick, Vector3 Position, float Weight)>();
+        var earlyScudSteps = new HashSet<long>();
         int texturedBatches = 0;
         bool descending = false;
         bool checkedMuzzle = false;
@@ -155,6 +366,16 @@ public partial class MapAuthoringChecks : Node
                 var effect = effects.Weapons[weapon.Id];
                 var batch = batches[weapon.Id];
                 if (shot.Current.Elevation > 1536) kinds.Add(weapon.Trajectory);
+                long age = world.Tick - shot.Departure.Tick;
+                var anchor = shot.LaunchProjection!.Value;
+                if (age == 0)
+                {
+                    var fired = world.Events.ToArray().Single(e => e.Kind == WorldEventKind.WeaponFired &&
+                        e.Entity == shot.Departure.Source && e.Mount == shot.Mount);
+                    Check(shot.Previous == fired.SourcePosition && shot.Current == fired.SourcePosition &&
+                        anchor.Origin == fired.SourcePosition && anchor.CurrentWeight == 1,
+                        weapon.Id + ": projectile and firing event must share the simulated muzzle.");
+                }
                 if (!checkedMuzzle && shot.Departure.Tick == world.Tick && weapon.Id == "howitzer")
                 {
                     var shotPosition = Instance(batch).Position;
@@ -195,23 +416,35 @@ public partial class MapAuthoringChecks : Node
                             Mathf.IsEqualApprox(smokeBuffer[n], (float)effect.SmokeSize);
                     }
                     Check(exhaust, weapon.Id + ": smoke should originate at the rocket tail, with its own scale.");
-                    if (departures.Count == 0)
-                    {
-                        using var restored = SimulationWorld.RestoreSnapshot(world.CaptureSnapshot(), () => map.Prepare(players).CreateWorld());
-                        var restoredShots = new ProjectilePose[restored.ProjectileCount];
-                        restored.CopyProjectilePoses(restoredShots);
-                        Check(active.SequenceEqual(restoredShots), "A runtime snapshot should keep the exact launch anchor.");
-                    }
                     departures.Add(weapon.Id);
                 }
-                if (batch.VisibleInstanceCount == 1 && shot.Previous != shot.Current && world.Tick - shot.Departure.Tick >= 5)
+                if (batch.VisibleInstanceCount == 1)
                 {
-                    var delta = new Vector3(shot.Current.X - shot.Previous.X, shot.Current.Elevation - shot.Previous.Elevation,
-                        shot.Current.Y - shot.Previous.Y).Normalized();
-                    var actual = Instance(batch).Direction;
-                    Check(actual.Dot(delta) > 0.9999f, weapon.Id + ": projectile sprite did not follow the flight tangent.");
-                    if (actual.Y > 0.1f) pitched.Add(weapon.Id);
-                    descending |= actual.Y < -0.1f;
+                    var actual = Instance(batch);
+                    if (flightSamples.TryGetValue(shot.Id, out var before) && before.Tick == tick - 1)
+                    {
+                        var delta = before.Position.DirectionTo(actual.Position);
+                        Check(anchor.PreviousWeight == before.Weight && actual.Direction.Dot(delta) > 0.9999f,
+                            weapon.Id + ": flight must remain continuous and the projectile must face the rendered tangent.");
+                        if (weapon.Id == "ballistic-missile" && age is >= 1 and <= 6)
+                        {
+                            Check(delta.Y > 0, $"SCUD dived on flight tick {age}.");
+                            if (earlyScudSteps.Add(age) && age == 3)
+                            {
+                                using var restored = SimulationWorld.RestoreSnapshot(world.CaptureSnapshot(), () => map.Prepare(players).CreateWorld());
+                                var restoredShots = new ProjectilePose[restored.ProjectileCount];
+                                restored.CopyProjectilePoses(restoredShots);
+                                Check(active.SequenceEqual(restoredShots), "A runtime snapshot must keep the launch anchor and its weight mid-flight.");
+                                view.Apply([shot with { Departure = default, LaunchProjection = anchor with { Origin = null } }], 1, world.Tick);
+                                Check(Mathf.IsEqualApprox(Instance(batch).Position.Y, actual.Position.Y),
+                                    "A SCUD revealed from fog must keep the same altitude as a visible launch.");
+                                view.Apply(active, 1, world.Tick, reliefProjection: true, actors: actors, weapons: mounts);
+                            }
+                        }
+                        if (actual.Direction.Y > 0.1f) pitched.Add(weapon.Id);
+                        descending |= actual.Direction.Y < -0.1f;
+                    }
+                    flightSamples[shot.Id] = (tick, actual.Position, anchor.CurrentWeight);
                 }
             }
             foreach (var e in world.Events)
@@ -232,6 +465,7 @@ public partial class MapAuthoringChecks : Node
             "Both launchers must render the loaded, launch and empty states.");
         Check(pitched.Contains("howitzer") && pitched.Contains("ballistic-missile") && descending,
             "Elevated flight must exercise both climbing and descending sprite pitch.");
+        Check(earlyScudSteps.Count == 6, "The SCUD check must cover every tick of its initial climb.");
         Check(kinds.SetEquals([ProjectileTrajectory.Arc, ProjectileTrajectory.Ballistic, ProjectileTrajectory.Cruise]) &&
             hits.SetEquals(["howitzer", "salvo-rocket", "ballistic-missile", "cruise-missile"]) && texturedBatches == 4,
             $"Indirect Fire did not render and hit across the cliff with all four units. Flew {string.Join(", ", kinds)}, hit {string.Join(", ", hits)}, textured {texturedBatches}.");

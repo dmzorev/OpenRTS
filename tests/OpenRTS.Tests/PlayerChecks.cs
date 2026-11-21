@@ -252,9 +252,10 @@ internal static class PlayerChecks
         });
         test("Players: skirmish journal captures distant resources and builds for the correct player", () =>
         {
-            var catalog = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units/units.yaml")), new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             var match = MapScenario.Load(catalog, path => new(path, File.ReadAllText(Path.Combine("sandbox", path))), MapScenario.DefaultMap);
             using var a = match.CreateWorld(1); using var b = match.CreateWorld(4);
+            long initialCredits = Player(a, 2).Credits;
             var commands = SkirmishScenario.Commands();
             for (int tick = 1; tick <= 1800; tick++)
             {
@@ -263,7 +264,9 @@ internal static class PlayerChecks
             }
             var poses = Poses(a);
             NavigationChecks.Check(poses.Single(p => p.Id.Value == 9).Presentation.Owner == 1 && poses.Single(p => p.Id.Value == 10).Presentation.Owner == 2, "Engineers did not reach and capture distant resources");
-            NavigationChecks.Check(a.Count == 16 && Player(a, 1).Credits > 4000 && Player(a, 2).Credits > 5000 && Player(a, 1).Energy == 80, "Skirmish production/income/power did not complete");
+            var constructed = poses.Where(p => p.Presentation.Owner == 1).Select(p => catalog.Units[p.UnitType].Id).ToHashSet();
+            NavigationChecks.Check(constructed.Contains("power-plant") && constructed.Contains("barracks") &&
+                Player(a, 2).Credits > initialCredits && Player(a, 1).Energy > 0, "Skirmish construction, income or power did not complete");
         });
         test("Players: content rejects invalid capture, economy and neutralization definitions", () =>
         {

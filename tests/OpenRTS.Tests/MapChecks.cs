@@ -9,8 +9,8 @@ internal static class MapChecks
     {
         static ContentSource Read(string path) => new(path, File.ReadAllText(Path.Combine("sandbox", path)));
         const string fixturePath = "content/maps/fixture.yaml";
-        var catalog = UnitCatalog.Load([Read("content/units/units.yaml"), Read("content/units/buildings.yaml")],
-            LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+        var manifest = GameManifest.Load("sandbox/game.yaml");
+        var catalog = manifest.LoadUnits();
         var players = new Dictionary<string, PlayerDefinition> { ["red"] = new(23, "Red"), ["blue"] = new(17, "Blue", 450) };
 
         test("Maps: fixed ownership and exact positions share terrain with navigation", () =>
@@ -73,10 +73,11 @@ internal static class MapChecks
         {
             int grove = catalog.Units.ToList().FindIndex(u => u.Id == "nature-trees");
             NavigationChecks.Check(!catalog.Presentations[grove].Selectable && catalog.Units[grove].Destruction == DestructionPolicy.Invulnerable, "Grove should be non-selectable and invulnerable");
-            var original = Read("content/units/buildings.yaml");
-            var selectable = UnitCatalog.Load([Read("content/units/units.yaml"), original with { Text = original.Text.Replace("States: [destroyed], Selectable: false", "States: [destroyed], Selectable: true") }],
-                LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
-            NavigationChecks.Check(selectable.Summary == catalog.Summary, "Selection changed gameplay fingerprint");
+            const string groveRule = "grove: {Health: {HP: 1}, Presentation: {Model: grove, Selectable: false}}";
+            var hidden = UnitCatalog.Load([new("grove.yaml", groveRule)]);
+            var selectable = UnitCatalog.Load([new("grove.yaml", groveRule.Replace("false", "true", StringComparison.Ordinal))]);
+            NavigationChecks.Check(!hidden.Presentations[0].Selectable && selectable.Presentations[0].Selectable &&
+                selectable.Summary == hidden.Summary, "Selection changed gameplay fingerprint");
             using var world = new SimulationWorld(catalog.Units, 20 * 1024, 12 * 1024);
             int rifle = catalog.Units.ToList().FindIndex(u => u.Id == "rifleman");
             var attacker = world.AddInitialUnit(rifle, new(4096, 4096), 1);

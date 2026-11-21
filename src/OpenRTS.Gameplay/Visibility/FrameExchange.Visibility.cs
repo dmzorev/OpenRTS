@@ -111,10 +111,24 @@ public sealed partial class FrameExchange
         bool At(WorldPosition p) => player >= 0 && (source.FogCellSize == 0 || p.X >= 0 && p.X < source.FogWidth && p.Y >= 0 && p.Y < source.FogDepth &&
             result.FogStates[p.Y / source.FogCellSize * source.FogColumns + p.X / source.FogCellSize] == CellVisibility.Visible);
         result.Poses = poses.ToArray(); result.Count = poses.Count; result.Weapons = weapons.ToArray(); result.WeaponCount = weapons.Count;
-        result.Projectiles = source.Projectiles.Take(source.ProjectileCount).Where(p => At(p.Current)).Select(p => p with
+        result.Projectiles = source.Projectiles.Take(source.ProjectileCount).Where(p => At(p.Current)).Select(p =>
         {
-            Previous = At(p.Previous) ? p.Previous : p.Current, Projection = default, Facing = Direction(p.Facing),
-            Departure = visible.Contains(p.Departure.Source) && At(p.Departure.Origin) ? p.Departure : default
+            bool previousVisible = At(p.Previous);
+            var launch = p.LaunchProjection;
+            bool departureVisible = launch.HasValue
+                ? (p.LaunchObservers & bit) != 0
+                : visible.Contains(p.Departure.Source) && At(p.Departure.Origin);
+            if (launch is { } projection)
+                launch = projection with
+                {
+                    Origin = departureVisible ? projection.Origin : null,
+                    PreviousWeight = previousVisible ? projection.PreviousWeight : projection.CurrentWeight
+                };
+            return p with
+            {
+                Previous = previousVisible ? p.Previous : p.Current, Projection = default, Facing = Direction(p.Facing),
+                Departure = departureVisible ? p.Departure : default, LaunchProjection = launch, LaunchObservers = 0
+            };
         }).ToArray();
         result.ProjectileCount = result.Projectiles.Length;
         result.Tasks = source.Tasks.Take(source.TaskCount).Where(t => own.Contains(t.Producer)).ToArray(); result.TaskCount = result.Tasks.Length;

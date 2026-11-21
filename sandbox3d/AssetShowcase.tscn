@@ -1,4 +1,4 @@
-[gd_scene load_steps=36 format=3]
+[gd_scene load_steps=42 format=3]
 
 [ext_resource type="PackedScene" path="res://assets/production-buildings/factory.glb" id="1"]
 [ext_resource type="PackedScene" path="res://assets/infrastructure/power-plant.glb" id="2"]
@@ -41,6 +41,12 @@
 
 [ext_resource type="PackedScene" path="res://assets/infrastructure/oil-derrick.glb" id="31"]
 [ext_resource type="PackedScene" path="res://assets/vehicles/RadarBuggy.tscn" id="32"]
+[ext_resource type="PackedScene" path="res://assets/vehicles/fighter.glb" id="33"]
+[ext_resource type="PackedScene" path="res://assets/vehicles/tiltrotor.glb" id="34"]
+[ext_resource type="PackedScene" path="res://assets/vehicles/missile-tiltrotor.glb" id="35"]
+[ext_resource type="PackedScene" path="res://assets/vehicles/heavy-air-transport.glb" id="37"]
+[ext_resource type="PackedScene" path="res://assets/quaternius/Sniper.tscn" id="38"]
+[ext_resource type="PackedScene" path="res://assets/quaternius/Rocketeer.tscn" id="39"]
 
 [sub_resource type="StandardMaterial3D" id="GroundMaterial"]
 albedo_color = Color(0.19, 0.23, 0.25, 1)
@@ -121,6 +127,45 @@ position = Vector3(10.5, 0, 3.6)
 rotation_degrees = Vector3(0, -35, 0)
 scale = Vector3(1.65, 1.65, 1.65)
 
+[node name="Sniper" parent="." instance=ExtResource("38")]
+position = Vector3(14, 0, 3.6)
+rotation_degrees = Vector3(0, -35, 0)
+scale = Vector3(1.65, 1.65, 1.65)
+
+[node name="Rocketeer" parent="." instance=ExtResource("39")]
+position = Vector3(18, 0, 3.6)
+rotation_degrees = Vector3(0, -35, 0)
+scale = Vector3(1.65, 1.65, 1.65)
+
+[node name="ShowcaseControls" type="CanvasLayer" parent="."]
+
+[node name="InfantryClips" type="OptionButton" parent="ShowcaseControls"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 267.0
+offset_bottom = 48.0
+item_count = 8
+selected = 0
+popup/item_0/text = "Пехота: стойка"
+popup/item_1/text = "Пехота: бег с винтовкой у корпуса"
+popup/item_2/text = "Пехота: бег с поднятой винтовкой"
+popup/item_3/text = "Пехота: ходьба"
+popup/item_4/text = "Пехота: прицеливание"
+popup/item_5/text = "Пехота: выстрел"
+popup/item_6/text = "Пехота: бег трусцой без оружия"
+popup/item_7/text = "Пехота: бег без оружия"
+
+[node name="RocketeerClips" type="OptionButton" parent="ShowcaseControls"]
+offset_left = 283.0
+offset_top = 16.0
+offset_right = 511.0
+offset_bottom = 48.0
+item_count = 3
+selected = 0
+popup/item_0/text = "Гранатомётчик: стойка"
+popup/item_1/text = "Гранатомётчик: бег"
+popup/item_2/text = "Гранатомётчик: выстрел"
+
 [node name="FactoryLabel" type="Label3D" parent="."]
 position = Vector3(-13.5, 0.3, -0.45)
 billboard = 1
@@ -175,6 +220,18 @@ billboard = 1
 pixel_size = 0.014
 text = "Пехота"
 
+[node name="SniperLabel" type="Label3D" parent="."]
+position = Vector3(14, 0.3, 7.25)
+billboard = 1
+pixel_size = 0.014
+text = "Снайпер"
+
+[node name="RocketeerLabel" type="Label3D" parent="."]
+position = Vector3(18, 0.3, 7.25)
+billboard = 1
+pixel_size = 0.014
+text = "Гранатомётчик"
+
 [node name="Radar" parent="." instance=ExtResource("10")]
 position = Vector3(-8, 0, -12)
 rotation_degrees = Vector3(0, -24, 0)
@@ -199,6 +256,20 @@ text = "Кран"
 position = Vector3(8, 0, -12)
 rotation_degrees = Vector3(0, -24, 0)
 
+[node name="AssaultTiltrotor" parent="Helipad" instance=ExtResource("34")]
+position = Vector3(-0.13, 0.331, 0.09)
+rotation_degrees = Vector3(0, 166, 0)
+
+[node name="MissileTiltrotor" parent="." instance=ExtResource("35")]
+position = Vector3(8.9, 0, -18.2)
+rotation_degrees = Vector3(0, 151, 0)
+
+[node name="MissileTiltrotorLabel" type="Label3D" parent="."]
+position = Vector3(8.9, 0.3, -16.0)
+billboard = 1
+pixel_size = 0.014
+text = "Ракетный конвертоплан"
+
 [node name="HelipadLabel" type="Label3D" parent="."]
 position = Vector3(8, 0.3, -9.6)
 billboard = 1
@@ -208,6 +279,10 @@ text = "Вертолётная площадка"
 [node name="Airfield" parent="." instance=ExtResource("14")]
 position = Vector3(17, 0, -13)
 rotation_degrees = Vector3(0, -16, 0)
+
+[node name="Fighter" parent="Airfield" instance=ExtResource("33")]
+position = Vector3(-1.625, 0.159, 1.2)
+rotation_degrees = Vector3(0, 180, 0)
 
 [node name="AirfieldLabel" type="Label3D" parent="."]
 position = Vector3(17.5, 0.3, -6.45)
@@ -399,3 +474,13 @@ position = Vector3(-22.2, 0.3, -15.8)
 billboard = 1
 pixel_size = 0.014
 text = "Нефтяная вышка"
+
+[node name="HeavyAirTransport" parent="." instance=ExtResource("37")]
+position = Vector3(21, 0, 14.3)
+rotation_degrees = Vector3(0, -26, 0)
+
+[node name="HeavyAirTransportLabel" type="Label3D" parent="."]
+position = Vector3(21, 0.3, 18.0)
+billboard = 1
+pixel_size = 0.014
+text = "Тяжёлый транспорт"

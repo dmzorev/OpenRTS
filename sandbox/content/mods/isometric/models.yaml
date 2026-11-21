@@ -1,6 +1,196 @@
-# The isometric definitions inherit the existing resources until alternate art is available.
 iso-infantry-rifle:
-  Inherits: infantry-rifle
+  Inherits: infantry-rifleman
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/swat-rifleman.tres
+        Size: [2.052, 3.55417]
+        Pivot: [0.5, 0.74065]
+        Facings: 8
+        SpriteRotation: -45
+        Facing: Body
+        -Muzzle:
+        MuzzleLocal: [0.04719, 1.06304, -0.46010]
+    Animations:
+      fire:
+        {
+          Sequence: shoot,
+          Parts: [body],
+          Facing: Weapon,
+          Recoil: 0,
+          Flash: 0.06,
+        }
+      throw:
+        Sequence: throw-release
+        WindupSequence: throw-windup
+        Parts: [body]
+        Facing: Weapon
+        LaunchLocal: [0.11329, 1.06555, -0.47961]
+
+iso-infantry-sniper:
+  Inherits: infantry-sniper
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/sniper.tres
+        Size: [2.052, 3.55417]
+        Pivot: [0.5, 0.74065]
+        Facings: 8
+        SpriteRotation: -45
+        Facing: Body
+        -Muzzle:
+        MuzzleLocal: [0.01858, 1.10146, -0.70348]
+    Animations:
+      fire:
+        {
+          Sequence: shoot,
+          WindupSequence: aim,
+          Parts: [body],
+          Facing: Weapon,
+          Recoil: 0,
+          Flash: 0.06,
+        }
+
+iso-infantry-rocketeer:
+  Inherits: infantry-rocket
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/rocketeer.tres
+        Size: [2.052, 3.55417]
+        Pivot: [0.5, 0.74065]
+        Facings: 8
+        SpriteRotation: -45
+        Facing: Body
+        -Muzzle:
+        MuzzleLocal: [0.20615, 1.00997, -0.22648]
+    Animations:
+      fire:
+        {
+          Sequence: shoot,
+          WindupSequence: prepare,
+          Parts: [body],
+          Facing: Weapon,
+          Recoil: 0,
+          Flash: 0.06,
+        }
+
+iso-fighter:
+  Inherits: fighter
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/fighter.tres
+        Size: [3.28467, 3.30657]
+        Pivot: [0.65667, 0.65232]
+        Facings: 32
+        HiddenWhen: [airborne]
+        Mount: main
+        MuzzleLocal: [0, 0.173, -0.51]
+      flight:
+        Resource: res://resources/units/isometric/fighter-airborne.tres
+        Size: [3.28467, 3.30657]
+        Pivot: [0.65667, 0.65232]
+        Facings: 32
+        VisibleWhen: [airborne]
+    Animations:
+      idle: { Sequence: stand, Parts: [body, flight] }
+      move: { Sequence: stand, Parts: [body, flight] }
+      fire: { Sequence: stand, Parts: [body, flight] }
+
+iso-tiltrotor:
+  Inherits: ^sprite
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/tiltrotor.tres
+        Size: [5.47445, 5.51825]
+        Pivot: [0.68000, 0.67857]
+        Facings: 32
+        HiddenWhen: [airborne]
+        Mount: main
+        MuzzleLocal: [0, 0.301, -1.834]
+      flight:
+        Resource: res://resources/units/isometric/tiltrotor-airborne.tres
+        Size: [5.49635, 5.51825]
+        Pivot: [0.68127, 0.67857]
+        Facings: 32
+        VisibleWhen: [airborne]
+        LoopAnimation: move
+        LoopWhen: airborne
+    Animations:
+      idle: { Sequence: stand, Parts: [body, flight] }
+      move: { Sequence: travel, Parts: [flight] }
+      fire: { Sequence: stand, Parts: [body] }
+
+iso-missile-tiltrotor:
+  Inherits: iso-tiltrotor
+  Model:
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/missile-tiltrotor.tres
+        Size: [5.36496, 5.38686]
+        Pivot: [0.69388, 0.69512]
+        MuzzleLocal: [0.820, 0.551, -0.573]
+      flight:
+        Resource: res://resources/units/isometric/missile-tiltrotor-airborne.tres
+        Size: [5.38686, 5.40876]
+        Pivot: [0.70325, 0.70040]
+
+iso-heavy-air-transport:
+  Inherits: ^sprite
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/heavy-air-transport.tres
+        Size: [9.26277, 9.28467]
+        Pivot: [0.58392, 0.58255]
+        Facings: 32
+        HiddenWhen: [airborne]
+      flight:
+        Resource: res://resources/units/isometric/heavy-air-transport-airborne.tres
+        Size: [8.03650, 8.03650]
+        Pivot: [0.67575, 0.67575]
+        Facings: 32
+        VisibleWhen: [airborne]
+        LoopAnimation: move
+        LoopWhen: airborne
+    Animations:
+      idle: { Sequence: stand, Parts: [body, flight] }
+      move: { Sequence: travel, Parts: [flight] }
+      fire: { Sequence: stand, Parts: [body] }
+
+iso-construction-tiltrotor:
+  Inherits: ^sprite
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/tiltrotor.tres
+        Size: [5.47445, 5.51825]
+        Pivot: [0.68000, 0.67857]
+        Facings: 32
+        HiddenWhen: [airborne]
+        Mount: main
+        MuzzleLocal: [0, 0.301, -1.834]
+      flight:
+        Resource: res://resources/units/isometric/tiltrotor-airborne.tres
+        Size: [5.49635, 5.51825]
+        Pivot: [0.68127, 0.67857]
+        Facings: 32
+        VisibleWhen: [airborne]
+        LoopAnimation: move
+        LoopWhen: airborne
+    Animations:
+      idle: { Sequence: stand, Parts: [body, flight] }
+      move: { Sequence: travel, Parts: [flight] }
+      fire: { Sequence: stand, Parts: [body] }
+      repair: { Sequence: stand, Parts: [body, flight], Flash: 0.12 }
 
 iso-tank:
   Inherits: tank

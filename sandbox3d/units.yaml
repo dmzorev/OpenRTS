@@ -2,6 +2,14 @@ scout:
   Health: { HP: 100 }
   Movement: { Locomotor: relief }
   Body: { Radius: 300 }
+sniper:
+  Inherits: scout
+rocketeer:
+  Inherits: scout
+  Armaments:
+    Mounts:
+      main: { Weapon: rocketeer-missile }
+  Presentation: { Model: rocketeer, Animations: [idle, move, fire] }
 tank:
   Health: { HP: 200 }
   Movement: { Locomotor: relief }

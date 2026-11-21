@@ -7,3 +7,13 @@ anti-air-missile:
     Speed: 420
     TravelLimit: 16384
     Damage: 50
+
+iso-grenade:
+  Inherits: grenade
+  Weapon:
+    WindupTicks: 18
+    AnimationTicks: 18
+
+iso-rocketeer-missile:
+  Inherits: missile
+  Weapon: { AnimationTicks: 11 }

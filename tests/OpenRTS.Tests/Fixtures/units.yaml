@@ -1,0 +1,22 @@
+^mobile:
+  Health: { HP: 100 }
+  Presentation: { Model: fixture, Animations: [idle, move, fire] }
+infantry:
+  Inherits: ^mobile
+  Movement: { Locomotor: infantry }
+amphibian:
+  Inherits: ^mobile
+  Movement: { Locomotor: amphibious }
+tank:
+  Inherits: ^mobile
+  Movement: { Locomotor: tracked }
+  Armaments:
+    Mounts:
+      main: { Weapon: rifle }
+      grenade: { Weapon: grenade }
+engineer:
+  Inherits: ^mobile
+  Movement: { Locomotor: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: repair }

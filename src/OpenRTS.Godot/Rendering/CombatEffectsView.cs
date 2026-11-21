@@ -102,30 +102,30 @@ public sealed partial class CombatEffectsView
             }
             var forward = previous.DirectionTo(current);
             if (forward == Vector3.Zero) forward = new(MathF.Sin(heading), 0, MathF.Cos(heading));
-            if (shot.Departure.Tick > 0 && tick - shot.Departure.Tick <= 4 &&
+            bool handThrown = weapon.Projectile == ProjectileKind.Grenade && LaunchAnimation(shot.UnitType, shot.Mount)?.LaunchLocal is not null;
+            if (shot.LaunchProjection is { PreviousWeight: > 0 } anchor &&
                 LaunchVisual(shot.UnitType, shot.Mount, shot.Departure, style, forward) is { } launch)
             {
-                var (direction, center) = launch;
-                if (!reliefProjection) center.Z -= Lift(shot.Departure.Origin.Elevation, HoverEndpoints.Source, projection.Hover, flightSurface);
-                float age = tick - shot.Departure.Tick;
-                float speed = weapon.ProjectileSpeed / 1024f;
-                previous = JoinFlight(previous, Math.Max(0, age - 1));
-                current = JoinFlight(current, age);
-                forward = age == 0 ? direction : previous.DirectionTo(current);
-                if (age == 1) forward = direction.Lerp(forward, alpha).Normalized();
-
-                Vector3 JoinFlight(Vector3 sample, float elapsed) =>
-                    (center + direction * (speed * elapsed)).Lerp(sample, Mathf.SmoothStep(0, 3, elapsed));
+                // Offset the published samples from the muzzle without inserting a separate launch leg.
+                var offset = anchor.Origin is { } origin ? launch.Center - Position(origin) :
+                    Vector3.Up * (launch.Center.Y - _overlayOffset.Y - anchor.HeightAboveActor / 1024f);
+                previous += offset * anchor.PreviousWeight;
+                current += offset * anchor.CurrentWeight;
+                var tangent = previous.DirectionTo(current);
+                if (tangent != Vector3.Zero)
+                    forward = anchor.Origin.HasValue && tick == shot.Departure.Tick + 1 && style.MountedRocket is not null
+                        ? launch.Direction.Slerp(tangent, alpha) : tangent;
+                else if (anchor.Origin.HasValue) forward = launch.Direction;
             }
             var point = previous.Lerp(current, alpha);
             float size = (float)style.Size;
             if (style.ProjectileModel is not null || style.ProjectileTexture is not null) ProjectileVisual(style, point, forward, eye);
-            else _rounds.Add(point, new(size, size, size * 1.7f), PitchBasis(forward, eye), Color(style.Color));
+            else _rounds.Add(point, new(size, size, handThrown ? size : size * 1.7f), PitchBasis(forward, eye), Color(style.Color));
             if (weapon.Projectile == ProjectileKind.Missile)
             {
                 if (emitSmoke) EmitSmoke(point - forward * size, style, time);
             }
-            else Beam(previous, point, (float)style.BeamWidth, Color(style.Color, 0.5f));
+            else if (!handThrown) Beam(previous, point, (float)style.BeamWidth, Color(style.Color, 0.5f));
         }
         PublishSmoke(time);
         _workSources.Clear();
@@ -146,6 +146,9 @@ public sealed partial class CombatEffectsView
             float phase = (float)(age / style.DurationTicks); var weapon = _units.Units[value.UnitType].Weapons[value.Mount].Weapon;
             if (value.Kind == WorldEventKind.WeaponFired)
             {
+                if (weapon.Projectile == ProjectileKind.Grenade &&
+                    LaunchAnimation(value.UnitType, value.Mount)?.LaunchLocal is not null)
+                    continue;
                 var sourcePoint = value.SourcePosition;
                 if (weapon.Effect == WeaponEffect.Repair && observation is not null)
                 {
@@ -193,9 +196,11 @@ public sealed partial class CombatEffectsView
     private void Beam(Vector3 from, Vector3 to, float width, Color color)
     {
         var delta = to - from;
-        float length = new Vector2(delta.X, delta.Z).Length();
+        float length = delta.Length();
         if (length < 0.003f) return;
-        _beams.Add((from + to) / 2, new(width, width, length), MathF.Atan2(delta.X, delta.Z), color);
+        var direction = delta / length;
+        var up = Math.Abs(direction.Y) < 0.99f ? Vector3.Up : Vector3.Right;
+        _beams.Add((from + to) / 2, new(width, width, length), Basis.LookingAt(direction, up), color);
     }
     private static float Lift(int elevation, HoverEndpoints endpoint, HoverEndpoints hover, float flightSurface) =>
         (hover & endpoint) != 0 ? SpriteWorldView.HoverLift(elevation / 1024f, flightSurface) : 0;

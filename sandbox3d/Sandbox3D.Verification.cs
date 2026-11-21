@@ -6,14 +6,15 @@ using OpenRTS.Godot.Controls;
 
 public partial class Sandbox3D
 {
-    private enum CheckStage { Input, Queue, Detour, Group, Stop, Hold }
+    private enum CheckStage { Input, Queue, Detour, Group, Stop, Hold, Rocket }
     private static readonly WorldPosition FirstGoal = new(19 * CellSize + 384, 8 * CellSize + 512, TerrainScenario.PlateauElevation);
     private static readonly WorldPosition FinalGoal = new(10 * CellSize + 768, 11 * CellSize + 128, 960);
     private CheckStage _checkStage;
     private long _checkTick;
-    private EntityId _scout, _secondScout;
+    private EntityId _scout, _secondScout, _rocketeer, _target;
     private WorldPosition _secondStart;
     private bool _climbed, _descended, _reachedFirstGoal;
+    private bool _rocketRan, _rocketAimed;
 
     private void VerifyControls(FrameExchange.FrameLease frame)
     {
@@ -26,7 +27,12 @@ public partial class Sandbox3D
             _scout = frame.Poses[0].Id;
             _secondScout = frame.Poses[1].Id;
             _secondStart = frame.Poses[1].Current;
-            VerifyModularVehicles(frame.Poses);
+            VerifyInfantry(frame.Poses[0], "SWAT");
+            VerifyInfantry(frame.Poses[^3], "Sniper");
+            _rocketeer = frame.Poses[^2].Id;
+            _target = frame.Poses[^1].Id;
+            VerifyRocketeerClips(frame.Poses[^2]);
+            VerifyModularVehicles(frame.Poses[..^1]);
             VerifySelectionAndCamera();
             VerifyReliefPicking();
             Press(Key.M);
@@ -88,12 +94,61 @@ public partial class Sandbox3D
             case CheckStage.Hold:
                 Check(scout.Order.Phase == OrderPhase.Holding && second.Order.Phase == OrderPhase.Holding,
                     "Hold position did not reach both selected units.");
+                _camera.Size = _baseCameraSize;
+                ChangeSelection([_rocketeer], SelectionChange.Replace);
+                CenterOnSelection();
+                Click(MouseButton.Right, _camera.UnprojectPosition(_actors[_target].PickCenter));
+                Advance(frame.Tick, CheckStage.Rocket);
+                break;
+            case CheckStage.Rocket:
+                Check(session.GetCommandLog()[^1] is { Kind: CommandKind.AttackTarget } attack && attack.TargetEntity == _target,
+                    "The target click did not issue an attack for the rocketeer.");
+                var actor = _actors[_rocketeer];
+                var animation = (AnimationPlayer)actor.Node.FindChild("AnimationPlayer", recursive: true, owned: false);
+                _rocketRan |= animation.CurrentAnimation == "RpgRun";
+                var weapon = frame.Weapons[ActorPose(frame.Poses, _rocketeer).WeaponOffset];
+                _rocketAimed |= weapon.WindupEndTick > frame.Tick && animation.CurrentAnimation == "RpgFire";
+                if (frame.Projectiles.IsEmpty)
+                {
+                    Check(frame.Tick < 340, "The rocketeer did not fire at the test target.");
+                    Advance(frame.Tick, CheckStage.Rocket);
+                    break;
+                }
+                Check(_rocketRan && _rocketAimed && weapon.Animation.IsActive(frame.Tick) &&
+                    animation.CurrentAnimation == "RpgFire" && _rockets.VisibleInstanceCount == 1,
+                    "The rocketeer skipped a movement, windup, firing, or projectile frame.");
                 VerifyReplay(frame);
-                GD.Print($"Sandbox3D verified: camera and RTS controls, exact relief picking, ramp ascent and descent, cliff detour and replay parity at tick {frame.Tick}.");
+                GD.Print($"Sandbox3D verified: cameras, RTS controls, ramp detour, rocketeer run and attack, and replay parity at tick {frame.Tick}.");
                 SetProcess(false);
                 GetTree().Quit();
                 break;
         }
+    }
+
+    private void VerifyRocketeerClips(EntityPose pose)
+    {
+        var actor = _actors[pose.Id];
+        var player = (AnimationPlayer)actor.Node.FindChild("AnimationPlayer", recursive: true, owned: false);
+        foreach (var clip in new[] { "RpgIdle", "RpgRun", "RpgFire" })
+            Check(player.HasAnimation(clip) && player.GetAnimation(clip).GetTrackCount() > 0,
+                $"The rocketeer is missing {clip}.");
+        Check(player.CurrentAnimation == "RpgIdle", "The rocketeer did not start in its idle clip.");
+    }
+
+    private void VerifyInfantry(EntityPose scout, string name)
+    {
+        var actor = _actors[scout.Id];
+        var player = (AnimationPlayer)actor.Node.FindChild("AnimationPlayer", recursive: true, owned: false);
+        foreach (string clip in new[] { "MixIdle", "MixRunLowReady", "MixRunRaised", "MixWalk", "MixAim", "MixFire", "UALJog", "StockRun" })
+            Check(player.HasAnimation(clip) && player.GetAnimation(clip).GetTrackCount() > 0,
+                $"The {name} model is missing animation {clip}.");
+        Check(player.CurrentAnimation == "MixIdle", $"Stationary {name} did not start its idle animation.");
+        actor.Apply(scout with { Previous = scout.Current with { X = scout.Current.X - 32 } }, 1, Vector3.Up);
+        Check(player.CurrentAnimation == "MixRunLowReady" &&
+            player.GetAnimation("MixRunLowReady").LoopMode == Animation.LoopModeEnum.Linear,
+            $"Moving {name} did not start the low-ready rifle run loop.");
+        actor.Apply(scout, 1, Vector3.Up);
+        Check(player.CurrentAnimation == "MixIdle", $"Stopping {name} did not restore idle.");
     }
 
     private void VerifyModularVehicles(ReadOnlySpan<EntityPose> poses)
@@ -151,7 +206,7 @@ public partial class Sandbox3D
         Press(Key.Key1);
         Check(_selection.Ids.SequenceEqual([_scout, _secondScout]), "Control group recall failed.");
         Press(Key.A, control: true);
-        Check(_selection.Count == TerrainScenario.UnitCount, "Select all missed a unit.");
+        Check(_selection.Count == TerrainScenario.UnitCount - 1, "Select all missed a friendly unit or selected the target.");
         Click(MouseButton.Left, first);
         Press(Key.Space);
         var centerPixel = ViewRect.GetCenter();

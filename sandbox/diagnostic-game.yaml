@@ -1,9 +1,12 @@
-# Fixed catalog for movement, combat and presentation laboratories.
+# Sandbox catalogs for the movement, combat and presentation laboratories.
 Version: 1
 Title: OpenRTS Diagnostics
-Rules: [content/units/units.yaml]
+Rules: [content/units/]
 Terrain: [content/terrain.yaml]
-Weapons: [content/weapons/weapons.yaml]
-Models: [content/models/models.yaml]
-Effects: [content/effects.yaml]
+Weapons: [content/weapons/]
+Models: [content/models/]
+Effects:
+  - content/effects.yaml
+  - content/indirect-fire-effects.yaml
+  - content/rocket-sprite-effects.yaml
 Settings: [content/settings/]

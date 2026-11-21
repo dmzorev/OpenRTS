@@ -1,0 +1,270 @@
+[gd_resource type="SpriteFrames" load_steps=35 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/units/isometric/missile-tiltrotor.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="open_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_1"]
+atlas = ExtResource("1")
+region = Rect2(0, 246, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_2"]
+atlas = ExtResource("1")
+region = Rect2(0, 492, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_3"]
+atlas = ExtResource("1")
+region = Rect2(0, 738, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_4"]
+atlas = ExtResource("1")
+region = Rect2(0, 984, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_5"]
+atlas = ExtResource("1")
+region = Rect2(0, 1230, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_6"]
+atlas = ExtResource("1")
+region = Rect2(0, 1476, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_7"]
+atlas = ExtResource("1")
+region = Rect2(0, 1722, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_8"]
+atlas = ExtResource("1")
+region = Rect2(0, 1968, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_9"]
+atlas = ExtResource("1")
+region = Rect2(0, 2214, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_10"]
+atlas = ExtResource("1")
+region = Rect2(0, 2460, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_11"]
+atlas = ExtResource("1")
+region = Rect2(0, 2706, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_12"]
+atlas = ExtResource("1")
+region = Rect2(0, 2952, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_13"]
+atlas = ExtResource("1")
+region = Rect2(0, 3198, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_14"]
+atlas = ExtResource("1")
+region = Rect2(0, 3444, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_15"]
+atlas = ExtResource("1")
+region = Rect2(0, 3690, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_16"]
+atlas = ExtResource("1")
+region = Rect2(245, 0, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_17"]
+atlas = ExtResource("1")
+region = Rect2(245, 246, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_18"]
+atlas = ExtResource("1")
+region = Rect2(245, 492, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_19"]
+atlas = ExtResource("1")
+region = Rect2(245, 738, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_20"]
+atlas = ExtResource("1")
+region = Rect2(245, 984, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_21"]
+atlas = ExtResource("1")
+region = Rect2(245, 1230, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_22"]
+atlas = ExtResource("1")
+region = Rect2(245, 1476, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_23"]
+atlas = ExtResource("1")
+region = Rect2(245, 1722, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_24"]
+atlas = ExtResource("1")
+region = Rect2(245, 1968, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_25"]
+atlas = ExtResource("1")
+region = Rect2(245, 2214, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_26"]
+atlas = ExtResource("1")
+region = Rect2(245, 2460, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_27"]
+atlas = ExtResource("1")
+region = Rect2(245, 2706, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_28"]
+atlas = ExtResource("1")
+region = Rect2(245, 2952, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_29"]
+atlas = ExtResource("1")
+region = Rect2(245, 3198, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_30"]
+atlas = ExtResource("1")
+region = Rect2(245, 3444, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_31"]
+atlas = ExtResource("1")
+region = Rect2(245, 3690, 245, 246)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="icon"]
+atlas = ExtResource("1")
+region = Rect2(490, 0, 256, 256)
+filter_clip = true
+
+[resource]
+animations = [{
+"frames": [{"duration": 1.0, "texture": SubResource("icon")}],
+"loop": false, "name": &"icon", "speed": 1.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_0")}],
+"loop": true, "name": &"stand-0", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_1")}],
+"loop": true, "name": &"stand-1", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_2")}],
+"loop": true, "name": &"stand-2", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_3")}],
+"loop": true, "name": &"stand-3", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_4")}],
+"loop": true, "name": &"stand-4", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_5")}],
+"loop": true, "name": &"stand-5", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_6")}],
+"loop": true, "name": &"stand-6", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_7")}],
+"loop": true, "name": &"stand-7", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_8")}],
+"loop": true, "name": &"stand-8", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_9")}],
+"loop": true, "name": &"stand-9", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_10")}],
+"loop": true, "name": &"stand-10", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_11")}],
+"loop": true, "name": &"stand-11", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_12")}],
+"loop": true, "name": &"stand-12", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_13")}],
+"loop": true, "name": &"stand-13", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_14")}],
+"loop": true, "name": &"stand-14", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_15")}],
+"loop": true, "name": &"stand-15", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_16")}],
+"loop": true, "name": &"stand-16", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_17")}],
+"loop": true, "name": &"stand-17", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_18")}],
+"loop": true, "name": &"stand-18", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_19")}],
+"loop": true, "name": &"stand-19", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_20")}],
+"loop": true, "name": &"stand-20", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_21")}],
+"loop": true, "name": &"stand-21", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_22")}],
+"loop": true, "name": &"stand-22", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_23")}],
+"loop": true, "name": &"stand-23", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_24")}],
+"loop": true, "name": &"stand-24", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_25")}],
+"loop": true, "name": &"stand-25", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_26")}],
+"loop": true, "name": &"stand-26", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_27")}],
+"loop": true, "name": &"stand-27", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_28")}],
+"loop": true, "name": &"stand-28", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_29")}],
+"loop": true, "name": &"stand-29", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_30")}],
+"loop": true, "name": &"stand-30", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_31")}],
+"loop": true, "name": &"stand-31", "speed": 10.0
+}]

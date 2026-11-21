@@ -69,11 +69,23 @@ internal static class ReplayChecks
     {
         test("B6 gameplay recipe binds a compiled map, starting set and committed local playtest", () =>
         {
-            var catalog = Catalog.Value;
-            const string path = "content/scene-maps/initial-properties-sample.scenemap.json";
-            var compiled = SceneMapBundle.Read(Read(path)).LoadMap(path, Read, catalog);
-            var source = compiled.Source;
-            var setInput = Read(MapScenario.InfantryStartSet);
+            var terrain = LocomotionCatalog.Load([new("terrain.yaml", """
+                grass: {Terrain: {Default: true}}
+                foot: {Locomotor: {Terrain: {grass: {}}}}
+                """)]);
+            var catalog = UnitCatalog.Load([new("units.yaml", "scout: {Health: {HP: 100}}")], terrain);
+            var ground = new MapLayer(["grass"], new int[12 * 8]);
+            var source = new MapSource("replay-fixture", true, 12, 8, ground, ground,
+                [new("blue", new(1536, 1536)), new("red", new(10752, 6656))],
+                [new("wounded", "scout", new(4608, 1536), "neutral", InitialHealth: 35)]);
+            var compiled = MapCompiler.Read(new("replay-fixture.ortmap.json", MapCompiler.Compile(source, catalog).Write()), catalog);
+            var setInput = new ContentSource("replay-start.yaml", """
+                version: 1
+                id: replay-start
+                credits: 5000
+                units:
+                  - { type: scout, offset: [0, 0] }
+                """);
             var set = StartingSet.Load(setInput);
             var options = new MatchSetupOptions(source.Id, set.Id, 2, 1, 25,
                 [new(SlotController.Human, 1), new(SlotController.None, 0), new(SlotController.None, 0), new(SlotController.None, 0)],

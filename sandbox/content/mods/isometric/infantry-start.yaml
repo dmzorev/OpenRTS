@@ -5,3 +5,4 @@ units:
   - { type: crane, offset: [512, 512] }
   - { type: rifleman, offset: [3584, 3072] }
   - { type: rocketeer, offset: [4608, 3072] }
+  - { type: sniper, offset: [5632, 3072] }

@@ -214,13 +214,14 @@ helipad:
   Actions:
     Definitions:
       tiltrotor: { Unit: tiltrotor }
+      missile-tiltrotor: { Unit: missile-tiltrotor }
       engineer-air: { Unit: engineering-tiltrotor }
       supply-air: { Unit: supply-tiltrotor }
       heavy-transport: { Unit: heavy-air-transport }
   ActionPanel:
     Buttons:
-      tiltrotor:
-        { Label: Конвертоплан, Icon: "res://assets/units/tiltrotor.png" }
+      tiltrotor: { Label: Конвертоплан поддержки }
+      missile-tiltrotor: { Label: Ракетный конвертоплан }
       engineer-air:
         {
           Label: Воздушный инженер,
@@ -231,11 +232,7 @@ helipad:
           Label: Воздушное снабжение,
           Icon: "res://assets/units/supply-tiltrotor.png",
         }
-      heavy-transport:
-        {
-          Label: Тяжёлый транспорт,
-          Icon: "res://assets/units/heavy-air-transport.png",
-        }
+      heavy-transport: { Label: Тяжёлый транспорт }
   Presentation: { Model: helipad, Name: Вертолётная площадка }
 
 airfield:
@@ -274,7 +271,7 @@ airfield:
       fighter: { Unit: fighter }
   ActionPanel:
     Buttons:
-      fighter: { Label: Истребитель, Icon: "res://assets/units/fighter.png" }
+      fighter: { Label: Истребитель }
   Presentation: { Model: airfield, Name: Аэродром · 4 самолёта }
 
 stealth-generator:

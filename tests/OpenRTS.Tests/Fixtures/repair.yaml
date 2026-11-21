@@ -1,0 +1,24 @@
+factory:
+  Health: { HP: 500 }
+  Movement: { Enabled: false }
+  Footprint:
+    Rows: ["#####", "###++", "###++", "###++"]
+    Types:
+      "#": { Traverse: false }
+      "+": { Traverse: true, CanStop: false, Targetable: false }
+  Presentation: { Model: factory, Animations: [idle, fire] }
+  Armaments:
+    Mounts:
+      repair: { Weapon: factory-repair }
+  Actions:
+    Definitions:
+      repair: { Mount: repair, AutoCast: true }
+engineer:
+  Health: { HP: 100 }
+  Presentation: { Model: engineer, Animations: [idle, move, fire] }
+  Armaments:
+    Mounts:
+      repair: { Weapon: repair }
+  Actions:
+    Definitions:
+      repair: { Mount: repair, AutoCast: true }

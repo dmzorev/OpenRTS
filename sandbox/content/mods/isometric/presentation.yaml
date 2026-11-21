@@ -2,10 +2,17 @@ Presentation:
   Renderer: Godot3D
   Camera: Isometric
   ModelOverrides:
-    infantry-rifle: iso-infantry-rifle
+    infantry-rifleman: iso-infantry-rifle
+    infantry-sniper: iso-infantry-sniper
+    infantry-rocket: iso-infantry-rocketeer
     tank: iso-tank
     tank-mixed: iso-tank-mixed
     radar-buggy: iso-radar-buggy
+    fighter: iso-fighter
+    tiltrotor: iso-tiltrotor
+    missile-tiltrotor: iso-missile-tiltrotor
+    heavy-air-transport: iso-heavy-air-transport
+    engineering-tiltrotor: iso-construction-tiltrotor
     apc-upgradable: iso-apc-upgradable
     apc-missiles: iso-apc-missiles
     engineer: iso-engineer

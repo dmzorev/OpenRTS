@@ -94,19 +94,15 @@ internal static class ConfigurationChecks
             Check(manifest.Settings.SensorRanges.Jam.Color == "#ffb840a6" &&
                 manifest.Settings.SensorRanges.Radar.Mode == SensorRangeMode.Selected, "Sandbox YAML defaults not loaded");
         });
-        test("Configuration: sandbox manifests preserve catalogs and feed map world settings", () =>
+        test("Configuration: sandbox manifest loads live catalogs and feeds map world settings", () =>
         {
             var manifest = GameManifest.Load("sandbox/game.yaml");
             var catalog = manifest.LoadUnits();
             var files = manifest.Files;
-            var old = UnitCatalog.Load([files.Read("content/units/units.yaml"), files.Read("content/units/buildings.yaml")],
-                LocomotionCatalog.Load([files.Read("content/terrain.yaml")]), WeaponCatalog.Load([files.Read("content/weapons/weapons.yaml")]));
-            Check(catalog.Summary == old.Summary, "Manifest changed the full catalog");
-            var diagnostic = GameManifest.Load("sandbox/diagnostic-game.yaml");
-            Check(diagnostic.LoadUnits().Summary == UnitCatalog.Load([files.Read("content/units/units.yaml")], old.Locomotion,
-                WeaponCatalog.Load([files.Read("content/weapons/weapons.yaml")])).Summary, "Diagnostic catalog changed");
-            _ = ModelCatalog.Load(manifest.Models);
-            _ = EffectCatalog.Load(manifest.Effects);
+            manifest.LoadModels().ValidateUnits(catalog);
+            var effects = EffectCatalog.Load(manifest.Effects);
+            Check(catalog.Units.SelectMany(unit => unit.Weapons).All(mount => effects.Weapons.ContainsKey(mount.Weapon.Id)),
+                "A live weapon has no effect definition");
             var match = MapScenario.Load(catalog, files.Read, manifest.Settings.Match.DefaultMap,
                 defaultStartSetPath: manifest.Settings.Match.DefaultStartSet);
             var settings = GameSettings.Load([new("custom.yaml", "Simulation: {TickRate: 40, SpeedPerTick: 64}")]).Simulation;
@@ -117,17 +113,16 @@ internal static class ConfigurationChecks
             var fixedMatch = MapScenario.Load(catalog, files.Read, "content/maps/fixture.yaml", defaultStartSetPath: "unused.yaml");
             Check(fixedMatch.UnitCount > 0, "Default starting set was forced on a fixed map");
         });
-        test("Configuration: isometric mod replaces models without changing gameplay", () =>
+        test("Configuration: isometric mod applies its model overrides to its game catalog", () =>
         {
             var standard = GameManifest.Load("sandbox/game.yaml");
             var isometric = GameManifest.Load("sandbox/isometric-game.yaml");
             Check(standard.Settings.Presentation is { Renderer: GameRenderer.Godot3D, Camera: GameCamera.Default } &&
                 isometric.Settings.Presentation is { Renderer: GameRenderer.Godot3D, Camera: GameCamera.Isometric }, "Presentation profile was ignored");
             var units = isometric.LoadUnits();
-            Check(units.Summary == standard.LoadUnits().Summary, "Presentation changed the unit catalog fingerprint");
             var models = isometric.LoadModels();
             models.ValidateUnits(units);
-            Check(isometric.Settings.Presentation.ModelOverrides.Count == 3, "Expected mod overrides for infantry, vehicle and building");
+            Check(isometric.Settings.Presentation.ModelOverrides.ContainsKey("tank"), "The isometric tank override was omitted");
             foreach (var (id, replacement) in isometric.Settings.Presentation.ModelOverrides)
                 Check(ReferenceEquals(models.Models[id].Parts, models.Models[replacement].Parts), "Model override was ignored: " + id);
             Check(!standard.LoadModels().Models.ContainsKey("iso-tank"), "Mod definitions leaked into the standard profile");

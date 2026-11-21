@@ -1,7 +1,7 @@
 Version: 1
 Title: OpenRTS Isometric Sandbox
 Rules:
-  - content/units/units-infantry.yaml
+  - content/mods/isometric/units-infantry.yaml
   - content/units/units-vehicles.yaml
   - content/mods/isometric/units.yaml
   - content/units/units-aircraft.yaml

@@ -44,7 +44,14 @@ public partial class Sandbox3D
         if (button.ButtonIndex == MouseButton.Right && button.Pressed)
         {
             CancelDrag();
-            if (IssueMove(pixel, button.ShiftPressed))
+            var target = _moveArmed ? default : Pick(pixel, hostile: true);
+            if (_selection.Count > 0 && target != default)
+            {
+                _session!.Issue(new UnitAction(UnitActionKind.Attack, new EntitySet(_selection.Snapshot()),
+                    Target: target, Queued: button.ShiftPressed));
+                _goal.Visible = false;
+            }
+            else if (IssueMove(pixel, button.ShiftPressed))
             {
                 _moveArmed = false;
                 UpdateStatus();
@@ -103,13 +110,14 @@ public partial class Sandbox3D
         if (_overlay is not null) _overlay.Marquee = null;
     }
 
-    private EntityId Pick(Vector2 pixel)
+    private EntityId Pick(Vector2 pixel, bool hostile = false)
     {
         EntityId picked = default;
         float best = float.PositiveInfinity;
         if (!ViewRect.HasPoint(pixel)) return picked;
         foreach (var (id, actor) in _actors)
         {
+            if ((actor.Owner != 1) != hostile) continue;
             if (_camera.IsPositionBehind(actor.PickCenter)) continue;
             var screen = _camera.UnprojectPosition(actor.PickCenter);
             float distance = screen.DistanceSquaredTo(pixel);
@@ -122,7 +130,7 @@ public partial class Sandbox3D
     }
 
     private IEnumerable<EntityId> ActorsIn(Rect2 box) =>
-        _actors.Where(pair => !_camera.IsPositionBehind(pair.Value.PickCenter) &&
+        _actors.Where(pair => pair.Value.Owner == 1 && !_camera.IsPositionBehind(pair.Value.PickCenter) &&
             box.HasPoint(_camera.UnprojectPosition(pair.Value.PickCenter))).Select(pair => pair.Key);
 
     private void ChangeSelection(IEnumerable<EntityId> ids, SelectionChange change)
@@ -151,7 +159,7 @@ public partial class Sandbox3D
         switch (code)
         {
             case Key.A when control:
-                ChangeSelection(_actors.Keys, SelectionChange.Replace);
+                ChangeSelection(_actors.Where(pair => pair.Value.Owner == 1).Select(pair => pair.Key), SelectionChange.Replace);
                 break;
             case Key.Escape:
                 if (_moveArmed || _dragStart.HasValue)

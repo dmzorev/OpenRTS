@@ -1,25 +1,36 @@
 using Godot;
 using OpenRTS.Core;
+using OpenRTS.Core.Combat;
+using OpenRTS.Core.Orders;
 using OpenRTS.Core.Presentation;
 
 public partial class Sandbox3D
 {
-    private sealed record ActorModel(PackedScene Scene, bool Infantry, bool ModularVehicle, bool Crane, float Radius);
+    private sealed record ActorModel(PackedScene Scene, bool Infantry, bool ModularVehicle, bool Crane, float Radius,
+        WeaponDefinition? Launcher)
+    {
+        public string Idle => Launcher is null ? "MixIdle" : "RpgIdle";
+        public string Run => Launcher is null ? "MixRunLowReady" : "RpgRun";
+    }
 
     private static ActorModel LoadModel(UnitDefinition type)
     {
-        bool infantry = type.Id == "scout";
+        string? infantryScene = type.Id switch
+        {
+            "scout" => "Infantry.tscn", "sniper" => "Sniper.tscn", "rocketeer" => "Rocketeer.tscn", _ => null
+        };
         string? modularScene = type.Id switch
         {
             "tank" => "MediumTank", "apc" => "TrackedAPC", "engineer" => "EngineeringTruck", _ => null
         };
-        string file = infantry ? "Infantry.tscn" : type.Id + ".glb";
+        string file = infantryScene ?? type.Id + ".glb";
         string path = modularScene is null
             ? "res://assets/quaternius/" + file : $"res://assets/vehicles/{modularScene}.tscn";
         var scene = GD.Load<PackedScene>(path)
             ?? throw new InvalidOperationException($"Cannot load model {path}.");
-        return new ActorModel(scene, infantry, modularScene is not null, type.Id == "engineer",
-            Math.Max(type.Body.HalfWidth, type.Body.HalfHeight) / (float)CellSize);
+        return new ActorModel(scene, infantryScene is not null, modularScene is not null, type.Id == "engineer",
+            Math.Max(type.Body.HalfWidth, type.Body.HalfHeight) / (float)CellSize,
+            type.Id == "rocketeer" ? type.Weapons[0].Weapon : null);
     }
 
     private static TorusMesh RingMesh(Color color) => new()
@@ -43,6 +54,7 @@ public partial class Sandbox3D
 
         public Node3D Node { get; } = new();
         public int Type { get; }
+        public uint Owner { get; private set; }
         public Vector3 PickCenter => Node.Position + Vector3.Up * (_model.Infantry ? 0.65f : 0.28f);
 
         public ActorView(ActorModel model, Mesh marker, int type)
@@ -65,6 +77,11 @@ public partial class Sandbox3D
             _animation = (AnimationPlayer)visual.FindChild("AnimationPlayer", recursive: true, owned: false);
             if (model.ModularVehicle)
                 _animation.GetAnimation("Drive").LoopMode = Animation.LoopModeEnum.Linear;
+            if (model.Infantry)
+            {
+                _animation.GetAnimation(model.Idle).LoopMode = Animation.LoopModeEnum.Linear;
+                _animation.GetAnimation(model.Run).LoopMode = Animation.LoopModeEnum.Linear;
+            }
 
             _ring = new MeshInstance3D
             {
@@ -76,7 +93,7 @@ public partial class Sandbox3D
             Node.AddChild(_ring);
         }
 
-        public void SetSelected(bool selected) => _ring.Visible = selected;
+        public void SetSelected(bool selected) => _ring.Visible = selected || Owner != 1;
 
         public float PickRadius(Camera3D camera, Vector2 screenCenter)
         {
@@ -85,11 +102,20 @@ public partial class Sandbox3D
             return Math.Max(12, Math.Max(width, halfHeight));
         }
 
-        public void Apply(EntityPose pose, float alpha, Vector3 normal)
+        public void Apply(EntityPose pose, float alpha, Vector3 normal, long tick = 0, WeaponPose weapon = default)
         {
+            Owner = pose.Presentation.Owner;
+            if (Owner != 1) _ring.Visible = true;
             Node.Position = Display(pose.Previous).Lerp(Display(pose.Current), alpha);
             var before = pose.Presentation.PreviousBodyFacing;
             var after = pose.Presentation.BodyFacing;
+            bool moving = pose.Previous != pose.Current;
+            bool rocketShot = _model.Launcher is not null && !moving &&
+                pose.Order is not { Kind: UnitActionKind.Move or UnitActionKind.AttackMove,
+                    Phase: OrderPhase.Moving or OrderPhase.Approaching or OrderPhase.Waiting or OrderPhase.Withdrawing } &&
+                (weapon.WindupEndTick > tick || weapon.Animation is { DurationTicks: > 0 } && weapon.Animation.IsActive(tick));
+            if (rocketShot && weapon.Facing != default)
+                before = after = weapon.Facing;
             Node.Rotation = new(0, Mathf.LerpAngle(Mathf.Atan2(before.X, before.Y), Mathf.Atan2(after.X, after.Y), alpha), 0);
             _ring.Quaternion = new Quaternion(Vector3.Up, Node.Basis.Inverse() * normal);
             if (_turret is not null)
@@ -103,10 +129,27 @@ public partial class Sandbox3D
                 _turret.Rotation = new(0, heading - Node.Rotation.Y, 0);
             }
 
-            bool moving = pose.Previous != pose.Current;
+            if (_model.Launcher is { } launcher)
+            {
+                string clip = rocketShot ? "RpgFire" : moving ? _model.Run : _model.Idle;
+                if (_animation.AssignedAnimation != clip || !_animation.IsPlaying())
+                    _animation.Play(clip, rocketShot ? 0 : 0.10, rocketShot ? 0 : 1);
+                if (rocketShot)
+                {
+                    const double LaunchSeconds = 5.0 / 30;
+                    double time = tick + alpha;
+                    double poseTime = weapon.WindupEndTick > tick
+                        ? LaunchSeconds * (1 - Math.Clamp((weapon.WindupEndTick - time) / launcher.WindupTicks, 0, 1))
+                        : LaunchSeconds + (_animation.CurrentAnimationLength - LaunchSeconds) *
+                            Math.Clamp((time - weapon.Animation.StartTick) / weapon.Animation.DurationTicks, 0, 1);
+                    _animation.Seek(poseTime, update: true);
+                }
+                return;
+            }
             if (_moving == moving) return;
             _moving = moving;
-            if (_model.Infantry) _animation.Play(moving ? "Jog_Fwd" : "Pistol_Idle", 0.12);
+            if (_model.Infantry)
+                _animation.Play(moving ? _model.Run : _model.Idle, 0.12, moving ? 0.95f : 1f);
             else if (moving) _animation.Play(_model.ModularVehicle ? "Drive" : "TankArmature|Tank_Forward");
             else _animation.Stop(keepState: true);
         }

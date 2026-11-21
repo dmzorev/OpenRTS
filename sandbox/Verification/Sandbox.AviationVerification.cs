@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using Godot;
 using OpenRTS.Core;
+using OpenRTS.Core.Combat;
 using OpenRTS.Core.Orders;
 using OpenRTS.Godot.Rendering;
 
@@ -17,8 +18,15 @@ public partial class Sandbox
             _verificationDone = true;
             VerifyAirWorkVisuals();
             VerifyAirTransportInput();
+            VerifyTiltrotorCombatRoles();
             if (_manifest.Settings.Presentation.ModelOverrides.GetValueOrDefault("airfield") == "iso-airfield")
                 VerifyIsometricAirfield();
+            if (_manifest.Settings.Presentation.ModelOverrides.GetValueOrDefault("fighter") == "iso-fighter")
+                VerifyIsometricFighter(frame);
+            if (_manifest.Settings.Presentation.ModelOverrides.GetValueOrDefault("tiltrotor") == "iso-tiltrotor")
+                VerifyIsometricTiltrotor(frame);
+            if (_manifest.Settings.Presentation.ModelOverrides.GetValueOrDefault("heavy-air-transport") == "iso-heavy-air-transport")
+                VerifyIsometricHeavyTransport(frame);
             var poses = frame.Poses.ToArray();
             var report = _session!.Completion.GetAwaiter().GetResult();
             if (frame.Tick != report.Tick || !poses.Any(p => _catalog!.Units[p.UnitType].Airbase is not null) ||
@@ -46,6 +54,182 @@ public partial class Sandbox
             GD.Print("OPENRTS_SIMULATION:" + JsonSerializer.Serialize(report)); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
+    }
+
+    private void VerifyIsometricFighter(FrameExchange.FrameLease frame)
+    {
+        var catalog = _catalog!;
+        int type = catalog.Units.ToList().FindIndex(unit => unit.Id == "fighter");
+        var unit = catalog.Units[type];
+        var north = FacingDirection.North;
+        var east = FacingDirection.FromQuarterTurns(1);
+        var ground = new WorldPosition(32 * 1024, 32 * 1024);
+        var air = ground with { Elevation = unit.Flight!.CruiseAltitude };
+        var parked = new EntityPose(new(90003), type, ground, ground,
+            new(1, east, east, north, north, new(unit.IdleAnimation, 0, 0), AnimationPlayback.None, 0));
+        var flying = parked with
+        {
+            Previous = air, Current = air,
+            Flight = new(FlightPhase.Flying, 0, 0, default, -1, true),
+            Presentation = parked.Presentation with { States = unit.StateMask("airborne"), Body = new(unit.MoveAnimation, 0, 0) }
+        };
+
+        foreach (var (pose, atlas) in new[] { (parked, "fighter.png"), (flying, "fighter-airborne.png") })
+        {
+            _sprites!.Apply([pose], 1, 0, frame.TickRate);
+            var visible = _sprites.Node.GetChildren().OfType<MultiMeshInstance3D>()
+                .Where(node => node.Multimesh.VisibleInstanceCount > 0)
+                .Select(node => (ShaderMaterial)node.Multimesh.Mesh.SurfaceGetMaterial(0)).ToArray();
+            if (visible.Length != (pose.Flight.Airborne ? 2 : 1) || visible.Any(material =>
+                    material.GetShaderParameter("sprite_texture").AsGodotObject() is not Texture2D texture ||
+                    !texture.ResourcePath.EndsWith("/isometric/" + atlas, StringComparison.Ordinal) ||
+                    !Mathf.IsEqualApprox(material.GetShaderParameter("uv_rect").AsVector4().Y, .5f)))
+                throw new InvalidOperationException("Fighter gear or heading did not match the rendering pose.");
+        }
+
+        var effects = OpenRTS.Content.EffectCatalog.Load(_manifest.Effects).Weapons;
+        var effect = _combatEffects!.LaunchVisual(type, 0, new(1, flying.Id, air, east, north),
+            effects[unit.Weapons[0].Weapon.Id], Vector3.Right);
+        var socket = new Vector3(32 + .51f, air.Elevation / 1024f + .173f, 32);
+        if (effect is not { } launch ||
+            _camera!.UnprojectPosition(launch.Center).DistanceTo(_camera.UnprojectPosition(socket)) > 0.05f)
+            throw new InvalidOperationException("Fighter launch effect did not follow its body heading and altitude.");
+
+        _sprites!.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons, contacts: frame.Contacts);
+    }
+
+    private void VerifyIsometricTiltrotor(FrameExchange.FrameLease frame)
+    {
+        var types = _catalog!.Units.ToList();
+        int aircraft = types.FindIndex(unit => unit.Id == "tiltrotor");
+        int rifleman = types.FindIndex(unit => unit.Id == "rifleman");
+        const int size = 48;
+        byte grass = _catalog.Locomotion!.TerrainIndex("grass");
+        using var world = new SimulationWorld(types, size * 1024, size * 1024,
+            navigationGrid: new(size, size, terrain: Enumerable.Repeat(grass, size * size)));
+        var start = new WorldPosition(16384, 16384);
+        var target = start with { X = start.X + 8192 };
+        var carrier = world.AddInitialUnit(aircraft, start, 1);
+        EntityId[] squad =
+        [
+            world.AddInitialUnit(rifleman, start with { X = start.X - 800 }, 1),
+            world.AddInitialUnit(rifleman, start with { X = start.X + 800 }, 1),
+            world.AddInitialUnit(rifleman, start with { Y = start.Y - 800 }, 1),
+            world.AddInitialUnit(rifleman, start with { Y = start.Y + 800 }, 1)
+        ];
+        var poses = new EntityPose[world.Count];
+        world.Step([new(1, 0, 1, CommandKind.Enter, TargetEntity: carrier, Recipients: new(squad))]);
+        world.CopyPoses(poses);
+        if (poses.Count(pose => pose.Carrier == carrier) != 4)
+            throw new InvalidOperationException("Four infantry must board the parked tiltrotor.");
+        var parked = poses.Single(pose => pose.Id == carrier);
+        AircraftAtlasFrame(parked, "tiltrotor.png", 0, frame.TickRate);
+
+        world.Step([new(2, 0, 1, CommandKind.Move, carrier, target)]);
+        for (int i = 0; i < 100; i++) world.Step();
+        world.CopyPoses(poses);
+        var hovering = poses.Single(pose => pose.Id == carrier);
+        if (!hovering.Flight.Airborne || poses.Count(pose => pose.Carrier == carrier) != 4 ||
+            AircraftAtlasFrame(hovering, "tiltrotor-airborne.png", 0, frame.TickRate).X ==
+            AircraftAtlasFrame(hovering, "tiltrotor-airborne.png", (int)Math.Ceiling(frame.TickRate / 12d), frame.TickRate).X)
+            throw new InvalidOperationException("The loaded tiltrotor must retain its squad and animate the rotors in flight.");
+
+        world.Step([new(world.Tick + 1, 0, 1, CommandKind.UnloadAt, carrier, target)]);
+        for (int i = 0; i < 100; i++) world.Step();
+        world.CopyPoses(poses);
+        if (poses.Any(pose => pose.Carrier == carrier || pose.Current.Elevation != 0))
+            throw new InvalidOperationException("The tiltrotor must land before unloading its squad.");
+        AircraftAtlasFrame(poses.Single(pose => pose.Id == carrier), "tiltrotor.png", 0, frame.TickRate);
+        _sprites!.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons, contacts: frame.Contacts);
+        GD.Print("OPENRTS_TILTROTOR:PASS four passengers, landing doors and rotor phases");
+    }
+
+    private Vector4 AircraftAtlasFrame(EntityPose pose, string atlas, int tick, int rate)
+    {
+        _sprites!.Apply([pose], 0, tick, rate);
+        var visible = _sprites.Node.GetChildren().OfType<MultiMeshInstance3D>()
+            .Where(node => node.Multimesh.VisibleInstanceCount > 0)
+            .Select(node => (ShaderMaterial)node.Multimesh.Mesh.SurfaceGetMaterial(0)).ToArray();
+        if (visible.Length != (pose.Flight.Airborne ? 2 : 1) || visible.Any(material =>
+                material.GetShaderParameter("sprite_texture").AsGodotObject() is not Texture2D texture ||
+                !texture.ResourcePath.EndsWith("/isometric/" + atlas, StringComparison.Ordinal)))
+            throw new InvalidOperationException($"The aircraft pose did not select {atlas}.");
+        return visible[0].GetShaderParameter("uv_rect").AsVector4();
+    }
+
+    private void VerifyIsometricHeavyTransport(FrameExchange.FrameLease frame)
+    {
+        var units = _catalog!.Units.ToList();
+        int type = units.FindIndex(unit => unit.Id == "heavy-air-transport");
+        var unit = units[type];
+        var ground = new WorldPosition(32 * 1024, 32 * 1024);
+        var north = FacingDirection.North;
+        var east = FacingDirection.FromQuarterTurns(1);
+        foreach (var (airborne, atlas) in new[]
+        {
+            (false, "heavy-air-transport.png"),
+            (true, "heavy-air-transport-airborne.png")
+        })
+        {
+            var at = ground with { Elevation = airborne ? unit.Flight!.CruiseAltitude : 0 };
+            uint states = airborne ? unit.StateMask("airborne") : 0;
+            var pose = new EntityPose(new(90004), type, at, at,
+                new(1, east, east, east, east, new(unit.IdleAnimation, 0, 0), AnimationPlayback.None, states))
+            { Flight = new(airborne ? FlightPhase.Hovering : FlightPhase.Landed, 0, 0, default, -1, airborne) };
+            var art = AircraftAtlasFrame(pose, atlas, 0, frame.TickRate);
+            var turned = pose with { Presentation = pose.Presentation with { BodyFacing = north, PreviousBodyFacing = north } };
+            if (art == AircraftAtlasFrame(turned, atlas, 0, frame.TickRate) || (airborne && art.X == AircraftAtlasFrame(pose, atlas,
+                    (int)Math.Ceiling(frame.TickRate / 12d), frame.TickRate).X))
+                throw new InvalidOperationException($"{atlas} did not follow the heading or animate while hovering.");
+        }
+        _sprites!.Apply(frame.Poses, 1, frame.Tick, frame.TickRate, frame.Weapons, contacts: frame.Contacts);
+        GD.Print("OPENRTS_HEAVY_TRANSPORT:PASS ground ramp, heading and hovering rotor phases");
+    }
+
+    private void VerifyTiltrotorCombatRoles()
+    {
+        var types = _catalog!.Units.ToList();
+        int Type(string id) => types.FindIndex(unit => unit.Id == id);
+        int padType = Type("helipad"), plantType = Type("power-plant");
+        const int size = 56;
+        byte grass = _catalog.Locomotion!.TerrainIndex("grass");
+        foreach (var (id, capacity, weaponKind) in new[]
+                 { ("tiltrotor", 0, ProjectileKind.Hitscan), ("missile-tiltrotor", 8, ProjectileKind.Missile) })
+        {
+            int type = Type(id);
+            var definition = types[type];
+            if (definition.Flight!.Ammo != capacity || definition.Weapons.Single().Weapon.Projectile != weaponKind ||
+                (capacity == 0 ? definition.Transport?.Slots != 4 : definition.Transport is not null) ||
+                !types[padType].Products.Any(product => product.Unit == id))
+                throw new InvalidOperationException($"{id} has the wrong combat role or cannot be built at a helipad.");
+
+            using var world = new SimulationWorld(types, size * 1024, size * 1024,
+                navigationGrid: new(size, size, terrain: Enumerable.Repeat(grass, size * size)),
+                players: [new(1, "Blue"), new(2, "Red")]);
+            var pad = world.AddInitialUnit(padType, new(24 * 1024, 35 * 1024), 1);
+            world.AddInitialUnit(plantType, new(16 * 1024 + 512, 35 * 1024), 1);
+            var target = world.AddInitialUnit(plantType, new(24 * 1024 + 512, 24 * 1024), 2);
+            var aircraft = world.AddInitialUnit(type, new(24 * 1024 + 512, 28 * 1024, definition.Flight.CruiseAltitude), 1);
+            world.Step([new(1, 0, 1, CommandKind.AttackTarget, aircraft, TargetEntity: target)]);
+
+            int shots = 0;
+            bool returnedEmpty = false, rearmed = false;
+            for (int tick = 0; tick < 600; tick++)
+            {
+                foreach (var evt in world.Events)
+                    if (evt.Kind == WorldEventKind.WeaponFired && evt.Entity == aircraft) shots++;
+                world.TryGetFlight(aircraft, out var flight);
+                if (capacity == 0 && (!flight.Airborne || flight.Airbase != default))
+                    throw new InvalidOperationException("Infantry support must stay airborne without seeking an ammo refill.");
+                returnedEmpty |= flight is { Phase: FlightPhase.Servicing, Ammo: 0 } && flight.Airbase == pad;
+                rearmed |= returnedEmpty && flight.Ammo == capacity;
+                if (shots > 8 && (capacity == 0 || rearmed)) break;
+                world.Step();
+            }
+            if (shots <= 8 || capacity > 0 && !rearmed)
+                throw new InvalidOperationException($"{id} did not sustain its attack: shots={shots}, serviced={returnedEmpty}, rearmed={rearmed}.");
+        }
+        GD.Print("OPENRTS_TILTROTOR_COMBAT:PASS sustained ground fire and missile rearm with attack resumed");
     }
 
     private void VerifyIsometricAirfield()

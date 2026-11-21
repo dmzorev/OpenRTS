@@ -20,7 +20,7 @@ public sealed class SpriteWorldView
             return Frames[i];
         }
     }
-    private sealed record Part(ModelPart Definition, Sequence[]?[] Sequences, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation, int WorkAnimation);
+    private sealed record Part(ModelPart Definition, Sequence[]?[] Sequences, Sequence[]?[]? Windups, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation, int WorkAnimation);
     private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed,
         ModelDrawLayer DrawLayer, int DrawLayers, double SortOffset, int PartLayerCount);
     private readonly record struct DrawItem(int Index, int Layer, double Depth, uint Id) : IComparable<DrawItem>
@@ -137,29 +137,23 @@ public sealed class SpriteWorldView
                     var part = definition.Parts[p];
                     var frames = framesFor(part.Resource) ?? throw new ArgumentException("Missing SpriteFrames: " + part.Resource);
                     var sequences = new Sequence[]?[type.Animations.Count]; var animations = new ModelAnimation?[sequences.Length];
+                    Sequence[]?[]? windups = null;
                     for (int a = 0; a < sequences.Length; a++)
                     {
                         var animation = definition.Animations[type.Animations[a]];
                         if (!animation.Parts.Contains(part.Id)) continue;
-                        using var name = new StringName(animation.Sequence);
-                        if (part.Facings < 2 || frames.HasAnimation(name))
-                            sequences[a] = [LoadSequence(frames, name, part.Resource)];
-                        else
+                        sequences[a] = LoadDirections(frames, animation.Sequence, part);
+                        if (animation.WindupSequence is { } windup)
                         {
-                            var directions = new Sequence[part.Facings];
-                            for (int facing = 0; facing < directions.Length; facing++)
-                            {
-                                using var variant = new StringName(animation.Sequence + "-" + facing.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                                directions[facing] = LoadSequence(frames, variant, part.Resource);
-                            }
-                            sequences[a] = directions;
+                            windups ??= new Sequence[]?[sequences.Length];
+                            windups[a] = LoadDirections(frames, windup, part);
                         }
                         animations[a] = animation;
                     }
                     if (sequences[type.IdleAnimation] is null) throw new ArgumentException($"{definition.Id}.{part.Id}: idle must bind every part.");
                     uint Mask(IEnumerable<string>? names) { uint mask = 0; if (names is not null) foreach (string name in names) mask |= type.StateMask(name); return mask; }
                     uint State(string? name) => name is null ? 0 : type.StateMask(name);
-                    parts[p] = new(part, sequences, animations, part.Mount is null ? -1 : type.Weapons.ToList().FindIndex(m => m.Id == part.Mount),
+                    parts[p] = new(part, sequences, windups, animations, part.Mount is null ? -1 : type.Weapons.ToList().FindIndex(m => m.Id == part.Mount),
                         Mask(part.VisibleWhen), Mask(part.HiddenWhen), State(part.SpinWhen), State(part.LoopWhen),
                         part.LoopAnimation is null ? -1 : type.AnimationIndex(part.LoopAnimation),
                         part.AimAtConstruction ? type.AnimationIndex("produce") : -1);
@@ -173,6 +167,19 @@ public sealed class SpriteWorldView
             }
         }
         catch { Node.Free(); throw; }
+    }
+
+    private Sequence[] LoadDirections(SpriteFrames frames, string sequence, ModelPart part)
+    {
+        using var name = new StringName(sequence);
+        if (part.Facings < 2 || frames.HasAnimation(name)) return [LoadSequence(frames, name, part.Resource)];
+        var directions = new Sequence[part.Facings];
+        for (int facing = 0; facing < directions.Length; facing++)
+        {
+            using var variant = new StringName(sequence + "-" + facing.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            directions[facing] = LoadSequence(frames, variant, part.Resource);
+        }
+        return directions;
     }
 
     private Sequence LoadSequence(SpriteFrames frames, StringName name, string resource)
@@ -316,6 +323,9 @@ public sealed class SpriteWorldView
             Vector2 origin = new(point.X, point.Z - lift);
             float body = _workFlights.Heading(pose, time, Angle(view.PreviousBodyFacing, view.BodyFacing, alpha)), weapon = Angle(view.PreviousWeaponFacing, view.WeaponFacing, alpha);
             int construct = pose.Upgrade.Active ? model.Unit.AnimationIndex("construct") : -1;
+            bool moving = view.Body.Animation == model.Unit.MoveAnimation ||
+                pose.Order is { Kind: UnitActionKind.Move or UnitActionKind.AttackMove,
+                    Phase: OrderPhase.Moving or OrderPhase.Approaching or OrderPhase.Waiting or OrderPhase.Withdrawing };
             Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : pose.Cloaked ? new(0.62f, 0.7f, 0.76f, 0.42f) : Colors.White;
             float scale = 1, stateFlash = 0;
             for (int state = 0; state < model.States.Length; state++) if ((view.States & (1u << state)) != 0)
@@ -333,14 +343,42 @@ public sealed class SpriteWorldView
                 if (runtime.LoopAnimation >= 0 && (view.States & runtime.LoopWhen) != 0 && runtime.Sequences[runtime.LoopAnimation] is not null && (animation == model.Unit.IdleAnimation || animation == model.Unit.MoveAnimation))
                 { animation = runtime.LoopAnimation; playback = new(animation, 0, 0); }
                 if (construct < 0 && view.Weapon.Animation >= 0 && view.Weapon.Animation < runtime.Sequences.Length &&
-                    view.Weapon.IsActive(tick) && runtime.Sequences[view.Weapon.Animation] is not null)
+                    view.Weapon.IsActive(tick) && runtime.Sequences[view.Weapon.Animation] is not null &&
+                    runtime.Windups?[view.Weapon.Animation] is null)
                 { playback = view.Weapon; animation = playback.Animation; }
                 float extraFlash = 0, extraRecoil = 0;
+                Sequence[]? windingUp = null;
+                WeaponPose? stagedChannel = null;
                 // shortcut: a shared part has one base clip; use rig mixing for layered skeletal animation.
                 if (construct < 0 && pose.WeaponCount > 0 && pose.WeaponOffset + pose.WeaponCount <= weapons.Length)
                     foreach (var channel in weapons.Slice(pose.WeaponOffset, pose.WeaponCount))
                     {
                         var clip = channel.Animation;
+                        if (runtime.Windups is { } windups)
+                        {
+                            var weaponMount = model.Unit.Weapons[channel.Mount];
+                            int staged = model.Unit.AnimationIndex(weaponMount.Animation);
+                            if (staged >= 0 && windups[staged] is { } windup)
+                            {
+                                int duration = weaponMount.Weapon.WindupTicks;
+                                if (!moving && duration > 0 && channel.WindupEndTick > tick)
+                                {
+                                    animation = staged;
+                                    playback = new(staged, channel.WindupEndTick - duration, duration);
+                                    windingUp = windup;
+                                    stagedChannel = channel;
+                                    break;
+                                }
+                                if (clip.Animation == staged && clip.IsActive(tick))
+                                {
+                                    if (moving || view.Body.StartTick > clip.StartTick) continue;
+                                    animation = staged;
+                                    playback = clip;
+                                    stagedChannel = channel;
+                                    break;
+                                }
+                            }
+                        }
                         if (!clip.IsActive(tick) || clip.Animation < 0 || clip.Animation >= runtime.Sequences.Length || runtime.Sequences[clip.Animation] is null) continue;
                         float phase = (float)Math.Clamp((time - clip.StartTick) / clip.DurationTicks, 0, 1);
                         float kick = MathF.Sin(MathF.PI * Math.Clamp(phase * 3, 0, 1));
@@ -358,11 +396,15 @@ public sealed class SpriteWorldView
                 var effect = runtime.Animations[animation]!;
                 var facing = effect.Facing ?? part.Facing;
                 float angle = facing == ModelFacing.Body ? body : weapon;
-                if (!ghost && facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
+                if (facing == ModelFacing.Weapon && stagedChannel is { } stagedAim)
+                    angle = Angle(stagedAim.Facing, stagedAim.Facing, 1);
+                else if (!ghost && facing == ModelFacing.Weapon && runtime.Mount >= 0 && pose.WeaponOffset + runtime.Mount < weapons.Length)
                 {
                     var aim = weapons[pose.WeaponOffset + runtime.Mount];
+                    bool firing = effect.Facing == ModelFacing.Weapon && part.MuzzleLocal.HasValue &&
+                        aim.Animation.Animation == animation && aim.Animation.IsActive(tick);
                     angle = part.AimAtConstruction && aim.Target == default && !aim.Animation.IsActive(tick)
-                        ? body + MathF.PI : Angle(aim.PreviousFacing, aim.Facing, alpha);
+                        ? body + MathF.PI : Angle(aim.PreviousFacing, aim.Facing, firing ? 1 : alpha);
                 }
                 else if (part.AimAtConstruction) angle = body + MathF.PI;
                 angle = constructionAngle ?? angle;
@@ -412,7 +454,7 @@ public sealed class SpriteWorldView
                 Vector2 center = mount + Rotate(new((0.5f - (float)part.PivotX) * size.X, (0.5f - (float)part.PivotY) * size.Y), drawAngle);
                 var team = _ownerColor(view.Owner);
                 team.A = Math.Max(stateFlash, Math.Max(pulse * (float)effect.Flash, extraFlash));
-                var directions = runtime.Sequences[animation]!;
+                var directions = windingUp ?? runtime.Sequences[animation]!;
                 var frame = directions[directions.Length == 1 ? 0 : direction].At(playback, time, tickRate);
                 if (model.Unit.Flight is { } flight && part.Parent < 0 && height > 0.25f && !ghost)
                 {

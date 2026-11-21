@@ -90,8 +90,7 @@ internal static class ConstructionWorkflowChecks
 
         test("Workflow: the real airfield clears its center and builds with occupied cardinal exits", () =>
         {
-            var catalog = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units/units.yaml")),
-                new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             int engineerType = catalog.Units.ToList().FindIndex(t => t.Id == "construction-engineer");
             int airfield = catalog.Units.ToList().FindIndex(t => t.Id == "airfield");
             using var w = new SimulationWorld(catalog.Units, 65536, 65536, speedPerTick: 128,
@@ -143,8 +142,7 @@ internal static class ConstructionWorkflowChecks
 
         test("Workflow: completed barracks clear neutral exit blockers and never park recruits inside", () =>
         {
-            var catalog = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units/units.yaml")),
-                new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             int barracks = catalog.Units.ToList().FindIndex(t => t.Id == "barracks");
             int rifle = catalog.Units.ToList().FindIndex(t => t.Id == "rifleman");
             using var w = new SimulationWorld(catalog.Units, 32768, 24576, speedPerTick: 256,

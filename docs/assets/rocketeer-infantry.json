@@ -1,0 +1,167 @@
+{
+  "source_blend_sha256": "b239b0027a2c35fcd4797867cb0ba7e0f1ae7528fc7d9fd0ff9e76b0f45b5924",
+  "fps": 30,
+  "facings": [
+    "N",
+    "NE",
+    "E",
+    "SE",
+    "S",
+    "SW",
+    "W",
+    "NW"
+  ],
+  "cell": 128,
+  "camera_elevation_degrees": 35.264389682754654,
+  "sprite_rotation": -45,
+  "size": [
+    2.052,
+    3.5541682571313364
+  ],
+  "pivot": [
+    0.5000002384185791,
+    0.7406515181064606
+  ],
+  "muzzle_local": [
+    0.20614731073379516,
+    1.0099715137481688,
+    -0.22648017168045043
+  ],
+  "clips": {
+    "stand": {
+      "action": "RpgIdle",
+      "frames": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46
+      ],
+      "durations": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "loop": true
+    },
+    "travel": {
+      "action": "RpgRun",
+      "frames": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18
+      ],
+      "durations": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "loop": true
+    },
+    "prepare": {
+      "action": "RpgFire",
+      "frames": [
+        0,
+        2,
+        4
+      ],
+      "durations": [
+        2,
+        2,
+        1
+      ],
+      "loop": false
+    },
+    "shoot": {
+      "action": "RpgFire",
+      "frames": [
+        5,
+        7,
+        9,
+        11,
+        13,
+        15,
+        17
+      ],
+      "durations": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1
+      ],
+      "loop": false
+    }
+  },
+  "release_source_frame": 5,
+  "source": "GameAssets/characters/rocketeer-animated-v001/rocketeer-animated.blend",
+  "asset_sources": {
+    "model": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+    "universal_animation_library": "https://quaternius.com/packs/universalanimationlibrary.html",
+    "mixamo": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html"
+  },
+  "outputs_sha256": {
+    "sandbox3d/assets/quaternius/rocketeer.glb": "e07553bd31e0cf53508ad42e416bfdf379d2083c587aa4a1d7b7d7b173f4ca59",
+    "sandbox/resources/units/isometric/rocketeer.tres": "2a56f56c5a8910e68ea8f661a0674524bfd4a5aa2f78a117206f0b2bea1f1827",
+    "sandbox/assets/units/isometric/rocketeer-stand.png": "b03d45352159c4e44a31b46be4302e3deab8354d9bbe5020b85bd91364ae1d9f",
+    "sandbox/assets/units/isometric/rocketeer-travel.png": "c8f0fff528422bb780ce2359481b1249e1fb260dd7ac68bb53200dfe7e711a8f",
+    "sandbox/assets/units/isometric/rocketeer-prepare.png": "6927c5899bf33371c43a7fe22c3bfc29ce09f49d731fc21de915794577c1bf04",
+    "sandbox/assets/units/isometric/rocketeer-shoot.png": "e7edf31929193cf27b0215dd3695c7e205ccece5b5d8b58b9de6abde6830d6c8"
+  }
+}

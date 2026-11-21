@@ -1,0 +1,78 @@
+^rifleman:
+  Inherits: ^unit
+  Vision: { Radius: 8144 }
+  Sensors:
+    Detectors:
+      [
+        {
+          Channel: optical,
+          Signature: visual,
+          Range: 3072,
+          Display: Model,
+          Counters: [stealth],
+        },
+      ]
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: rifleman, FireFromTransport: true }
+      grenade: { Weapon: grenade }
+  Actions:
+    Definitions:
+      grenade: { Mount: grenade, GroundTarget: true }
+  ActionPanel:
+    Buttons:
+      grenade:
+        {
+          Label: Граната,
+          Cursor: grenade,
+          Icon: res://assets/units/rifleman.png,
+        }
+  Presentation: { Model: infantry-rifleman, Name: Пехотинец с автоматом }
+
+rifleman:
+  Inherits: ^rifleman
+  Armaments:
+    Mounts:
+      grenade: { Weapon: iso-grenade, Animation: throw }
+  Presentation: { Animations: [idle, move, fire, throw] }
+
+rocketeer:
+  Inherits: ^unit
+  Vision: { Radius: 6144 }
+  Sensors:
+    Detectors:
+      [
+        {
+          Channel: optical,
+          Signature: visual,
+          Range: 3072,
+          Display: Model,
+          Counters: [stealth],
+        },
+      ]
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: iso-rocketeer-missile, FireFromTransport: true }
+  Presentation: { Model: infantry-rocket, Name: Пехотинец с ракетницей }
+
+sniper:
+  Inherits: ^unit
+  Vision: { Radius: 8144 }
+  Sensors:
+    Detectors:
+      [
+        {
+          Channel: optical,
+          Signature: visual,
+          Range: 8144,
+          Display: Model,
+          Counters: [stealth],
+        },
+      ]
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: sniper-rifle, FireFromTransport: true }
+  Presentation: { Model: infantry-sniper, Name: Снайпер }

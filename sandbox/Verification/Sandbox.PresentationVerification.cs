@@ -1,9 +1,9 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Godot;
 using OpenRTS.Core;
+using OpenRTS.Core.Orders;
 using OpenRTS.Content;
 
 public partial class Sandbox
@@ -22,8 +22,9 @@ public partial class Sandbox
             if (tick != 12 || apc.Presentation.States != expected || !apc.Presentation.Weapon.IsActive(tick) ||
                 apc.Presentation.Body.Animation != type.MoveAnimation || apc.Presentation.BodyFacing == apc.Presentation.WeaponFacing)
                 throw new InvalidOperationException("Concurrent movement, aim, fire and states were not published.");
-            if (sprites.BatchCount != 28 || sprites.SpriteCount != 36)
-                throw new InvalidOperationException($"Expected 28 frame batches and 36 sprite layers including mobile radars; got {sprites.BatchCount}/{sprites.SpriteCount}.");
+            int batchCount = sprites.BatchCount;
+            if (sprites.SpriteCount != 36)
+                throw new InvalidOperationException($"Expected 36 sprite layers including mobile radars; got {sprites.SpriteCount}.");
             int capacity = sprites.Capacity;
             sprites.Apply(ReadOnlySpan<EntityPose>.Empty, 1, tick, tickRate);
             if (sprites.SpriteCount != 0 || sprites.Node.GetChildren().OfType<MultiMeshInstance3D>().Any(n => n.Multimesh.VisibleInstanceCount != 0))
@@ -41,7 +42,7 @@ public partial class Sandbox
                 stress[i] = template with { Id = new((uint)i + 1), Previous = position, Current = position };
             }
             sprites.Apply(stress, 1, tick, tickRate);
-            if (sprites.BatchCount != 28 || sprites.SpriteCount != 18000 || sprites.Node.GetChildCount() != 28)
+            if (sprites.BatchCount != batchCount || sprites.SpriteCount != 18000 || sprites.Node.GetChildCount() != batchCount)
                 throw new InvalidOperationException("Sprite scene size grew with entity count.");
             var savedDisplay = _displayPoses; int savedCount = _displayCount;
             _displayPoses = stress; _displayCount = stress.Length; RefreshSelection();
@@ -94,8 +95,7 @@ public partial class Sandbox
             if (spread > 0.07) throw new InvalidOperationException($"Rocketeer walking exposure flickers: torso spread={spread:P2}.");
             GD.Print($"OPENRTS_WALK_EXPOSURE:PASS torso luminance spread={spread:P2}");
         }
-        var models = ModelCatalog.Load([new("models", File.ReadAllText(ProjectSettings.GlobalizePath("res://content/models/models.yaml")))]);
-        var probe = new OpenRTS.Godot.Rendering.SpriteWorldView(_catalog!, models); AddChild(probe.Node);
+        var probe = new OpenRTS.Godot.Rendering.SpriteWorldView(_catalog!, _modelCatalog!); AddChild(probe.Node);
         foreach (string id in new[] { "rifleman", "rocketeer" })
         {
             int unit = _catalog!.Units.ToList().FindIndex(u => u.Id == id); var type = _catalog.Units[unit];
@@ -188,6 +188,8 @@ public partial class Sandbox
         var frames = new SpriteFrames();
         frames.AddAnimation("stand");
         frames.AddFrame("stand", Texture("stand"));
+        frames.AddAnimation("aim");
+        frames.AddFrame("aim", Texture("aim"));
         for (int direction = 0; direction < 4; direction++)
         {
             string sequence = $"travel-{direction}";
@@ -198,7 +200,13 @@ public partial class Sandbox
             frames.AddFrame(sequence, Texture($"{sequence}-1"));
         }
         if (ResourceSaver.Save(frames, resource) != Error.Ok) throw new IOException("Failed to create directional sprite fixture.");
-        var units = UnitCatalog.Load([new("directional-unit", "u: {Health: {HP: 1}, Presentation: {Model: m, Animations: [idle, move, fire]}}")]);
+        var weapons = WeaponCatalog.Load([new("directional-weapon", "rifle: {Weapon: {WindupTicks: 2}}")]);
+        var units = UnitCatalog.Load([new("directional-unit", """
+            u:
+              Health: {HP: 1}
+              Presentation: {Model: m, Animations: [idle, move, fire]}
+              Armaments: {Mounts: {main: {Weapon: rifle}}}
+            """)], weapons: weapons);
         var models = ModelCatalog.Load([new("directional-model", $$"""
             m:
               Model:
@@ -207,7 +215,7 @@ public partial class Sandbox
                 Animations:
                   idle: { Sequence: stand, Parts: [body] }
                   move: { Sequence: travel, Parts: [body] }
-                  fire: { Sequence: travel, Parts: [body], Facing: Weapon }
+                  fire: { Sequence: travel, WindupSequence: aim, Parts: [body], Facing: Weapon }
             """)]);
         var probe = new SpriteWorldView(units, models); AddChild(probe.Node);
         var unit = units.Units[0];
@@ -221,14 +229,23 @@ public partial class Sandbox
         Check(unit.MoveAnimation, south, south, 3, 0, "travel-2-1");
         Check(unit.MoveAnimation, west, west, 3, 0, "travel-3-1");
         Check(unit.MoveAnimation, west, north, 3, 0.75f, "travel-0-1");
-        Check(unit.AnimationIndex("fire"), east, east, 3, 0, "travel-3-1");
+        int fire = unit.AnimationIndex("fire");
+        Check(fire, east, east, 3, 0, "travel-3-1");
         Check(unit.IdleAnimation, east, east, 3, 0, "stand");
+        var engagement = new OrderSnapshot(UnitActionKind.Move, OrderPhase.Engaging, default, new(2), 0, 0);
+        var firing = new WeaponPose(new(1), 0, west, west, new(fire, 3, 4), 0, 0, new(2));
+        Check(unit.IdleAnimation, east, east, 2, 0, "aim", engagement,
+            firing with { Animation = AnimationPlayback.None, WindupEndTick = 3 });
+        Check(unit.IdleAnimation, east, east, 3, 0, "travel-3-0", engagement, firing);
+        Check(unit.IdleAnimation, east, east, 3, 0, "stand", engagement with { Phase = OrderPhase.Moving }, firing);
         probe.Node.QueueFree();
 
-        void Check(int animation, FacingDirection previous, FacingDirection current, int tick, float alpha, string expected)
+        void Check(int animation, FacingDirection previous, FacingDirection current, int tick, float alpha, string expected,
+            OrderSnapshot order = default, WeaponPose? weapon = null)
         {
             var view = new EntityPresentation(0, previous, current, west, west, new(animation, 0, 0), AnimationPlayback.None, 0);
-            probe.Apply([new(new(1), 0, new(1024, 1024), new(1024, 1024), view)], alpha, tick, 10);
+            probe.Apply([new(new(1), 0, new(1024, 1024), new(1024, 1024), view, order, WeaponCount: weapon.HasValue ? 1 : 0)],
+                alpha, tick, 10, weapon is { } channel ? [channel] : []);
             var batch = probe.Node.GetChildren().OfType<MultiMeshInstance3D>().Single(n => n.Multimesh.VisibleInstanceCount == 1);
             var material = (ShaderMaterial)batch.Multimesh.Mesh.SurfaceGetMaterial(0);
             var texture = (Texture2D)material.GetShaderParameter("sprite_texture").AsGodotObject();

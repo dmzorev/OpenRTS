@@ -21,8 +21,7 @@ internal static class AirBoardingChecks
     {
         test("Air boarding: real heavy transport and combat tiltrotor land for a selected passenger", () =>
         {
-            var catalog = UnitCatalog.Load([new("units", File.ReadAllText("sandbox/content/units/units.yaml")),
-                new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             foreach (string name in new[] { "heavy-air-transport", "tiltrotor" })
             {
                 SimulationReport? reference = null;

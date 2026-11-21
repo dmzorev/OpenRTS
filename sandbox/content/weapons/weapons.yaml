@@ -91,6 +91,10 @@ fighter-missile:
     WindupTicks: 0
     TravelLimit: 24576
 
+tiltrotor-autogun:
+  Inherits: rifle
+  Weapon: { Range: 5120, Damage: 7, Burst: 1, ReloadTicks: 3, WindupTicks: 0 }
+
 tiltrotor-missile:
   Inherits: fighter-missile
   Weapon:

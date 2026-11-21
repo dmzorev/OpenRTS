@@ -1,0 +1,470 @@
+^building:
+  Buildable:
+    { Ticks: 125, Cost: 500, Kind: PlaceBuilding, PlacementRadius: 102400 }
+  Health: { HP: 1000, Armor: Building }
+  Capturable: {}
+  Economy: { Energy: -20 }
+  Movement: { Enabled: false, Locomotor: tracked }
+  Presentation:
+    Animations: [idle, construct, produce, door]
+    States: [damaged, working, destroyed, lowpower, constructing]
+  Footprint:
+    Types:
+      "#": { Traverse: false, CanStop: false }
+      "+": { Traverse: true, CanStop: false, Terrain: road, Targetable: false }
+      "=": { Traverse: true, CanStop: true, Terrain: road, Targetable: false }
+
+power-plant:
+  Inherits: ^building
+  Economy: { Energy: 50 }
+  Footprint: { Rows: ["###", "###"] }
+  Presentation: { Model: power-plant, Name: Электростанция }
+
+barracks:
+  Inherits: ^building
+  TaskQueues:
+    Queues:
+      infantry:
+        {
+          Capacity: 20,
+          Payment: Upfront,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [0, 1024],
+        }
+  Actions:
+    Definitions:
+      rifleman: { Unit: rifleman }
+      sniper: { Unit: sniper }
+      rocketeer: { Unit: rocketeer }
+  ActionPanel:
+    Buttons:
+      rifleman: { Label: Автоматчик }
+      sniper: { Label: Снайпер }
+      rocketeer: { Label: Ракетчик }
+  Footprint: { Rows: ["####", "#++#", "#++#"] }
+  Presentation: { Model: barracks, Name: Бараки }
+
+factory:
+  Inherits: ^building
+  TaskQueues:
+    Queues:
+      vehicles:
+        {
+          Capacity: 12,
+          Payment: Progressive,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [1536, 1536],
+        }
+  Actions:
+    Definitions:
+      apc: { Unit: apc-mg, Cost: 500, Ticks: 250 }
+      engineer: { Unit: construction-engineer }
+      tank: { Unit: tank, Cost: 800, Ticks: 350 }
+      mixed-tank: { Unit: tank-mixed, Cost: 850, Ticks: 350 }
+      # repair: { Mount: repair, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      apc: { Label: БТР, Order: 0 }
+      engineer: { Label: Инженер, Order: 1 }
+      tank: { Label: Танк, Order: 2 }
+      mixed-tank: { Label: Мобильный радар, Order: 3 }
+      # repair: { Label: Ремонт, Cursor: repair, Order: 4 }
+  Footprint: { Rows: ["#####", "###++", "###++", "###++"] }
+  Armaments:
+    Mounts:
+      repair: { Weapon: factory-repair, Animation: produce }
+  Upgrades:
+    Variants:
+      heavy: { Cost: 600, Ticks: 175, Products: [tank, mixed-tank] }
+  Presentation:
+    Model: upgradable-factory
+    Name: Завод · ремонтная зона
+    States: [damaged, working, destroyed, lowpower, constructing, heavy]
+
+headquarters:
+  Inherits: ^building
+  Footprint: { Rows: ["####", "####", "####"] }
+  Presentation: { Model: headquarters, Name: HQ · Радар }
+
+supply-center:
+  Inherits: ^building
+  Buildable: { Ticks: 175, Cost: 800 }
+  Economy: { Energy: 0 }
+  Supply: { Role: Depot }
+  TaskQueues:
+    Queues:
+      vehicles:
+        {
+          Capacity: 5,
+          Payment: Upfront,
+          WorkingState: working,
+          ExitAnimation: door,
+          Exit: [1536, 2560],
+        }
+  Actions:
+    Definitions:
+      engineer: { Unit: construction-engineer, Queue: vehicles }
+      truck: { Unit: supply-truck, Queue: vehicles }
+  ActionPanel:
+    Buttons:
+      engineer: { Label: Инженер }
+      truck: { Label: Грузовик снабжения, Order: 1 }
+  Footprint: { Rows: ["#####", "###==", "###==", "###++"] }
+  Presentation: { Model: supply-center, Name: Центр снабжения }
+
+supply-truck:
+  Inherits: ^unit
+  Supply: { Role: Truck, Capacity: 800 }
+  Buildable: { Ticks: 250, Cost: 450 }
+  Movement: { Locomotor: tracked }
+  Health: { HP: 280, Armor: Mechanical }
+  Body: { Kind: Box, HalfSize: [320, 384] }
+  Actions:
+    Definitions:
+      harvest: { Harvest: true, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      harvest: { Label: Добыча, Cursor: harvest }
+  Presentation:
+    Model: supply-truck
+    Name: Грузовик снабжения
+    Animations: [idle, move]
+    States: [damaged, loaded]
+
+^structure-recipes:
+  Actions:
+    Definitions:
+      site-power: { Unit: power-plant, OnSite: true }
+      site-barracks: { Unit: barracks, OnSite: true }
+      site-factory: { Unit: factory, OnSite: true }
+      site-bunker: { Unit: bunker, OnSite: true }
+      site-supply: { Unit: supply-center, OnSite: true }
+      site-airfield: { Unit: airfield, OnSite: true }
+      site-helipad: { Unit: helipad, OnSite: true }
+  ActionPanel:
+    Buttons:
+      site-power: { Label: Электростанция, Hotkey: E, Order: 2 }
+      site-barracks: { Label: Бараки, Hotkey: R, Order: 3 }
+      site-factory: { Label: Завод, Hotkey: T, Order: 4 }
+      site-bunker: { Label: Бункер, Hotkey: U, Order: 6 }
+      site-supply: { Label: Центр снабжения, Hotkey: I, Order: 7 }
+      site-airfield: { Label: Аэродром, Order: 10 }
+      site-helipad: { Label: Вертолётная площадка, Order: 11 }
+crane:
+  Inherits: ^building
+  Inherits@recipes: ^structure-recipes
+  Builder: { Range: 12288 }
+  Buildable: { Ticks: 150, Cost: 700 }
+  Actions:
+    Definitions:
+      build: { Build: true, AutoCast: true }
+      repair: { Mount: repair, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      build: { Label: Помочь строить, Cursor: build, Order: 0 }
+      repair: { Label: Ремонт, Cursor: repair, Order: 1 }
+  Armaments:
+    Mounts:
+      repair: { Weapon: crane-repair, Animation: produce }
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: crane, Name: Кран }
+
+mine:
+  Inherits: ^building
+  -Buildable:
+  -Capturable:
+  Supply: { Role: Mine, Capacity: 300000 }
+  Upgrades:
+    Variants:
+      owned:
+        {
+          Cost: 1200,
+          Ticks: 350,
+          Support: true,
+          Default: true,
+          ClaimNeutral: true,
+        }
+  Health: { Destruction: Neutralize }
+  Economy: { Energy: 0 }
+  Footprint: { Rows: ["###", "###", "#+#", "#+#"] }
+  Presentation:
+    Model: mine
+    Name: Шахта
+    States: [damaged, working, destroyed, lowpower, constructing, owned]
+
+bunker:
+  Inherits: ^building
+  Buildable: { Ticks: 100, Cost: 400 }
+  Economy: { Energy: 0 }
+  Transport: { Accepts: [infantry], Slots: 4, FireFromInside: true }
+  Armaments:
+    Mounts:
+      cannon: { Weapon: cannon }
+      machinegun: { Weapon: rifle }
+      missiles: { Weapon: missile }
+  Upgrades:
+    Variants:
+      expanded:
+        { Cost: 250, Ticks: 100, Support: true, Default: true, Seats: 8 }
+      cannon: { Cost: 350, Ticks: 125, Support: true, Mounts: [cannon] }
+      mixed:
+        { Cost: 400, Ticks: 140, Support: true, Mounts: [machinegun, missiles] }
+  Footprint: { Rows: ["##", "##"] }
+  Presentation:
+    Model: bunker-upgradable
+    Name: Бункер
+    Animations: [idle, construct, produce, fire]
+    States:
+      [
+        damaged,
+        working,
+        destroyed,
+        lowpower,
+        constructing,
+        expanded,
+        cannon,
+        mixed,
+        garrisoned,
+      ]
+
+oil-derrick:
+  Inherits: ^building
+  -Buildable:
+  Health: { Destruction: Neutralize }
+  Economy: { Energy: 0, Income: 50, Interval: 100 }
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: oil-derrick, Name: Нефтяная вышка }
+
+^nature:
+  Health: { HP: 600, Armor: Building, Destruction: Invulnerable }
+  Movement: { Enabled: false }
+  Presentation: { Animations: [idle], States: [destroyed], Selectable: false }
+
+nature-trees:
+  Inherits: ^nature
+  Footprint:
+    Rows: ["ttt", "ttt"]
+    Types: { t: { Traverse: true, Terrain: forest } }
+  Presentation: { Model: nature-trees, Name: Деревья · лес }
+
+nature-rocks:
+  Inherits: ^nature
+  Footprint:
+    Rows: ["rr", "rr"]
+    Types: { r: { Terrain: mountains } }
+  Presentation: { Model: nature-rocks, Name: Груда камней }
+
+nature-cliff:
+  Inherits: ^nature
+  Footprint:
+    Rows: [".rr", "rrr", "rr."]
+    Types: { r: { Terrain: mountains } }
+  Presentation: { Model: nature-cliff, Name: Скала · горы }
+
+nature-debris:
+  Inherits: ^nature
+  Footprint:
+    Rows: ["rrr", "rrr"]
+    Types: { r: { Traverse: false, CanStop: false } }
+  Presentation: { Model: nature-debris, Name: Обломки }
+
+light-infantry:
+  Inherits: rifleman
+  Body: { Kind: Circle, Radius: 160 }
+  Presentation: { Name: Пехота · радиус 160 }
+
+medium-apc:
+  Inherits: apc-mg
+  Body: { Kind: Circle, Radius: 384 }
+  Presentation: { Name: БТР · радиус 384 }
+
+large-tank:
+  Inherits: tank
+  Body: { Kind: Circle, Radius: 640 }
+  Presentation: { Name: Танк · радиус 640 }
+
+box-vehicle:
+  Inherits: tank
+  Body: { Kind: Box, HalfSize: [640, 320] }
+  Presentation: { Name: Техника · прямоугольное тело }
+
+civilian-house:
+  Transport: { Accepts: [infantry], Slots: 6, FireFromInside: true }
+  Health: { HP: 1000, Armor: Building }
+  Movement: { Enabled: false }
+  Footprint:
+    Rows: ["###", "###", "###"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Presentation:
+    Model: civilian-house
+    Name: Гражданский дом
+    Animations: [idle]
+    States: [damaged, garrisoned, nearly-destroyed, destroyed]
+
+civilian-apartments:
+  Inherits: civilian-house
+  Presentation: { Model: civilian-apartments, Name: Жилой комплекс }
+
+civilian-clinic:
+  Inherits: civilian-house
+  Footprint: { Rows: ["##", "##"] }
+  Presentation: { Model: civilian-clinic, Name: Клиника }
+
+civilian-market:
+  Inherits: civilian-house
+  Footprint: { Rows: ["####", "####"] }
+  Presentation: { Model: civilian-market, Name: Магазин }
+
+civilian-library:
+  Inherits: civilian-house
+  Footprint: { Rows: ["###", "###", "###"] }
+  Presentation: { Model: civilian-library, Name: Библиотека }
+
+civilian-station:
+  Inherits: civilian-house
+  Footprint: { Rows: ["#####", "#####"] }
+  Presentation: { Model: civilian-station, Name: Станция }
+
+civilian-community:
+  Inherits: civilian-house
+  Footprint: { Rows: ["####", "####", "####", "####"] }
+  Presentation: { Model: civilian-community, Name: Общественный центр }
+
+construction-engineer:
+  Inherits: engineer
+  Inherits@recipes: ^structure-recipes
+  Actions:
+    Definitions:
+      site-crane: { Unit: crane, OnSite: true }
+  ActionPanel:
+    Buttons:
+      site-crane: { Label: Кран, Hotkey: O, Order: 9 }
+  Presentation: { Name: Инженер }
+
+engineering-tiltrotor:
+  Inherits: construction-engineer
+  Builder: { Range: 1536, WorkInterval: 2 }
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 550, Cost: 1300 }
+  Aircraft:
+    WorkRoaming: true
+    Mode: Hover
+    Speed: 192
+    CruiseAltitude: 3584
+    VerticalSpeed: 144
+    ServiceType: rotorcraft
+    Categories: [air, helicopter, tiltrotor]
+  Presentation:
+    Model: engineering-tiltrotor
+    Name: Воздушный инженер
+    States: [damaged, airborne]
+
+supply-tiltrotor:
+  Inherits: supply-truck
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 425, Cost: 1100 }
+  Supply: { Role: Truck, Capacity: 400 }
+  Aircraft:
+    Mode: Hover
+    Speed: 192
+    CruiseAltitude: 3584
+    VerticalSpeed: 144
+    ServiceType: rotorcraft
+    Categories: [air, helicopter, tiltrotor]
+  Presentation:
+    Model: supply-tiltrotor
+    Name: Конвертоплан снабжения
+    States: [damaged, loaded, airborne]
+
+heavy-air-transport:
+  Inherits: tiltrotor
+  -Armaments:
+  Body: { Radius: 480 }
+  Health: { HP: 800 }
+  Buildable: { Ticks: 375, Cost: 1800 }
+  Aircraft: { Ammo: 0, Speed: 144 }
+  Transport: { Accepts: [infantry, vehicle], Slots: 12, UnloadDistance: 1024 }
+  Presentation:
+    Model: heavy-air-transport
+    Name: Тяжёлый воздушный транспорт
+
+airfield:
+  Inherits: ^building
+  Health: { HP: 1800 }
+  Buildable: { Ticks: 200, Cost: 1800 }
+  Economy: { Energy: -20 }
+  Footprint:
+    Rows:
+      [
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+        "########",
+      ]
+  Airbase:
+    Slots: [[-2048, -512], [2048, -512], [-2048, 2048], [2048, 2048]]
+    Accepts: [fighter]
+    RunwayStart: [0, 3072]
+    RunwayEnd: [0, -1536]
+    KeepsParking: true
+    ReloadTicks: 12
+    RepairPerTick: 2
+  TaskQueues:
+    Queues:
+      aircraft: { Capacity: 8, Payment: Upfront, WorkingState: working }
+  Actions:
+    Definitions:
+      fighter: { Unit: fighter }
+  ActionPanel:
+    Buttons:
+      fighter: { Label: Истребитель, Icon: "res://assets/units/fighter.png" }
+  Presentation: { Model: airfield, Name: Аэродром · 4 самолёта }
+
+helipad:
+  Inherits: ^building
+  Health: { HP: 900 }
+  Buildable: { Ticks: 425, Cost: 800 }
+  Economy: { Energy: -10 }
+  Footprint: { Rows: ["####", "####", "####", "####"] }
+  Airbase:
+    Slots: [[0, 0]]
+    Accepts: [rotorcraft]
+    ReloadTicks: 10
+    RepairPerTick: 2
+  TaskQueues:
+    Queues:
+      rotorcraft: { Capacity: 8, Payment: Upfront, WorkingState: working }
+  Actions:
+    Definitions:
+      tiltrotor: { Unit: tiltrotor }
+      engineer-air: { Unit: engineering-tiltrotor }
+      supply-air: { Unit: supply-tiltrotor }
+      heavy-transport: { Unit: heavy-air-transport }
+  ActionPanel:
+    Buttons:
+      tiltrotor:
+        { Label: Конвертоплан, Icon: "res://assets/units/tiltrotor.png" }
+      engineer-air:
+        {
+          Label: Воздушный инженер,
+          Icon: "res://assets/units/engineering-tiltrotor.png",
+        }
+      supply-air:
+        {
+          Label: Воздушное снабжение,
+          Icon: "res://assets/units/supply-tiltrotor.png",
+        }
+      heavy-transport:
+        {
+          Label: Тяжёлый транспорт,
+          Icon: "res://assets/units/heavy-air-transport.png",
+        }
+  Presentation: { Model: helipad, Name: Вертолётная площадка }

@@ -1,0 +1,9 @@
+rifle:
+  Weapon: { Range: 4096, AcquireRange: 8192, Damage: 12, Burst: 3, ReloadTicks: 24 }
+grenade:
+  Weapon: { Range: 4096, AcquireRange: 6144, Projectile: Grenade, Damage: 45, SplashRadius: 1800, ReloadTicks: 65 }
+repair:
+  Weapon: { Range: 2048, AcquireRange: 2048, Effect: Repair, Damage: 10, ReloadTicks: 8 }
+factory-repair:
+  Inherits: repair
+  Weapon: { Range: 4096, AcquireRange: 4096 }

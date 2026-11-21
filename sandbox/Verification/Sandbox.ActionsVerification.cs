@@ -30,9 +30,12 @@ public partial class Sandbox
                 Check(_activeType == poses.Single(p => p.Id.Value == 16).UnitType && HandleCustomKey(new InputEventKey(), Key.Q) && _armedCustom == "repair", "A same-frame selection left the previous action panel active");
                 SelectTypes(12);
                 var original = _catalog!;
-                var source = File.ReadAllText(ProjectSettings.GlobalizePath("res://content/units/units.yaml")).Replace("Cursor: grenade,", "Hotkey: A, Cursor: grenade,");
-                var weapon = WeaponCatalog.Load([new("weapons", File.ReadAllText(ProjectSettings.GlobalizePath("res://content/weapons/weapons.yaml")))]);
-                _catalog = UnitCatalog.Load([new("units", source), new("buildings", File.ReadAllText(ProjectSettings.GlobalizePath("res://content/units/buildings.yaml")))], original.Locomotion, weapon);
+                _catalog = _manifest.LoadUnits(_manifest.Rules.Select(rule => rule with
+                {
+                    Text = rule.Text.Replace("Cursor: grenade,", "Hotkey: A, Cursor: grenade,", StringComparison.Ordinal)
+                }));
+                Check(_catalog.Presentations.Any(unit => unit.Actions?.Any(binding => binding.Id == "grenade" && binding.Hotkey == "A") == true),
+                    "The fixture did not assign A to the grenade ability");
                 Check(_catalog.Summary == original.Summary, "Hotkey changed gameplay content");
                 _panelRevision = -1; RefreshSelection();
                 HandleRtsKey(new InputEventKey(), Key.A); Check(_armedCustom == "grenade" && _armedAction is null, "Custom A lost to standard attack-move");

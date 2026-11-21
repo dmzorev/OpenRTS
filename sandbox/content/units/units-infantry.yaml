@@ -1,4 +1,4 @@
-rifleman:
+^rifleman:
   Inherits: ^unit
   Vision: { Radius: 8144 }
   Sensors:
@@ -28,7 +28,10 @@ rifleman:
           Cursor: grenade,
           Icon: res://assets/units/rifleman.png,
         }
-  Presentation: { Model: infantry-rifle, Name: Пехотинец с автоматом }
+  Presentation: { Model: infantry-rifleman, Name: Пехотинец с автоматом }
+
+rifleman:
+  Inherits: ^rifleman
 
 rocketeer:
   Inherits: ^unit
@@ -68,4 +71,4 @@ sniper:
   Armaments:
     Mounts:
       main: { Weapon: sniper-rifle, FireFromTransport: true }
-  Presentation: { Model: infantry-rifle, Name: Снайпер }
+  Presentation: { Model: infantry-sniper, Name: Снайпер }

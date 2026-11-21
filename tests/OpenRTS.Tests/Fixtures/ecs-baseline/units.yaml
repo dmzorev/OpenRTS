@@ -1,0 +1,211 @@
+^unit:
+  Buildable: { Ticks: 75, Cost: 100 }
+  Movement: { Locomotor: infantry }
+  Health: { HP: 100, Armor: Living }
+  Presentation:
+    Animations: [idle, move, fire]
+    States: [damaged]
+
+rifleman:
+  Inherits: ^unit
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: rifleman, FireFromTransport: true }
+      grenade: { Weapon: grenade }
+  Actions:
+    Definitions:
+      grenade: { Mount: grenade, GroundTarget: true }
+  ActionPanel:
+    Buttons:
+      grenade:
+        {
+          Label: Граната,
+          Cursor: grenade,
+          Icon: res://assets/units/rifleman.png,
+        }
+  Presentation: { Model: infantry-rifle, Name: Пехотинец с автоматом }
+
+rocketeer:
+  Inherits: ^unit
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: missile, FireFromTransport: true }
+  Presentation: { Model: infantry-rocket, Name: Пехотинец с ракетницей }
+
+^apc:
+  Inherits: ^unit
+  Passenger: { Type: vehicle, Slots: 6 }
+  Transport: { Accepts: [infantry], Slots: 6, UnloadDistance: 768 }
+  Movement: { Locomotor: amphibious }
+  Health: { HP: 250, Armor: Mechanical }
+  Presentation: { States: [damaged, swimming] }
+
+apc-mg:
+  Inherits: ^apc
+  Armaments:
+    Mounts:
+      main: { Weapon: rifle, FireWhileMoving: true }
+      option-rocket: { Weapon: missile, FireWhileMoving: true }
+      option-cannon: { Weapon: cannon }
+  Upgrades:
+    Variants:
+      rockets:
+        {
+          Cost: 300,
+          Ticks: 90,
+          Support: true,
+          ReplaceWeapons: true,
+          Mounts: [option-rocket],
+        }
+      cannon:
+        {
+          Cost: 450,
+          Ticks: 110,
+          Support: true,
+          ReplaceWeapons: true,
+          Mounts: [option-cannon],
+        }
+      firing-ports: { Cost: 125, Ticks: 75, Support: true, PassengerFire: true }
+  Presentation:
+    Model: apc-upgradable
+    Animations: [idle, move, fire, construct]
+    States: [damaged, swimming, rockets, cannon, firing-ports]
+    Name: БТР · пулемёт
+
+apc-rocket:
+  Inherits: ^apc
+  Transport: { FireFromInside: true }
+  Armaments:
+    Mounts:
+      main: { Weapon: missile }
+  Presentation: { Model: apc-missiles, Name: БТР · ракеты }
+
+tank:
+  Inherits: ^apc
+  -Transport:
+  Armaments:
+    Mounts:
+      main: { Weapon: cannon }
+  Movement: { Locomotor: tracked }
+  Health: { HP: 400 }
+  Presentation: { Model: tank, Name: Танк }
+
+tank-mixed:
+  Inherits: tank
+  Armaments:
+    Mounts:
+      main: { Weapon: cannon, Animation: fire }
+      missiles: { Weapon: missile, Animation: missiles, FireWhileMoving: true }
+  Presentation:
+    Model: tank-mixed
+    Animations: [idle, move, fire, missiles]
+    Name: Мобильный радар · пулемёт и ракеты
+
+engineer:
+  Inherits: ^unit
+  Builder: { Range: 1536 }
+  Actions:
+    Definitions:
+      capture: { Capture: true, Range: 1024 }
+      repair: { Mount: main, AutoCast: true }
+      build: { Build: true, AutoCast: true }
+  ActionPanel:
+    Buttons:
+      repair: { Label: Ремонт, Cursor: repair, Order: 0 }
+      capture: { Label: Захват, Cursor: capture, Order: 1 }
+      build: { Label: Помочь строить, Hotkey: P, Cursor: build, Order: 7 }
+  Movement: { Locomotor: amphibious }
+  Health: { HP: 220, Armor: Mechanical }
+  Armaments:
+    Mounts:
+      main: { Weapon: repair, Animation: repair }
+  Presentation:
+    Model: engineer
+    Animations: [idle, move, repair]
+    States: [damaged, swimming]
+    Name: Инженерная машина
+
+bunker-cannon:
+  Inherits: tank
+  Buildable: { Ticks: 100, Cost: 550, Kind: PlaceBuilding }
+  -Passenger:
+  Capturable: {}
+  Economy: { Energy: -15 }
+  Footprint:
+    Rows: ["##", "##"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Movement: { Enabled: false }
+  Health: { HP: 700, Armor: Building }
+  Presentation:
+    Model: bunker-cannon
+    Name: ДОТ · пушка
+    States: [damaged, working, destroyed, lowpower, constructing]
+
+bunker-mixed:
+  Inherits: tank-mixed
+  Buildable: { Ticks: 100, Cost: 750, Kind: PlaceBuilding }
+  -Passenger:
+  Capturable: {}
+  Economy: { Energy: -25 }
+  Footprint:
+    Rows: ["##", "##"]
+    Types: { "#": { Traverse: false, CanStop: false } }
+  Movement: { Enabled: false }
+  Health: { HP: 700, Armor: Building }
+  Presentation:
+    Model: bunker-mixed
+    Name: ДОТ · пушка и ракеты
+    States: [damaged, working, destroyed, lowpower, constructing]
+
+sniper:
+  Inherits: ^unit
+  Passenger: { Type: infantry }
+  Armaments:
+    Mounts:
+      main: { Weapon: sniper-rifle, FireFromTransport: true }
+  Presentation: { Model: infantry-rifle, Name: Снайпер }
+
+fighter:
+  Inherits: ^unit
+  Movement: { Locomotor: tracked }
+  Health: { HP: 280, Armor: Mechanical }
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 450, Cost: 1200 }
+  Aircraft:
+    Mode: ForwardFlight
+    Speed: 256
+    MinimumSpeed: 160
+    TurnRate: 12
+    CruiseAltitude: 5120
+    VerticalSpeed: 160
+    Ammo: 6
+    ServiceType: fighter
+    Categories: [air, airplane]
+    NeedsRunway: true
+  Armaments:
+    Mounts:
+      main: { Weapon: fighter-missile, FireWhileMoving: true }
+  Presentation: { Model: fighter, Name: Истребитель }
+
+tiltrotor:
+  Inherits: ^unit
+  Movement: { Locomotor: tracked }
+  Health: { HP: 350, Armor: Mechanical }
+  Body: { Radius: 320 }
+  Buildable: { Ticks: 325, Cost: 1000 }
+  Aircraft:
+    Mode: Hover
+    Speed: 192
+    CruiseAltitude: 3584
+    VerticalSpeed: 144
+    Ammo: 8
+    ServiceType: rotorcraft
+    Categories: [air, helicopter, tiltrotor]
+  Armaments:
+    Mounts:
+      main: { Weapon: tiltrotor-missile, FireWhileMoving: true }
+  Transport: { Accepts: [infantry], Slots: 4, UnloadDistance: 768 }
+  Presentation:
+    { Model: tiltrotor, Name: Конвертоплан, States: [damaged, airborne] }

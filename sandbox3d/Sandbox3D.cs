@@ -3,6 +3,7 @@ using Godot;
 using DeclarativeContent;
 using OpenRTS.Content;
 using OpenRTS.Core;
+using OpenRTS.Core.Combat;
 using OpenRTS.Core.Presentation;
 using OpenRTS.Godot.Controls;
 
@@ -23,7 +24,7 @@ public partial class Sandbox3D : Node3D
     private RtsOverlay _overlay = null!;
     private Label _status = null!;
     private MeshInstance3D _goal = null!;
-    private Mesh _selectionMesh = null!;
+    private Mesh _selectionMesh = null!, _targetMesh = null!;
     private float _baseCameraSize, _goalTime;
     private bool _verify, _failed;
     private Rect2 ViewRect => GetViewport().GetVisibleRect();
@@ -34,7 +35,8 @@ public partial class Sandbox3D : Node3D
         {
             _verify = OS.GetCmdlineUserArgs().Contains("--verify");
             var terrain = LocomotionCatalog.Load([ReadContent("res://terrain.yaml")]);
-            var catalog = UnitCatalog.Load([ReadContent("res://units.yaml")], terrain);
+            var weapons = WeaponCatalog.Load([ReadContent("res://weapons.yaml")]);
+            var catalog = UnitCatalog.Load([ReadContent("res://units.yaml")], terrain, weapons);
             _scenario = new(catalog);
             _terrain = new(_scenario.Grid);
             GetNode<MeshInstance3D>("Ground").Mesh = _terrain.Mesh;
@@ -48,8 +50,10 @@ public partial class Sandbox3D : Node3D
                     ProjectSettings.GetSetting("display/window/size/viewport_height").AsInt32());
             window.FocusExited += CancelDrag;
             _selectionMesh = RingMesh(new Color("#84efb9"));
+            _targetMesh = RingMesh(new Color("#f28b77"));
             _goal = new MeshInstance3D { Mesh = RingMesh(new Color("#ffe184")), Visible = false };
             AddChild(_goal);
+            CreateRocketBatch();
 
             var layer = new CanvasLayer();
             AddChild(layer);
@@ -59,7 +63,7 @@ public partial class Sandbox3D : Node3D
             {
                 Position = new Vector2(16, 12),
                 MouseFilter = Control.MouseFilterEnum.Ignore,
-                Text = "ЛКМ / рамка — выбор    ПКМ — движение    Shift — очередь\n" +
+                Text = "ЛКМ / рамка — выбор    ПКМ — движение или атака    Shift — очередь\n" +
                     "Стрелки / СКМ — камера    Колесо — масштаб    Пробел — к выбору\n" +
                     "M — цель движения    S / H — стоп / удерживать    Ctrl+1–9 — сохранить группу"
             };
@@ -95,14 +99,16 @@ public partial class Sandbox3D : Node3D
             using var frame = _session.Frames.AcquireLatest();
             if (frame is null) return;
 
-            UpdateActors(frame.Poses, _session.GetInterpolationAlpha(frame.Tick));
+            float alpha = _session.GetInterpolationAlpha(frame.Tick);
+            UpdateActors(frame.Poses, frame.Weapons, alpha, frame.Tick);
+            UpdateRockets(frame.Projectiles, alpha);
             while (_session.TryReadEvent(out _)) { }
             if (_verify) VerifyControls(frame);
         }
         catch (Exception error) { Fail(error); }
     }
 
-    private void UpdateActors(ReadOnlySpan<EntityPose> poses, float alpha)
+    private void UpdateActors(ReadOnlySpan<EntityPose> poses, ReadOnlySpan<WeaponPose> weapons, float alpha, long tick)
     {
         _displayed.Clear();
         foreach (var pose in poses)
@@ -111,11 +117,13 @@ public partial class Sandbox3D : Node3D
             _displayed.Add(pose.Id);
             if (!_actors.TryGetValue(pose.Id, out var actor))
             {
-                actor = new ActorView(_models[pose.UnitType], _selectionMesh, pose.UnitType);
+                var marker = pose.Presentation.Owner == 1 ? _selectionMesh : _targetMesh;
+                actor = new ActorView(_models[pose.UnitType], marker, pose.UnitType);
                 AddChild(actor.Node);
                 _actors.Add(pose.Id, actor);
             }
-            actor.Apply(pose, alpha, _terrain.NormalAt(pose.Current));
+            var weapon = pose.WeaponCount == 0 ? default : weapons[pose.WeaponOffset];
+            actor.Apply(pose, alpha, _terrain.NormalAt(pose.Current), tick, weapon);
         }
         _removed.Clear();
         foreach (var (id, actor) in _actors)

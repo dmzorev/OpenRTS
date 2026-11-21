@@ -1,0 +1,526 @@
+[gd_resource type="SpriteFrames" load_steps=67 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/units/isometric/tiltrotor-airborne.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="open_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_0"]
+atlas = ExtResource("1")
+region = Rect2(251, 0, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_1"]
+atlas = ExtResource("1")
+region = Rect2(0, 252, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_1"]
+atlas = ExtResource("1")
+region = Rect2(251, 252, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_2"]
+atlas = ExtResource("1")
+region = Rect2(0, 504, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_2"]
+atlas = ExtResource("1")
+region = Rect2(251, 504, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_3"]
+atlas = ExtResource("1")
+region = Rect2(0, 756, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_3"]
+atlas = ExtResource("1")
+region = Rect2(251, 756, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_4"]
+atlas = ExtResource("1")
+region = Rect2(0, 1008, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_4"]
+atlas = ExtResource("1")
+region = Rect2(251, 1008, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_5"]
+atlas = ExtResource("1")
+region = Rect2(0, 1260, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_5"]
+atlas = ExtResource("1")
+region = Rect2(251, 1260, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_6"]
+atlas = ExtResource("1")
+region = Rect2(0, 1512, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_6"]
+atlas = ExtResource("1")
+region = Rect2(251, 1512, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_7"]
+atlas = ExtResource("1")
+region = Rect2(0, 1764, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_7"]
+atlas = ExtResource("1")
+region = Rect2(251, 1764, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_8"]
+atlas = ExtResource("1")
+region = Rect2(0, 2016, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_8"]
+atlas = ExtResource("1")
+region = Rect2(251, 2016, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_9"]
+atlas = ExtResource("1")
+region = Rect2(0, 2268, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_9"]
+atlas = ExtResource("1")
+region = Rect2(251, 2268, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_10"]
+atlas = ExtResource("1")
+region = Rect2(0, 2520, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_10"]
+atlas = ExtResource("1")
+region = Rect2(251, 2520, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_11"]
+atlas = ExtResource("1")
+region = Rect2(0, 2772, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_11"]
+atlas = ExtResource("1")
+region = Rect2(251, 2772, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_12"]
+atlas = ExtResource("1")
+region = Rect2(0, 3024, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_12"]
+atlas = ExtResource("1")
+region = Rect2(251, 3024, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_13"]
+atlas = ExtResource("1")
+region = Rect2(0, 3276, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_13"]
+atlas = ExtResource("1")
+region = Rect2(251, 3276, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_14"]
+atlas = ExtResource("1")
+region = Rect2(0, 3528, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_14"]
+atlas = ExtResource("1")
+region = Rect2(251, 3528, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_15"]
+atlas = ExtResource("1")
+region = Rect2(0, 3780, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_15"]
+atlas = ExtResource("1")
+region = Rect2(251, 3780, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_16"]
+atlas = ExtResource("1")
+region = Rect2(502, 0, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_16"]
+atlas = ExtResource("1")
+region = Rect2(753, 0, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_17"]
+atlas = ExtResource("1")
+region = Rect2(502, 252, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_17"]
+atlas = ExtResource("1")
+region = Rect2(753, 252, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_18"]
+atlas = ExtResource("1")
+region = Rect2(502, 504, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_18"]
+atlas = ExtResource("1")
+region = Rect2(753, 504, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_19"]
+atlas = ExtResource("1")
+region = Rect2(502, 756, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_19"]
+atlas = ExtResource("1")
+region = Rect2(753, 756, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_20"]
+atlas = ExtResource("1")
+region = Rect2(502, 1008, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_20"]
+atlas = ExtResource("1")
+region = Rect2(753, 1008, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_21"]
+atlas = ExtResource("1")
+region = Rect2(502, 1260, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_21"]
+atlas = ExtResource("1")
+region = Rect2(753, 1260, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_22"]
+atlas = ExtResource("1")
+region = Rect2(502, 1512, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_22"]
+atlas = ExtResource("1")
+region = Rect2(753, 1512, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_23"]
+atlas = ExtResource("1")
+region = Rect2(502, 1764, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_23"]
+atlas = ExtResource("1")
+region = Rect2(753, 1764, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_24"]
+atlas = ExtResource("1")
+region = Rect2(502, 2016, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_24"]
+atlas = ExtResource("1")
+region = Rect2(753, 2016, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_25"]
+atlas = ExtResource("1")
+region = Rect2(502, 2268, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_25"]
+atlas = ExtResource("1")
+region = Rect2(753, 2268, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_26"]
+atlas = ExtResource("1")
+region = Rect2(502, 2520, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_26"]
+atlas = ExtResource("1")
+region = Rect2(753, 2520, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_27"]
+atlas = ExtResource("1")
+region = Rect2(502, 2772, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_27"]
+atlas = ExtResource("1")
+region = Rect2(753, 2772, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_28"]
+atlas = ExtResource("1")
+region = Rect2(502, 3024, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_28"]
+atlas = ExtResource("1")
+region = Rect2(753, 3024, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_29"]
+atlas = ExtResource("1")
+region = Rect2(502, 3276, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_29"]
+atlas = ExtResource("1")
+region = Rect2(753, 3276, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_30"]
+atlas = ExtResource("1")
+region = Rect2(502, 3528, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_30"]
+atlas = ExtResource("1")
+region = Rect2(753, 3528, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="open_31"]
+atlas = ExtResource("1")
+region = Rect2(502, 3780, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="travel_31"]
+atlas = ExtResource("1")
+region = Rect2(753, 3780, 251, 252)
+filter_clip = true
+
+[sub_resource type="AtlasTexture" id="icon"]
+atlas = ExtResource("1")
+region = Rect2(1004, 0, 256, 256)
+filter_clip = true
+
+[resource]
+animations = [{
+"frames": [{"duration": 1.0, "texture": SubResource("icon")}],
+"loop": false, "name": &"icon", "speed": 1.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_0")}],
+"loop": true, "name": &"stand-0", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_0")}, {"duration": 1.0, "texture": SubResource("travel_0")}],
+"loop": true, "name": &"travel-0", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_1")}],
+"loop": true, "name": &"stand-1", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_1")}, {"duration": 1.0, "texture": SubResource("travel_1")}],
+"loop": true, "name": &"travel-1", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_2")}],
+"loop": true, "name": &"stand-2", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_2")}, {"duration": 1.0, "texture": SubResource("travel_2")}],
+"loop": true, "name": &"travel-2", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_3")}],
+"loop": true, "name": &"stand-3", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_3")}, {"duration": 1.0, "texture": SubResource("travel_3")}],
+"loop": true, "name": &"travel-3", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_4")}],
+"loop": true, "name": &"stand-4", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_4")}, {"duration": 1.0, "texture": SubResource("travel_4")}],
+"loop": true, "name": &"travel-4", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_5")}],
+"loop": true, "name": &"stand-5", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_5")}, {"duration": 1.0, "texture": SubResource("travel_5")}],
+"loop": true, "name": &"travel-5", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_6")}],
+"loop": true, "name": &"stand-6", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_6")}, {"duration": 1.0, "texture": SubResource("travel_6")}],
+"loop": true, "name": &"travel-6", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_7")}],
+"loop": true, "name": &"stand-7", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_7")}, {"duration": 1.0, "texture": SubResource("travel_7")}],
+"loop": true, "name": &"travel-7", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_8")}],
+"loop": true, "name": &"stand-8", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_8")}, {"duration": 1.0, "texture": SubResource("travel_8")}],
+"loop": true, "name": &"travel-8", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_9")}],
+"loop": true, "name": &"stand-9", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_9")}, {"duration": 1.0, "texture": SubResource("travel_9")}],
+"loop": true, "name": &"travel-9", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_10")}],
+"loop": true, "name": &"stand-10", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_10")}, {"duration": 1.0, "texture": SubResource("travel_10")}],
+"loop": true, "name": &"travel-10", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_11")}],
+"loop": true, "name": &"stand-11", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_11")}, {"duration": 1.0, "texture": SubResource("travel_11")}],
+"loop": true, "name": &"travel-11", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_12")}],
+"loop": true, "name": &"stand-12", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_12")}, {"duration": 1.0, "texture": SubResource("travel_12")}],
+"loop": true, "name": &"travel-12", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_13")}],
+"loop": true, "name": &"stand-13", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_13")}, {"duration": 1.0, "texture": SubResource("travel_13")}],
+"loop": true, "name": &"travel-13", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_14")}],
+"loop": true, "name": &"stand-14", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_14")}, {"duration": 1.0, "texture": SubResource("travel_14")}],
+"loop": true, "name": &"travel-14", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_15")}],
+"loop": true, "name": &"stand-15", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_15")}, {"duration": 1.0, "texture": SubResource("travel_15")}],
+"loop": true, "name": &"travel-15", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_16")}],
+"loop": true, "name": &"stand-16", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_16")}, {"duration": 1.0, "texture": SubResource("travel_16")}],
+"loop": true, "name": &"travel-16", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_17")}],
+"loop": true, "name": &"stand-17", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_17")}, {"duration": 1.0, "texture": SubResource("travel_17")}],
+"loop": true, "name": &"travel-17", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_18")}],
+"loop": true, "name": &"stand-18", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_18")}, {"duration": 1.0, "texture": SubResource("travel_18")}],
+"loop": true, "name": &"travel-18", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_19")}],
+"loop": true, "name": &"stand-19", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_19")}, {"duration": 1.0, "texture": SubResource("travel_19")}],
+"loop": true, "name": &"travel-19", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_20")}],
+"loop": true, "name": &"stand-20", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_20")}, {"duration": 1.0, "texture": SubResource("travel_20")}],
+"loop": true, "name": &"travel-20", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_21")}],
+"loop": true, "name": &"stand-21", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_21")}, {"duration": 1.0, "texture": SubResource("travel_21")}],
+"loop": true, "name": &"travel-21", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_22")}],
+"loop": true, "name": &"stand-22", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_22")}, {"duration": 1.0, "texture": SubResource("travel_22")}],
+"loop": true, "name": &"travel-22", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_23")}],
+"loop": true, "name": &"stand-23", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_23")}, {"duration": 1.0, "texture": SubResource("travel_23")}],
+"loop": true, "name": &"travel-23", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_24")}],
+"loop": true, "name": &"stand-24", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_24")}, {"duration": 1.0, "texture": SubResource("travel_24")}],
+"loop": true, "name": &"travel-24", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_25")}],
+"loop": true, "name": &"stand-25", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_25")}, {"duration": 1.0, "texture": SubResource("travel_25")}],
+"loop": true, "name": &"travel-25", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_26")}],
+"loop": true, "name": &"stand-26", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_26")}, {"duration": 1.0, "texture": SubResource("travel_26")}],
+"loop": true, "name": &"travel-26", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_27")}],
+"loop": true, "name": &"stand-27", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_27")}, {"duration": 1.0, "texture": SubResource("travel_27")}],
+"loop": true, "name": &"travel-27", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_28")}],
+"loop": true, "name": &"stand-28", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_28")}, {"duration": 1.0, "texture": SubResource("travel_28")}],
+"loop": true, "name": &"travel-28", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_29")}],
+"loop": true, "name": &"stand-29", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_29")}, {"duration": 1.0, "texture": SubResource("travel_29")}],
+"loop": true, "name": &"travel-29", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_30")}],
+"loop": true, "name": &"stand-30", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_30")}, {"duration": 1.0, "texture": SubResource("travel_30")}],
+"loop": true, "name": &"travel-30", "speed": 12.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_31")}],
+"loop": true, "name": &"stand-31", "speed": 10.0
+}, {
+"frames": [{"duration": 1.0, "texture": SubResource("open_31")}, {"duration": 1.0, "texture": SubResource("travel_31")}],
+"loop": true, "name": &"travel-31", "speed": 12.0
+}]

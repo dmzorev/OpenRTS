@@ -23,6 +23,12 @@ infantry-rifle:
       move: { Sequence: travel, Parts: [body] }
       fire: { Sequence: shoot, Parts: [body], Recoil: 0.045, Flash: 0.24 }
 
+infantry-rifleman:
+  Inherits: infantry-rifle
+
+infantry-sniper:
+  Inherits: infantry-rifle
+
 infantry-rocket:
   Inherits: infantry-rifle
   Model:
@@ -226,6 +232,8 @@ apc-upgradable:
 fighter:
   Inherits: ^sprite
   Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
     Parts:
       body:
         Resource: res://resources/units/fighter.tres
@@ -239,8 +247,6 @@ fighter:
 tiltrotor:
   Inherits: fighter
   Model:
-    States:
-      airborne: { Tint: [1, 1, 1] }
     Parts:
       body:
         Resource: res://resources/units/tiltrotor.tres
@@ -266,6 +272,22 @@ tiltrotor:
       move: { Sequence: travel, Parts: [body, rotor-left, rotor-right] }
       fire:
         { Sequence: shoot, Parts: [body, rotor-left, rotor-right], Flash: 0.18 }
+
+missile-tiltrotor:
+  Inherits: ^sprite
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/missile-tiltrotor.tres
+        Size: [3.05, 3.05]
+        Mount: main
+        MuzzleLocal: [0.476, 0.320, -0.333]
+    Animations:
+      idle: { Sequence: stand, Parts: [body] }
+      move: { Sequence: stand, Parts: [body] }
+      fire: { Sequence: stand, Parts: [body] }
 
 radar-buggy:
   Inherits: ^sprite
@@ -369,48 +391,22 @@ supply-tiltrotor:
       loaded: { Tint: [0.9, 1.1, 0.9] }
 
 heavy-air-transport:
-  Inherits: tiltrotor
+  Inherits: ^sprite
   Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
     Parts:
       body:
-        {
-          Resource: res://resources/units/heavy-air-transport.tres,
-          Size: [4.4, 4.4],
-        }
-      rotor-left: { Size: [0.98, 0.98], Offset: [-1.29, -0.95] }
-      rotor-right: { Size: [0.98, 0.98], Offset: [1.29, -0.95] }
-      rotor-rear-left:
-        Parent: body
-        Resource: res://resources/units/rotor.tres
-        Size: [0.98, 0.98]
-        Offset: [-1.27, 1.10]
-        Layer: 1
+        Resource: res://resources/units/heavy-air-transport-top.tres
+        Size: [5.7, 5.7]
+        HiddenWhen: [airborne]
+      flight:
+        Resource: res://resources/units/heavy-air-transport-top-airborne.tres
+        Size: [5.7, 5.7]
         VisibleWhen: [airborne]
-        Spin: -720
-      rotor-rear-right:
-        Parent: body
-        Resource: res://resources/units/rotor.tres
-        Size: [0.98, 0.98]
-        Offset: [1.27, 1.10]
-        Layer: 1
-        VisibleWhen: [airborne]
-        Spin: 720
+        LoopAnimation: move
+        LoopWhen: airborne
     Animations:
-      idle:
-        {
-          Sequence: stand,
-          Parts:
-            [body, rotor-left, rotor-right, rotor-rear-left, rotor-rear-right],
-        }
-      move:
-        {
-          Sequence: travel,
-          Parts:
-            [body, rotor-left, rotor-right, rotor-rear-left, rotor-rear-right],
-        }
-      fire:
-        {
-          Sequence: shoot,
-          Parts:
-            [body, rotor-left, rotor-right, rotor-rear-left, rotor-rear-right],
-        }
+      idle: { Sequence: stand, Parts: [body, flight] }
+      move: { Sequence: travel, Parts: [flight] }
+      fire: { Sequence: stand, Parts: [body] }

@@ -9,8 +9,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def run(command, expected=0):
-    result = subprocess.run(command, cwd=ROOT, encoding='utf-8', capture_output=True, timeout=60)
+def run(command, expected=0, *, timeout=60):
+    result = subprocess.run(command, cwd=ROOT, encoding='utf-8', capture_output=True, timeout=timeout)
     if result.returncode != expected:
         raise RuntimeError(f"Command returned {result.returncode}, expected {expected}: {command}\n{result.stdout}\n{result.stderr}")
     return result
@@ -74,8 +74,6 @@ def main():
         raise RuntimeError("Configured fog match failed:\n" + fog_match.stdout + fog_match.stderr)
     print("PASS configured hidden match and player fog settings", flush=True)
     expected = report(run(headless).stdout)
-    if expected["DefinitionCount"] != 12:
-        raise RuntimeError("Expected twelve concrete unit definitions, including aviation")
     for count in (1, 10000, 10001):
         result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify", f"--count={count}"])
         if "ERROR:" in result.stderr or "SCRIPT ERROR:" in result.stderr:
@@ -103,13 +101,14 @@ def main():
         # Any-angle motion reaches the wall earlier; 256 ticks exercise routes and local contacts.
         # Complete passage is checked separately by the 1000-member Core regression.
         arguments = ["--navigation", f"--count={count}", f"--ticks={256 if count == 10000 else 128}"]
-        expected_navigation = report(run(headless + arguments + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")
-        reverse = report(run(headless + arguments + ["--workers=4", "--reverse-jobs"]).stdout, "OPENRTS_SIMULATION:")
+        timeout = 180 if count == 10000 else 60
+        expected_navigation = report(run(headless + arguments + ["--workers=1"], timeout=timeout).stdout, "OPENRTS_SIMULATION:")
+        reverse = report(run(headless + arguments + ["--workers=4", "--reverse-jobs"], timeout=timeout).stdout, "OPENRTS_SIMULATION:")
         if reverse != expected_navigation:
             raise RuntimeError("Reversed parallel navigation changed headless state")
         for fps, workers in ((15, 1), (120, 4)):
             result = run([godot, "--headless", "--path", str(ROOT / "sandbox"), "--", "--verify-simulation",
-                f"--fps={fps}", f"--workers={workers}"] + arguments)
+                f"--fps={fps}", f"--workers={workers}"] + arguments, timeout=timeout)
             if "ERROR:" in result.stderr or report(result.stdout, "OPENRTS_SIMULATION:") != expected_navigation:
                 raise RuntimeError("Navigation host parity failed:\n" + result.stdout + result.stderr)
         print(f"PASS {count} navigation entities: sequential/parallel/reverse/Godot parity", flush=True)

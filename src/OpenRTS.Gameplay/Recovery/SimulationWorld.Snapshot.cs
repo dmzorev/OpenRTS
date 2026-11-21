@@ -18,7 +18,8 @@ public sealed partial class SimulationWorld
         RequireCompletedBoundary(); CheckSnapshotMechanics();
         string hash = Report().StateHash;
         _snapshotOrigin ??= hash;
-        int version = _projectiles.Any(shot => shot.FanDirection != default) ? 3 :
+        int version = _projectiles.Any(shot => shot.LaunchAnchor.HasValue) ? 4 :
+            _projectiles.Any(shot => shot.FanDirection != default) ? 3 :
             _projectiles.Any(shot => shot.Departure != default) ? 2 : 1;
         using var payload = new SnapshotBuffer(MaximumSnapshotBytes);
         using (var writer = new BinaryWriter(payload, Encoding.UTF8, true))
@@ -45,7 +46,7 @@ public sealed partial class SimulationWorld
         if (!reader.ReadBytes(13).AsSpan().SequenceEqual(new byte[] { 12, (byte)'O', (byte)'R', (byte)'T', (byte)'S', (byte)'-', (byte)'R', (byte)'U', (byte)'N', (byte)'T', (byte)'I', (byte)'M', (byte)'E' }))
             throw new InvalidDataException("Unknown runtime snapshot format.");
         int version = reader.ReadInt32();
-        if (version is not (1 or 2 or 3)) throw new InvalidDataException("Unknown runtime snapshot format.");
+        if (version is < 1 or > 4) throw new InvalidDataException("Unknown runtime snapshot format.");
         int length = reader.ReadInt32(); byte[] digest = reader.ReadBytes(32);
         if (length < 130 || length > MaximumSnapshotBytes || length != stream.Length - stream.Position ||
             !CryptographicOperations.FixedTimeEquals(digest, SHA256.HashData(snapshot[^length..])))
@@ -131,12 +132,15 @@ public sealed partial class SimulationWorld
             var shot = a.Value(a.Reading ? default : _projectiles[i]);
             if (version >= 2) shot.Departure = a.Value(shot.Departure);
             if (version >= 3) shot.FanDirection = a.Value(shot.FanDirection);
+            if (version >= 4) shot.LaunchAnchor = a.Value(shot.LaunchAnchor);
             if (a.Reading)
             {
                 ValidateType(shot.UnitType);
                 shot.Weapon = _types[shot.UnitType].Weapons[shot.Mount].Weapon;
                 if (shot.Departure != default && (shot.Departure.Tick != shot.BornTick || shot.Departure.Source != shot.Source))
                     throw new InvalidDataException("Projectile departure does not match the active shot.");
+                if (shot.LaunchAnchor is { } launch && (shot.Departure == default || launch.Distance < 1))
+                    throw new InvalidDataException("Invalid projectile launch anchor.");
                 _projectiles.Add(shot);
             }
         }
@@ -170,7 +174,8 @@ public sealed partial class SimulationWorld
         a.Layout<TruckState>("Automatic", "Returning", "Mine", "Depot", "Station", "Cargo", "Arrival"); a.Layout<MineState>("Remaining");
         a.Layout<UpgradeState>("Completed", "Project", "Work", "Support", "Payer");
         a.Layout<ProjectileDeparture>("Tick", "Source", "Origin", "BodyFacing", "MountFacing");
-        a.LayoutOmitting<ProjectileState>(["Weapon", "Departure", "FanDirection"], "Id", "BornTick", "Source", "Target", "Owner", "UnitType", "Mount", "Remaining", "InitialDistance", "Previous", "Position", "Destination", "Hover", "LaunchElevation");
+        a.Layout<ProjectileLaunch>("Origin", "Distance", "Observers");
+        a.LayoutOmitting<ProjectileState>(["Weapon", "Departure", "FanDirection", "LaunchAnchor"], "Id", "BornTick", "Source", "Target", "Owner", "UnitType", "Mount", "Remaining", "InitialDistance", "Previous", "Position", "Destination", "Hover", "LaunchElevation");
         a.Layout<TransformationClip>("Animation", "Ticks", "Facing"); a.Layout<TransformationRecipe>("Target", "Before", "After", "AllowRotation");
         a.Layout<PendingTransformation>("Recipe", "Position", "Turns", "MoveAfter", "Phase", "UntilTick", "LastProgress", "NextClearance", "LastPosition");
     }

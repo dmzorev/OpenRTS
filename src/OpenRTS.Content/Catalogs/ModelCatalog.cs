@@ -11,7 +11,7 @@ public sealed record ModelPart(string Id, int Parent, string Resource, ModelFaci
     double Spin = 0, string? SpinWhen = null, string? LoopWhen = null, string? LoopAnimation = null, int Facings = 0,
     ModelDrawLayer? DrawLayer = null, bool EmitterSpin = false, double SpriteRotation = 0, (double X, double Y)? Muzzle = null,
     bool AimAtConstruction = false, (double X, double Y, double Z)? MuzzleLocal = null, int? FarLayer = null);
-public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0, ModelFacing? Facing = null);
+public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> Parts, double Bob, double Recoil, double Flash, double ScaleFrom = 1, double OpacityFrom = 1, double SlideX = 0, double SlideY = 0, ModelFacing? Facing = null, string? WindupSequence = null, (double X, double Y, double Z)? LaunchLocal = null);
 public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity, double Pulse = 0);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
     ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null,
@@ -78,7 +78,13 @@ public sealed class ModelCatalog
                 if (string.IsNullOrWhiteSpace(name) || animation.Parts.Length == 0 || animation.Parts.Distinct().Count() != animation.Parts.Length ||
                     animation.Parts.Any(p => !options.Parts.ContainsKey(p))) throw node.Error(id + ".Model.Animations." + name, "Animation references missing or duplicate parts.");
                 if (animation.Slide.Length != 2 || animation.Slide.Any(v => !double.IsFinite(v) || Math.Abs(v) > 16)) throw node.Error(id + ".Model.Animations." + name, "Slide requires two finite values in -16..16.");
-                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash, animation.ScaleFrom, animation.OpacityFrom, animation.Slide[0], animation.Slide[1], animation.Facing));
+                if (animation.WindupSequence is { } windup && string.IsNullOrWhiteSpace(windup))
+                    throw node.Error(id + ".Model.Animations." + name, "WindupSequence requires a sequence name.");
+                var launch = animation.LaunchLocal;
+                if (launch is not null && (launch.Length != 3 || launch.Any(v => !double.IsFinite(v) || Math.Abs(v) > 32)))
+                    throw node.Error(id + ".Model.Animations." + name, "LaunchLocal requires three finite values in -32..32.");
+                animations.Add(name, new(animation.Sequence, Array.AsReadOnly(animation.Parts), animation.Bob, animation.Recoil, animation.Flash, animation.ScaleFrom, animation.OpacityFrom, animation.Slide[0], animation.Slide[1], animation.Facing,
+                    animation.WindupSequence, launch is null ? null : (launch[0], launch[1], launch[2])));
             }
             var states = new Dictionary<string, ModelState>(StringComparer.Ordinal);
             foreach (var (name, state) in options.States)
@@ -166,6 +172,8 @@ public sealed class ModelCatalog
         [Required] public string Sequence { get; set; } = "";
         public string[] Parts { get; set; } = [];
         public ModelFacing? Facing { get; set; }
+        public string? WindupSequence { get; set; }
+        public double[]? LaunchLocal { get; set; }
         [Range(0.0, 1.0)] public double Bob { get; set; }
         [Range(0.0, 1.0)] public double Recoil { get; set; }
         [Range(0.0, 1.0)] public double Flash { get; set; }

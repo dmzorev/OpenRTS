@@ -371,10 +371,11 @@ internal static class WeaponChecks
         test("Weapons: named YAML mounts validate references and canonical gameplay fingerprints", () =>
         {
             var catalog = LocomotionChecks.Units();
-            NavigationChecks.Check(catalog.Units.Single(u => u.Id == "tank-mixed").Weapons.Count == 2 && catalog.Units.Single(u => u.Id == "engineer").Weapon!.Effect == WeaponEffect.Repair, "Missing sample mounts");
+            NavigationChecks.Check(catalog.Units.Single(u => u.Id == "tank").Weapons.Count == 2 && catalog.Units.Single(u => u.Id == "engineer").Weapon!.Effect == WeaponEffect.Repair, "Missing sample mounts");
             var weapons = LocomotionChecks.Weapons();
-            var altered = WeaponCatalog.Load([new("w", File.ReadAllText("sandbox/content/weapons/weapons.yaml").Replace("Burst: 3", "Burst: 4"))]);
-            NavigationChecks.Check(catalog.Summary != UnitCatalog.Load([new("u", File.ReadAllText("sandbox/content/units/units.yaml"))], LocomotionChecks.Catalog(), altered).Summary, "Burst excluded from fingerprint");
+            var fixture = LocomotionChecks.Fixture("weapons.yaml");
+            var altered = WeaponCatalog.Load([fixture with { Text = fixture.Text.Replace("Burst: 3", "Burst: 4", StringComparison.Ordinal) }]);
+            NavigationChecks.Check(catalog.Summary != LocomotionChecks.Units(weapons: altered).Summary, "Burst excluded from fingerprint");
             NavigationChecks.Reject<ContentException>(() => UnitCatalog.Load([new("u", "u: {Health: {HP: 1}, Armaments: {Mounts: {a: {Weapon: absent}}}}")], weapons: weapons));
             NavigationChecks.Reject<ContentException>(() => WeaponCatalog.Load([new("w", "w: {Weapon: {Burst: 0}}") ]));
             NavigationChecks.Reject<ContentException>(() => WeaponCatalog.Load([new("w", "w: {Weapon: {Effect: Repair, Projectile: Missile}}") ]));
@@ -382,22 +383,18 @@ internal static class WeaponChecks
         });
         test("Weapons: factory repairs automatically beyond engineer range", () =>
         {
-            var catalog = UnitCatalog.Load([
-                new("units", File.ReadAllText("sandbox/content/units/units.yaml")),
-                new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))
-            ], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = UnitCatalog.Load([LocomotionChecks.Fixture("repair.yaml")], weapons: LocomotionChecks.Weapons());
             var factory = catalog.Units.Single(u => u.Id == "factory");
             var engineer = catalog.Units.Single(u => u.Id == "engineer");
-            var power = catalog.Units.Single(u => u.Id == "power-plant");
-            NavigationChecks.Check(engineer.Abilities.Single(a => a.Id == "repair").AutoCast, "Engineer repair should default to autocast");
+            NavigationChecks.Check(factory.Weapon!.Range > engineer.Weapon!.Range &&
+                engineer.Abilities.Single(a => a.Id == "repair").AutoCast, "Repair fixture must have distinct ranges");
 
             var enemy = Armed("enemy", new(8192, 8192, 60, 1000, 0));
             var target = new UnitDefinition("vehicle", 100, armor: ArmorKind.Mechanical);
-            using var world = new SimulationWorld([factory, enemy, target, power, .. catalog.Units.Where(u => u != factory && u != power)], 24000, 16000);
+            using var world = new SimulationWorld([factory, enemy, target], 24000, 16000);
             world.AddInitialUnit(0, new(7680, 8192), 1);
             world.AddInitialUnit(2, new(1536, 8192), 1);
             world.AddInitialUnit(1, new(1536, 12288), 2);
-            world.AddInitialUnit(3, new(15872, 4096), 1);
             world.Step([Attack(world, 3, 2)]);
             NavigationChecks.Check(Pose(world, 2).Health == 40, "The enemy should damage the vehicle before it gets repaired");
             for (int tick = 0; tick < 16; tick++) world.Step();

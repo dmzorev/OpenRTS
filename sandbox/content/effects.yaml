@@ -26,5 +26,8 @@ crane-repair:
 fighter-missile:
   Inherits: missile
 
+tiltrotor-autogun:
+  Inherits: rifle
+
 tiltrotor-missile:
   Inherits: missile

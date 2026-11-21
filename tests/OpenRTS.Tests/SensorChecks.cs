@@ -106,10 +106,7 @@ internal static class SensorChecks
 
         test("Sensors: an HQ built by the crane reveals a distant radar contact until removal", () =>
         {
-            var catalog = UnitCatalog.Load([
-                new("units", File.ReadAllText("sandbox/content/units/units.yaml")),
-                new("buildings", File.ReadAllText("sandbox/content/units/buildings.yaml"))
-            ], LocomotionChecks.Catalog(), LocomotionChecks.Weapons());
+            var catalog = GameManifest.Load("sandbox/game.yaml").LoadUnits();
             int Type(string id) => catalog.Units.ToList().FindIndex(unit => unit.Id == id);
             using var world = SimulationWorld.CreateWithMechanics(new() { FogCellSize = 1024 }, catalog.Units,
                 65536, 32768, navigationGrid: new(64, 32), players: [new(1, "Blue", 10000), new(2, "Red")]);

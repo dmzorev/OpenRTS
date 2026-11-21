@@ -4,6 +4,8 @@ namespace OpenRTS.Core;
 
 public sealed partial class SimulationWorld
 {
+    private readonly record struct ProjectileLaunch(WorldPosition Origin, int Distance, ulong Observers);
+
     private struct ProjectileState
     {
         public long Id, BornTick;
@@ -15,6 +17,7 @@ public sealed partial class SimulationWorld
         public HoverEndpoints Hover;
         public int LaunchElevation;
         public ProjectileDeparture Departure;
+        public ProjectileLaunch? LaunchAnchor;
         public FacingDirection FanDirection;
     }
     private readonly List<ProjectileState> _projectiles = [];
@@ -59,15 +62,26 @@ public sealed partial class SimulationWorld
     }
 
     private void Launch(int source, int target, int mount, WeaponDefinition weapon, WorldPosition muzzle, WorldPosition destination,
-        int weaponUnitType, HoverEndpoints hover, ProjectileDeparture departure, FacingDirection fan)
+        int weaponUnitType, HoverEndpoints hover, ProjectileDeparture departure, FacingDirection fan, ulong observers)
     {
         var actor = _entityHandles[source];
         _projectiles.Add(new() { Id = checked(_nextProjectileId++), BornTick = Tick, Source = actor.Get<EntityIdentity>().Id,
             Target = target < 0 ? default : _entityHandles[target].Get<EntityIdentity>().Id,
             Owner = actor.Get<OwnershipState>().Owner, UnitType = weaponUnitType, Mount = mount, Previous = muzzle, Position = muzzle,
             Destination = destination, Weapon = weapon, Remaining = weapon.TravelLimit, Hover = hover, LaunchElevation = muzzle.Elevation,
-            Departure = departure, FanDirection = fan, InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
+            Departure = departure, FanDirection = fan,
+            LaunchAnchor = departure == default ? null :
+                new(muzzle, Math.Max(1, ProjectileTravel(muzzle, destination, weapon.SpatialTrajectory)), observers),
+            InitialDistance = Math.Max(1, (int)SquareRoot((ulong)DistanceSquared(muzzle, destination))) });
     }
+
+    private static int ProjectileTravel(WorldPosition from, WorldPosition to, bool spatial)
+    {
+        long squared = ProjectileDistanceSquared(from, to, spatial);
+        int distance = (int)SquareRoot((ulong)squared);
+        return (long)distance * distance < squared ? distance + 1 : distance;
+    }
+
     private void UpdateProjectiles()
     {
         int write = 0;
@@ -89,10 +103,8 @@ public sealed partial class SimulationWorld
             bool spatial = weapon.SpatialTrajectory;
             var next = weapon.HasFlightProfile ? ProfileStep(shot, shot.Remaining) :
                 spatial ? SpatialStep(shot.Position, shot.Destination, budget) : StepTowards(shot.Position, shot.Destination, budget);
-            int travel = Math.Max(1, (int)SquareRoot((ulong)ProjectileDistanceSquared(shot.Position, next, spatial)));
             // Round distance upwards so rounding cannot extend a missile's fuel budget.
-            if ((long)travel * travel < ProjectileDistanceSquared(shot.Position, next, spatial)) travel++;
-            shot.Remaining -= travel;
+            shot.Remaining -= Math.Max(1, ProjectileTravel(shot.Position, next, spatial));
             // shortcut: wall effects use the segment start; calculate exact entry when impact placement matters.
             bool traceTerrain = weapon.HasFlightProfile || TracesCliffRelief(weapon);
             if (!traceTerrain && _baseGrid is not null &&
@@ -184,13 +196,27 @@ public sealed partial class SimulationWorld
         for (int i = 0; i < _projectiles.Count; i++)
         {
             var shot = _projectiles[i]; var current = shot.Position; var previous = shot.Previous;
+            ProjectileLaunchProjection? launchProjection = null;
+            if (shot.LaunchAnchor is { } launch)
+            {
+                int travelled = shot.Weapon.TravelLimit - shot.Remaining;
+                int previousTravel = shot.BornTick == Tick ? 0 :
+                    travelled - Math.Max(1, ProjectileTravel(previous, current, shot.Weapon.SpatialTrajectory));
+                launchProjection = new(launch.Origin, launch.Origin.Elevation - shot.Departure.Origin.Elevation,
+                    Weight(previousTravel), Weight(travelled));
+                float Weight(int distance)
+                {
+                    float fraction = Math.Clamp((float)distance / launch.Distance, 0, 1);
+                    return 1 - (shot.Weapon.HasFlightProfile ? fraction * fraction * (3 - 2 * fraction) : fraction);
+                }
+            }
             if (!shot.Weapon.HasFlightProfile && shot.Weapon.Projectile == ProjectileKind.Grenade)
             {
+                long distance = shot.InitialDistance;
                 current = Arc(current); previous = Arc(previous);
                 WorldPosition Arc(WorldPosition point)
                 {
-                    long remaining = (long)SquareRoot((ulong)DistanceSquared(point, shot.Destination));
-                    long distance = shot.InitialDistance; remaining = Math.Min(remaining, distance);
+                    long remaining = Math.Min(distance, (long)SquareRoot((ulong)DistanceSquared(point, shot.Destination)));
                     return point with { Elevation = point.Elevation + (int)(4 * 1024 * remaining * (distance - remaining) / (distance * distance)) };
                 }
             }
@@ -202,7 +228,9 @@ public sealed partial class SimulationWorld
             {
                 Projection = shot.Hover == HoverEndpoints.None ? default :
                     new(shot.Hover, shot.LaunchElevation, shot.Destination, shot.Weapon.TravelLimit - shot.Remaining),
-                Departure = shot.Departure
+                Departure = shot.Departure,
+                LaunchProjection = launchProjection,
+                LaunchObservers = shot.LaunchAnchor?.Observers ?? 0
             };
         }
     }

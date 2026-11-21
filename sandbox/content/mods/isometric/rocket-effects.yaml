@@ -14,3 +14,10 @@ ballistic-missile:
 
 anti-air-missile:
   Inherits: missile
+
+iso-rocketeer-missile:
+  Inherits: missile
+
+iso-grenade:
+  Inherits: grenade
+  Effect: { Size: 0.11 }

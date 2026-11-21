@@ -133,8 +133,10 @@ public enum HoverEndpoints { None = 0, Source = 1, Target = 2 }
 
 /// <summary>Physical flight samples used to project the visual path between two sprite anchors.</summary>
 public readonly record struct ProjectileProjection(HoverEndpoints Hover, int LaunchElevation, WorldPosition Destination, int Travelled);
+/// <summary>Visual launch projection. Origin is available to observers who saw the shot fired.</summary>
+public readonly record struct ProjectileLaunchProjection(WorldPosition? Origin, int HeightAboveActor, float PreviousWeight, float CurrentWeight);
 
-/// <summary>Launch-time anchors for joining a mounted projectile to the published flight path.</summary>
+/// <summary>Actor pose at the instant of firing, used to locate its visual muzzle.</summary>
 public readonly record struct ProjectileDeparture(long Tick, EntityId Source, WorldPosition Origin,
     FacingDirection BodyFacing, FacingDirection MountFacing);
 
@@ -142,5 +144,7 @@ public readonly record struct ProjectilePose(long Id, int UnitType, int Mount, W
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public ProjectileProjection Projection { get; init; }
+    [JsonIgnore] public ProjectileLaunchProjection? LaunchProjection { get; init; }
+    internal ulong LaunchObservers { get; init; }
     [JsonIgnore] public ProjectileDeparture Departure { get; init; }
 }

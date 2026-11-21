@@ -10,13 +10,16 @@ public partial class Sandbox
 {
     private static void CheckSkirmish(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private int _skirmishCheck;
+    private long _skirmishBlueCredits, _skirmishRedCredits;
     private void VerifySkirmish(FrameExchange.FrameLease frame)
     {
         if (_skirmishCheck == 7) return;
         if (_skirmishCheck == 0)
         {
             CheckSkirmish(frame.Poses.Length == 14 && frame.Players.Length == 3, "Skirmish players/objects not initialized");
-            CheckSkirmish(frame.Players.ToArray().Where(p => p.Id != 0).All(p => p.Credits == 5000), "Initial funds wrong");
+            var players = frame.Players.ToArray();
+            _skirmishBlueCredits = players.Single(p => p.Id == 1).Credits;
+            _skirmishRedCredits = players.Single(p => p.Id == 2).Credits;
             VerifyRallyProjection();
             var empty = _sprites!.Node.GetNode<MultiMeshInstance3D>("Sprite_supply-truck-empty").Multimesh;
             CheckSkirmish(empty.VisibleInstanceCount == 2, "Starting trucks did not use the empty sprite");
@@ -59,7 +62,10 @@ public partial class Sandbox
         if (_skirmishCheck == 1)
         {
             if (frame.Tick < 1) return;
-            CheckSkirmish(frame.Players.ToArray().Single(p => p.Id == 1).Credits == 4650 && frame.Players.ToArray().Single(p => p.Id == 2).Credits == 5000, "Production charged the wrong player");
+            var task = frame.Tasks.ToArray().Single(t => t.Producer.Value == 1);
+            var players = frame.Players.ToArray();
+            CheckSkirmish(task.Payer == 1 && players.Single(p => p.Id == 1).Credits == _skirmishBlueCredits - (task.Cost - task.UnpaidCost) &&
+                players.Single(p => p.Id == 2).Credits == _skirmishRedCredits, "Production charged the wrong player");
             CheckSkirmish(frame.Poses.ToArray().Single(p => p.Id.Value == 5).Order.Kind == UnitActionKind.Capture, "Capture button did not issue a simulation action");
             _selection.Change([new(2), new(5)], SelectionChange.Replace); RefreshSelection();
             CheckSkirmish(Controlled().Length == 2 && CanIssue(UnitActionKind.Move), "Mixed player control failed");
