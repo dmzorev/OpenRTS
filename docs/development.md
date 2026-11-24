@@ -4,7 +4,9 @@
 
 Установите .NET SDK 10.0.105 или более новый patch той же feature band и Godot 4.7.2 .NET. Скрипт для macOS и Linux использует Bash, для Windows нужен PowerShell 7.3 или новее (`pwsh`). Для сквозных проверок и команд сборки карт нужен Python 3.9+. Для `verify-wan --netem` нужен Docker с Linux-контейнерами. Первый запуск восстанавливает зависимости из NuGet. [Версия SDK](../global.json) · [Версия Godot SDK](../sandbox/OpenRTS.Sandbox.csproj).
 
-Оба скрипта сначала используют `OPENRTS_GODOT`, затем ищут Godot в `PATH` под именами `godot-mono`, `godot4-mono`, `godot` или `godot4`. На macOS скрипт также ищет соседний `Godot_mono.app` и приложения Godot в `/Applications` и `~/Applications`. На Windows скрипт использует консольный `*_console.exe`, если он лежит рядом с указанным `.exe`. Для установки по другому адресу задайте `OPENRTS_GODOT` полным путём к исполняемому файлу.
+На Windows для запуска игры, редактора и проверок с Godot задайте `OPENRTS_GODOT` полным путём к исполняемому файлу Godot .NET из распакованного архива. Сохраните оригинальные имена файлов. Скрипт использует соседний `*_console.exe`, если он есть. Команды `build` и `test` запускаются без этой переменной.
+
+На macOS и Linux скрипт использует `OPENRTS_GODOT` или ищет Godot в `PATH` под именами `godot-mono`, `godot4-mono`, `godot` или `godot4`. На macOS скрипт также ищет соседний `Godot_mono.app` и приложения Godot в `/Applications` и `~/Applications`.
 
 При работе с локальным NuGet feed задайте `OPENRTS_NUGET_SOURCE`. Godot SDK должен быть доступен SDK resolver через NuGet или локальный кэш `.packages`.
 
@@ -22,7 +24,7 @@
 В PowerShell на Windows используются те же команды и аргументы.
 
 ```powershell
-$env:OPENRTS_GODOT = 'C:\Tools\Godot\Godot.exe'
+$env:OPENRTS_GODOT = 'C:\Tools\Godot\Godot_v4.7.2-stable_mono_win64.exe'
 pwsh -File .\tools\dev.ps1 build
 pwsh -File .\tools\dev.ps1 test
 pwsh -File .\tools\dev.ps1 run --buildings

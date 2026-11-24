@@ -20,6 +20,7 @@ OpenRTS — движок для desktop RTS на C# с независимой с
 Команды для Windows.
 
 ```powershell
+$env:OPENRTS_GODOT = 'C:\Tools\Godot\Godot_v4.7.2-stable_mono_win64.exe'
 pwsh -File .\tools\dev.ps1 run
 pwsh -File .\tools\dev.ps1 test
 ```

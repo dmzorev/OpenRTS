@@ -13,6 +13,9 @@ function Invoke-Native([string]$Command, [string[]]$Arguments) {
 
 function Resolve-Godot {
     $path = $env:OPENRTS_GODOT
+    if ($IsWindows -and [string]::IsNullOrWhiteSpace($path)) {
+        throw 'Set OPENRTS_GODOT to the full path of the Godot .NET executable (e.g. Godot_v4.7.2-stable_mono_win64.exe).'
+    }
     if ($path) {
         if (Test-Path -LiteralPath $path -PathType Leaf) {
             $path = (Resolve-Path -LiteralPath $path).ProviderPath
@@ -23,10 +26,16 @@ function Resolve-Godot {
         $path = (Get-Command godot-mono, godot4-mono, godot_console, godot, godot4 -CommandType Application -ErrorAction SilentlyContinue |
                  Select-Object -First 1).Source
     }
-    if (!$path) { throw 'Godot .NET executable not found. Set OPENRTS_GODOT to its executable path.' }
+    if (!$path) { throw 'Godot .NET executable not found. Check the executable path in OPENRTS_GODOT.' }
     if ($IsWindows -and $path -like '*.exe') {
         $console = $path -replace '\.exe$', '_console.exe'
-        if (Test-Path -LiteralPath $console -PathType Leaf) { return $console }
+        if (Test-Path -LiteralPath $console -PathType Leaf) { $path = $console }
+    }
+    if ($IsWindows) {
+        $version = (& $path --version 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $version -notmatch '\.mono(\.|$)') {
+            throw "'$path' did not report a Godot .NET version. Set OPENRTS_GODOT to the original .NET executable. $version"
+        }
     }
     return $path
 }

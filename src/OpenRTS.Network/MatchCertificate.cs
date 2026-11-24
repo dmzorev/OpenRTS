@@ -7,7 +7,8 @@ internal static class MatchCertificate
 {
     internal static X509Certificate2 Create()
     {
-        using var key = ECDsa.Create();
+        // P-256 is enabled by default in Schannel. ECDsa.Create() can default to P-521.
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var now = DateTimeOffset.UtcNow;
         var certificate = new CertificateRequest("CN=openrts.local", key, HashAlgorithmName.SHA256)
             .CreateSelfSigned(now.AddMinutes(-5), now.AddDays(1));
