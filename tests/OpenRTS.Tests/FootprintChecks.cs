@@ -231,6 +231,8 @@ internal static class FootprintChecks
                     "A shallow crossing between the cliffs is blocked.");
                 NavigationChecks.Check(!resolver.CanStop(new(1024, 160)) && !resolver.CanStop(new(1024, 864)) &&
                     !resolver.CanStop(new(1024, 350)), "Cliffs or swept body clearance were ignored.");
+                NavigationChecks.Check(!resolver.CanStop(new(1024 - body.HalfWidth, 160)) &&
+                    resolver.CanStop(new(1023 - body.HalfWidth, 160)), "Cliff clearance did not distinguish tangency from a gap.");
                 using var world = new SimulationWorld([new("unit", 100, body: body, locomotor: profile)], 2048, 1024, navigationGrid: grid);
                 world.AddInitialUnit(0, new(500, 512));
                 var goal = new WorldPosition(1513, 512, 64);
