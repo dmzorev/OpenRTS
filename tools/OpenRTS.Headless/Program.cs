@@ -45,7 +45,7 @@ try
         else if (argument.StartsWith("--ticks=", StringComparison.Ordinal) && int.TryParse(argument[8..], out value) && value is >= 1 and <= 1000000) { ticks = value; ticksSpecified = true; }
         else if (argument.StartsWith("--workers=", StringComparison.Ordinal) && int.TryParse(argument[10..], out value) && value is >= 1 and <= 64) workers = value;
         else if (!argument.StartsWith("--", StringComparison.Ordinal) && !hasPath) { path = argument; hasPath = true; }
-        else throw new ArgumentException("Usage: OpenRTS.Headless [units.yaml] [--mod=game.yaml] [--simulate|--benchmark|--fog-retention-benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1..4] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--compile-map=output.ortmap.json] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
+        else throw new ArgumentException($"Usage: OpenRTS.Headless [units.yaml] [--mod=game.yaml] [--simulate|--benchmark|--fog-retention-benchmark|--ecs-benchmark|--size-benchmark|--showcase|--buildings|--production] [--navigation] [--skirmish|--skirmish-ai|--map=path] [--ai-player=1..{MapScenario.MaximumPlayers}] [--ai-config=path] [--ai-profile=id] [--start-set=path] [--compile-map=output.ortmap.json] [--workers=1..64] [--reverse-jobs] [--count=1..1000000] [--ticks=1..1000000]");
     }
     if (localPlaytest is not null && (mapPath is null || hasPath || startSetPath is not null || compileMapPath is not null ||
         fog || aviation || skirmish || skirmishAi))

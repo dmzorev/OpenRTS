@@ -179,8 +179,8 @@ def main():
     for file, count, extra in [
         ("fixture.yaml", 3, []),
         ("skirmish.yaml", 14, ["--start-set=content/start-sets/infantry.yaml"]),
-        ("crossroads.yaml", 26, []),
-        ("riverside-station.yaml", 29, ["--start-set=content/start-sets/infantry.yaml"]),
+        ("crossroads.yaml", 31, []),
+        ("riverside-station.yaml", 35, ["--start-set=content/start-sets/infantry.yaml"]),
     ]:
         args = ["--map=content/maps/" + file, "--ticks=3", *extra]
         direct = report(run(headless + args + ["--workers=1"]).stdout, "OPENRTS_SIMULATION:")

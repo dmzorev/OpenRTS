@@ -11,8 +11,9 @@ OpenRTS — движок для desktop RTS на C# с независимой с
 Команды для macOS и Linux.
 
 ```bash
-./tools/dev.sh run       # Главное меню 2D-полигона
-./tools/dev.sh headless --mod=sandbox/game.yaml  # Симуляция без Godot
+./tools/dev.sh run       # Сборка и запуск Top-down версии
+./tools/dev.sh run --mod=res://isometric-game.yaml # Запуск изометрической версии
+./tools/dev.sh headless --mod=sandbox/game.yaml    # Симуляция без Godot
 ./tools/dev.sh editor    # Редактор карт Godot
 ./tools/dev.sh test      # Сборка и тесты
 ```

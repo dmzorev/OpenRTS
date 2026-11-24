@@ -61,7 +61,8 @@ public sealed class GameMap
     public static GameMap Load(ContentSource source, UnitCatalog catalog, IEnumerable<ContentSource>? brushSources = null) =>
         source.Name.EndsWith(".ortmap.json", StringComparison.OrdinalIgnoreCase)
             ? MapCompiler.Read(source, catalog).Map
-            : MapCompiler.Compile(MapSource.FromM1(source, catalog, brushSources), catalog).Map;
+            : MapCompiler.Compile(source.Name.EndsWith(".mapsource.json", StringComparison.OrdinalIgnoreCase)
+                ? MapSource.Read(source) : MapSource.FromM1(source, catalog, brushSources), catalog).Map;
 
     public MapMatch Prepare(IReadOnlyDictionary<string, PlayerDefinition> assignments, StartingSet? startingSet = null, ulong seed = 1)
     {

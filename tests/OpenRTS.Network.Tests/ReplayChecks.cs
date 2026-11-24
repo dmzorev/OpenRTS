@@ -67,6 +67,24 @@ internal static class ReplayChecks
     }
     internal static void Run(Action<string, Action> test)
     {
+        test("Lobby recipe keeps active seats and teams through player eight", () =>
+        {
+            var catalog = Catalog.Value;
+            var ground = new MapLayer(["grass"], new int[96 * 16]);
+            var slots = Enumerable.Range(0, 8).Select(i => new MapSlotSource($"start-{i}", new(4608 + i * 10240, 7168))).ToArray();
+            var source = new MapSource("eight-seats", true, 96, 16, ground, ground, slots, []);
+            var map = GameMap.Load(new("eight-seats.mapsource.json", source.Write()), catalog);
+            var set = StartingSet.Load(Read("content/start-sets/supply.yaml"));
+            foreach (int active in new[] { 6, 8 })
+            {
+                var seats = Enumerable.Range(0, 8).Select(i => new MatchSeat(
+                    i >= active ? SlotController.None : SlotController.Human, i, i == active - 1 ? 8u : 0u)).ToArray();
+                var options = new MatchSetupOptions(map.Id, set.Id, 2, 1, 25, seats).Bind(map, set);
+                var restored = MatchSetupOptions.Parse(options.Serialize());
+                Check(restored.Seats.SequenceEqual(seats) && restored.PlayerSlots(map).SequenceEqual(map.Slots));
+                Check(restored.Prepare(map, set).UnitCount == active * set.Units.Count);
+            }
+        });
         test("B6 gameplay recipe binds a compiled map, starting set and committed local playtest", () =>
         {
             var terrain = LocomotionCatalog.Load([new("terrain.yaml", """

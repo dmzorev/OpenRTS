@@ -53,7 +53,7 @@ try:
         text = (output / (role + '.log')).read_text(encoding='utf-8')
         if process.returncode or 'OPENRTS_NETWORK_PASS:' not in text: raise RuntimeError(role + ' failed:\n' + text)
         if role == 'join' and 'OPENRTS_DIRECTORY_UI_JOIN:' not in text: raise RuntimeError('Guest bypassed directory controls')
-        if role == 'join' and 'OPENRTS_DIRECTORY_CAPACITY:2/8 disabled' not in text: raise RuntimeError('Unsupported capacities were not checked in the browser')
+        if role == 'join' and 'OPENRTS_DIRECTORY_CAPACITY:2 disabled, 8 enabled' not in text: raise RuntimeError('Lobby capacities were not checked in the browser')
         hashes += [line.split(':', 1)[1] for line in text.splitlines() if line.startswith('OPENRTS_NETWORK_PASS:')]
     if len(hashes) != 2 or len(set(hashes)) != 1: raise RuntimeError('Directory peers disagree')
     print('PASS Godot NET5: publish, account session, catalogue UI, host-assigned seat, TLS match, identical hashes and replay')
