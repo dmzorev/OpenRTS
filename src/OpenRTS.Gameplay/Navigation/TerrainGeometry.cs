@@ -8,10 +8,13 @@ internal static class TerrainGeometry
     internal static bool Clear(NavigationGrid grid, WorldPosition from, WorldPosition to, BodyShape body, Locomotor? locomotor = null)
     {
         int width = grid.Width * grid.CellSize, height = grid.Height * grid.CellSize;
-        if (Math.Min(from.X, to.X) < body.HalfWidth || Math.Min(from.Y, to.Y) < body.HalfHeight ||
-            Math.Max(from.X, to.X) > width - body.HalfWidth || Math.Max(from.Y, to.Y) > height - body.HalfHeight) return false;
+        int minX = Math.Min(from.X, to.X), minY = Math.Min(from.Y, to.Y);
+        int maxX = Math.Max(from.X, to.X), maxY = Math.Max(from.Y, to.Y);
+        if (minX < body.HalfWidth || minY < body.HalfHeight ||
+            maxX > width - body.HalfWidth || maxY > height - body.HalfHeight) return false;
         int size = grid.CellSize;
         bool graded = (grid.HasSlopedSurface || grid.HasSurfaceCuts) && locomotor is not null;
+        var sweep = new WorldBox(minX - body.HalfWidth, minY - body.HalfHeight, maxX + body.HalfWidth, maxY + body.HalfHeight);
         // Include edges owned by the cell just beyond a tangent on a grid line.
         int reachX = (body.HalfWidth + size - (graded ? 0 : 1)) / size;
         int reachY = (body.HalfHeight + size - (graded ? 0 : 1)) / size;
@@ -38,8 +41,10 @@ internal static class TerrainGeometry
                         BodyGeometry.SweptBox(from, to, bounds, body)) return false;
                     if (locomotor is not null && TouchesRestrictedTerrain(grid, cell, bounds, from, to, body, locomotor, stopping: false))
                         return false;
-                    if (graded && locomotor is not null &&
-                        TouchesCliff(grid, cx, cy, cell, locomotor.MaximumStep, from, to, body)) return false;
+                    // A tangent still touches the cliff, including edges owned by neighboring cells.
+                    if (graded && sweep.MinX <= bounds.MaxX && sweep.MaxX >= bounds.MinX &&
+                        sweep.MinY <= bounds.MaxY && sweep.MaxY >= bounds.MinY &&
+                        TouchesCliff(grid, cx, cy, cell, bounds, sweep, locomotor!.MaximumStep, from, to, body)) return false;
                     foreach (int obstacle in grid.ObstaclesAt(cell)) if (BodyGeometry.SweptBox(from, to, grid.Obstacle(obstacle), body)) return false;
                 }
             if (x == endX && y == endY) return true;
@@ -48,18 +53,18 @@ internal static class TerrainGeometry
         }
     }
 
-    private static bool TouchesCliff(NavigationGrid grid, int x, int y, int cell, int maximumStep,
-        WorldPosition from, WorldPosition to, BodyShape body)
+    private static bool TouchesCliff(NavigationGrid grid, int x, int y, int cell, WorldBox bounds, WorldBox sweep,
+        int maximumStep, WorldPosition from, WorldPosition to, BodyShape body)
     {
-        int size = grid.CellSize, left = x * size, top = y * size, right = left + size, bottom = top + size;
+        int size = grid.CellSize, left = bounds.MinX, top = bounds.MinY, right = bounds.MaxX, bottom = bounds.MaxY;
         var cut = grid.SurfaceCutAt(cell);
         if (cut != default && cut.UpperElevation - grid.SurfaceAt(cell).Elevation > maximumStep &&
             BodyGeometry.SweptSegment(from, to, new(left, cut.DescendingDiagonal ? top : bottom),
                 new(right, cut.DescendingDiagonal ? bottom : top), body)) return true;
 
         // A flat edge can meet a ramp at the same height. Test the shared edge, keeping the full body clear of a cliff.
-        return x + 1 < grid.Width && Blocks(cell + 1, right, top, right, bottom) ||
-            y + 1 < grid.Height && Blocks(cell + grid.Width, left, bottom, right, bottom);
+        return sweep.MaxX >= right && x + 1 < grid.Width && Blocks(cell + 1, right, top, right, bottom) ||
+            sweep.MaxY >= bottom && y + 1 < grid.Height && Blocks(cell + grid.Width, left, bottom, right, bottom);
 
         bool Blocks(int neighbor, int x0, int y0, int x1, int y1)
         {

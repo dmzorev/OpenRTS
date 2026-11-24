@@ -40,7 +40,7 @@ public sealed class DestinationResolver
                     {
                         if ((head & 4095) == 0) token.ThrowIfCancellationRequested();
                         int current = queue[head++];
-                        hasStop |= Geometry.Stop(current);
+                        hasStop = hasStop || Geometry.Stop(current);
                         for (int d = 0; d < 4; d++)
                         {
                             int next = Geometry.Neighbor(current, d);

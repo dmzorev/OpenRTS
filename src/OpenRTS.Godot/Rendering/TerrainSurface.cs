@@ -7,8 +7,10 @@ namespace OpenRTS.Godot.Rendering;
 internal sealed class TerrainSurface
 {
     private readonly record struct Face(Vector3 A, Vector3 B, Vector3 C, int Cell);
+    private sealed record FaceGroup(Aabb Bounds, int Start, int End, FaceGroup? Left = null, FaceGroup? Right = null);
     private readonly NavigationGrid _grid;
     private readonly Face[] _faces;
+    private readonly FaceGroup _faceIndex;
     public ArrayMesh Mesh { get; }
 
     public TerrainSurface(NavigationGrid grid, Func<int, int, Texture2D>? textureAt = null, Texture2D? cliff = null,
@@ -89,6 +91,7 @@ internal sealed class TerrainSurface
             foreach (var builder in builders.Values) builder.Dispose();
         }
         _faces = faces.ToArray();
+        _faceIndex = IndexFaces(0, _faces.Length);
 
         Vector3 Vertex(int cell, int x, int y) => VertexAt(x, y, grid.SurfaceElevationAt(cell, x, y));
         static Vector3 VertexAt(int x, int y, int elevation) => new Vector3(x, elevation, y) / WorldPosition.UnitsPerCell;
@@ -191,6 +194,46 @@ internal sealed class TerrainSurface
         return new Vector3(-rise.X, _grid.CellSize, -rise.Y).Normalized();
     }
 
+    private FaceGroup IndexFaces(int start, int end)
+    {
+        // Keep mesh order so coincident ground and cliff hits resolve as before.
+        if (end - start > 16)
+        {
+            int middle = start + (end - start) / 2;
+            var left = IndexFaces(start, middle);
+            var right = IndexFaces(middle, end);
+            return new(left.Bounds.Merge(right.Bounds), start, end, left, right);
+        }
+
+        var bounds = new Aabb(_faces[start].A, Vector3.Zero);
+        for (int i = start; i < end; i++)
+        {
+            var face = _faces[i];
+            bounds = bounds.Expand(face.A).Expand(face.B).Expand(face.C);
+        }
+        // Include shared edges despite float rounding in the triangle intersection.
+        return new(bounds.Grow(1f / WorldPosition.UnitsPerCell), start, end);
+    }
+
+    private static bool IntersectsRay(Aabb bounds, Vector3 origin, Vector3 direction)
+    {
+        double enter = 0, exit = double.PositiveInfinity;
+        var min = bounds.Position;
+        var max = bounds.End;
+        return Clip(origin.X, direction.X, min.X, max.X, ref enter, ref exit) &&
+            Clip(origin.Y, direction.Y, min.Y, max.Y, ref enter, ref exit) &&
+            Clip(origin.Z, direction.Z, min.Z, max.Z, ref enter, ref exit);
+
+        static bool Clip(double origin, double direction, double min, double max, ref double enter, ref double exit)
+        {
+            if (direction == 0) return origin >= min && origin <= max;
+            double a = (min - origin) / direction, b = (max - origin) / direction;
+            enter = Math.Max(enter, Math.Min(a, b));
+            exit = Math.Min(exit, Math.Max(a, b));
+            return enter <= exit;
+        }
+    }
+
     public WorldPosition? Pick(Camera3D camera, Vector2 pixel)
     {
         var origin = camera.ProjectRayOrigin(pixel);
@@ -198,18 +241,7 @@ internal sealed class TerrainSurface
         float nearest = float.PositiveInfinity;
         Vector3 hit = default;
         int cell = -1;
-        // shortcut: scan this small terrain; index the faces before using this picker on large maps.
-        foreach (var face in _faces)
-        {
-            var intersection = Geometry3D.RayIntersectsTriangle(origin, direction, face.A, face.B, face.C);
-            if (intersection.VariantType != Variant.Type.Vector3) continue;
-            var point = intersection.AsVector3();
-            float distance = origin.DistanceSquaredTo(point);
-            if (distance > nearest || (distance == nearest && cell >= 0)) continue;
-            nearest = distance;
-            hit = point;
-            cell = face.Cell;
-        }
+        TestFaces(_faceIndex);
         if (cell < 0) return null;
 
         int size = _grid.CellSize, left = cell % _grid.Width * size, top = cell / _grid.Width * size;
@@ -237,5 +269,28 @@ internal sealed class TerrainSurface
             error = distance;
         }
         return corrected;
+
+        void TestFaces(FaceGroup group)
+        {
+            if (!IntersectsRay(group.Bounds, origin, direction)) return;
+            if (group.Left is { } left && group.Right is { } right)
+            {
+                TestFaces(left);
+                TestFaces(right);
+                return;
+            }
+            for (int i = group.Start; i < group.End; i++)
+            {
+                var face = _faces[i];
+                var intersection = Geometry3D.RayIntersectsTriangle(origin, direction, face.A, face.B, face.C);
+                if (intersection.VariantType != Variant.Type.Vector3) continue;
+                var point = intersection.AsVector3();
+                float distance = origin.DistanceSquaredTo(point);
+                if (distance > nearest || distance == nearest && cell >= 0) continue;
+                nearest = distance;
+                hit = point;
+                cell = face.Cell;
+            }
+        }
     }
 }
