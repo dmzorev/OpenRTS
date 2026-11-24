@@ -32,11 +32,11 @@ specialist-section:
 armor-section:
   Strategy: Assault
   Members:
-    tank: { Min: 1, Target: 3, Recipe: { Producer: factory, Action: tank } }
+    tank: { Min: 1, Target: 2, Recipe: { Producer: factory, Action: tank } }
     tank-mixed:
-      { Min: 0, Target: 2, Recipe: { Producer: factory, Action: mixed-tank } }
+      { Min: 0, Target: 1, Recipe: { Producer: factory, Action: mixed-tank } }
     howitzer:
-      { Min: 0, Target: 2, Recipe: { Producer: factory, Action: howitzer } }
+      { Min: 0, Target: 1, Recipe: { Producer: factory, Action: howitzer } }
 
 artillery-section:
   Strategy: Assault
@@ -44,7 +44,7 @@ artillery-section:
     tank-mixed:
       { Min: 1, Target: 2, Recipe: { Producer: factory, Action: mixed-tank } }
     mlrs: { Min: 1, Target: 2, Recipe: { Producer: factory, Action: mlrs } }
-    scud: { Min: 0, Target: 1, Recipe: { Producer: factory, Action: scud } }
+    #scud: { Min: 0, Target: 1, Recipe: { Producer: factory, Action: scud } }
 
 rotorcraft-section:
   Strategy: Assault
@@ -135,12 +135,12 @@ combined-arms-skirmish:
     -rifle-section:
     -rifle-guard:
     apc-section: { Max: 1 }
-    specialist-section: { Min: 1, Max: 2, Priority: 90 }
-    armor-section: { Min: 1, Max: 2, Priority: 120, EarliestTick: 600 }
-    artillery-section: { Min: 1, Max: 1, Priority: 80, EarliestTick: 900 }
-    rotorcraft-section: { Min: 1, Max: 1, Priority: 70, EarliestTick: 900 }
+    specialist-section: { Min: 1, Max: 1, Priority: 90 }
+    armor-section: { Min: 1, Max: 2, Priority: 120, EarliestTick: 400 }
+    artillery-section: { Min: 0, Max: 1, Priority: 100, EarliestTick: 600 }
+    rotorcraft-section: { Min: 0, Max: 1, Priority: 60, EarliestTick: 800 }
     missile-rotorcraft-section:
-      { Min: 1, Max: 2, Priority: 60, EarliestTick: 1200 }
+      { Min: 0, Max: 2, Priority: 70, EarliestTick: 900 }
     fighter-section: { Min: 1, Max: 2, Priority: 60, EarliestTick: 1200 }
   Recipes:
     helipad: { Producer: construction-engineer, Action: site-helipad }

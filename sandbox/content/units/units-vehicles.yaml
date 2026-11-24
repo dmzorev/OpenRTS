@@ -29,9 +29,9 @@ engineer:
       build: { Build: true, AutoCast: true }
   ActionPanel:
     Buttons:
-      repair: { Label: Ремонт, Cursor: repair, Order: 0 }
-      capture: { Label: Захват, Cursor: capture, Order: 1 }
-      build: { Label: Помочь строить, Hotkey: P, Cursor: build, Order: 7 }
+      repair: { Label: Ремонт, Cursor: repair, Order: 11 }
+      capture: { Label: Захват, Hotkey: C, Cursor: capture, Order: 12 }
+      build: { Label: Помочь строить, Hotkey: P, Cursor: build, Order: 13 }
   Movement: { Locomotor: amphibious }
   Health: { HP: 220, Armor: Light }
   Armaments:
@@ -46,12 +46,13 @@ engineer:
 construction-engineer:
   Inherits: engineer
   Inherits@recipes: ^structure-recipes
+  Buildable: { Ticks: 250, Cost: 550 }
   Actions:
     Definitions:
       site-crane: { Unit: crane, OnSite: true }
   ActionPanel:
     Buttons:
-      site-crane: { Label: Кран, Hotkey: O, Order: 9 }
+      site-crane: { Label: Кран, Order: 15 }
   Presentation: { Name: Инженер }
 
 supply-truck:

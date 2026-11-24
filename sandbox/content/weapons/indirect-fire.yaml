@@ -9,7 +9,7 @@ howitzer:
     Range: 16168
     AcquireRange: 16168
     TravelLimit: 18384
-    Speed: 280
+    Speed: 320
     SplashRadius: 768
     Damage: 85
     ReloadTicks: 72

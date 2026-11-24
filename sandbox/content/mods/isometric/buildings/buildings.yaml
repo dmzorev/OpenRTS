@@ -28,19 +28,19 @@
       site-helipad: { Unit: helipad, OnSite: true }
       site-radar: { Unit: headquarters, OnSite: true }
       site-stealth: { Unit: stealth-generator, OnSite: true }
-      site-shield: { Unit: shield-generator, OnSite: true }
+      # site-shield: { Unit: shield-generator, OnSite: true }
   ActionPanel:
     Buttons:
-      site-power: { Label: Электростанция, Hotkey: E, Order: 2 }
-      site-barracks: { Label: Бараки, Hotkey: R, Order: 3 }
-      site-factory: { Label: Завод, Hotkey: T, Order: 4 }
-      site-bunker: { Label: Бункер, Hotkey: U, Order: 6 }
-      site-supply: { Label: Центр снабжения, Hotkey: I, Order: 7 }
-      site-airfield: { Label: Аэродром, Order: 10 }
-      site-helipad: { Label: Вертолётная площадка, Order: 11 }
-      site-radar: { Label: HQ · Радар, Order: 12 }
-      site-stealth: { Label: Стелс-генератор, Order: 13 }
-      site-shield: { Label: Генератор щита, Order: 14 }
+      site-power: { Label: Электростанция, Hotkey: E, Order: 1 }
+      site-barracks: { Label: Бараки, Hotkey: Q, Order: 2 }
+      site-factory: { Label: Завод, Hotkey: W, Order: 3 }
+      site-supply: { Label: Центр снабжения, Hotkey: I, Order: 4 }
+      site-radar: { Label: Радар, Order: 5 }
+      site-helipad: { Label: Вертолётная площадка, Order: 6 }
+      site-airfield: { Label: Аэродром, Order: 7 }
+      site-bunker: { Label: Бункер, Hotkey: B, Order: 8 }
+      site-stealth: { Label: Стелс-генератор, Order: 9 }
+      # site-shield: { Label: Генератор щита, Order: 12 }
 
 crane:
   Inherits: ^building
@@ -53,8 +53,8 @@ crane:
       repair: { Mount: repair, AutoCast: true }
   ActionPanel:
     Buttons:
-      build: { Label: Помочь строить, Cursor: build, Order: 0 }
-      repair: { Label: Ремонт, Cursor: repair, Order: 1 }
+      build: { Label: Помочь строить, Cursor: build, Order: 15 }
+      repair: { Label: Ремонт, Cursor: repair, Order: 16 }
   Armaments:
     Mounts:
       repair: { Weapon: crane-repair, Animation: produce }
@@ -82,8 +82,8 @@ supply-center:
       truck: { Unit: supply-truck, Queue: vehicles }
   ActionPanel:
     Buttons:
-      engineer: { Label: Инженер }
-      truck: { Label: Грузовик снабжения, Order: 1 }
+      truck: { Label: Грузовик снабжения, Order: 0 }
+      engineer: { Label: Инженер, Order: 1 }
   Footprint: { Rows: ["#####", "###==", "###==", "###++"] }
   Presentation: { Model: supply-center, Name: Центр снабжения }
 
@@ -130,33 +130,33 @@ factory:
         Exit: [0, 3328]
   Actions:
     Definitions:
-      apc: { Unit: apc-mg, Cost: 500, Ticks: 250 }
+      truck: { Unit: supply-truck, Queue: vehicles }
       engineer: { Unit: construction-engineer }
+      apc: { Unit: apc-mg, Cost: 500, Ticks: 250 }
       tank: { Unit: tank, Cost: 800, Ticks: 350 }
       stealth-truck: { Unit: stealth-truck, Cost: 1500, Ticks: 450 }
       radar-buggy: { Unit: radar-buggy, Cost: 300, Ticks: 150 }
       mixed-tank: { Unit: tank-mixed, Cost: 850, Ticks: 350 }
       howitzer: { Unit: howitzer, Cost: 1200, Ticks: 250 }
       mlrs: { Unit: mlrs, Cost: 1500, Ticks: 300 }
-      tomahawk: { Unit: tomahawk, Cost: 2000, Ticks: 400 }
       scud: { Unit: scud, Cost: 2250, Ticks: 450 }
-      shield-truck: { Unit: shield-truck }
+      tomahawk: { Unit: tomahawk, Cost: 2000, Ticks: 400 }
       mobile-aa: { Unit: mobile-aa }
       # repair: { Mount: repair, AutoCast: true }
   ActionPanel:
     Buttons:
-      apc: { Label: БТР, Order: 0 }
-      engineer: { Label: Инженер, Order: 1 }
-      tank: { Label: Танк, Order: 2 }
-      stealth-truck: { Label: Стелс-генератор, Order: 6 }
-      radar-buggy: { Label: Разведчик, Order: 7 }
-      mixed-tank: { Label: Мобильный радар, Order: 3 }
-      howitzer: { Label: Самоходная гаубица, Order: 4 }
-      mlrs: { Label: Реактивная установка залпового огня, Order: 5 }
-      tomahawk: { Label: Установка крылатой ракеты, Order: 6 }
-      scud: { Label: SCUD, Order: 8 }
-      shield-truck: { Label: Генератор щита, Order: 9 }
-      mobile-aa: { Label: Мобильное ПВО, Order: 10 }
+      truck: { Label: Грузовик снабжения, Order: 0 }
+      engineer: { Label: Инженер, Order: 0 }
+      radar-buggy: { Label: Разведчик, Order: 1 }
+      apc: { Label: БТР, Order: 2 }
+      tank: { Label: Танк, Order: 3 }
+      mixed-tank: { Label: Мобильный радар, Order: 4 }
+      howitzer: { Label: Самоходная гаубица, Order: 5 }
+      mlrs: { Label: Реактивная система залпового огня, Order: 6 }
+      scud: { Label: Установка баллистической ракеты, Order: 7 }
+      #tomahawk: { Label: Установка крылатой ракеты, Order: 8 }
+      mobile-aa: { Label: Мобильное ПВО, Order: 9 }
+      stealth-truck: { Label: Стелс-генератор, Order: 10 }
       # repair: { Label: Ремонт, Cursor: repair, Order: 4 }
   Footprint: { Rows: ["#####", "#####", "#####", ".+++.", ".+++."] }
   Armaments:
@@ -167,7 +167,8 @@ factory:
       heavy:
         Cost: 600
         Ticks: 175
-        Products: [tank, mixed-tank, howitzer, mlrs, tomahawk]
+        Products:
+          [tank, mixed-tank, howitzer, mlrs, scud, mobile-aa, stealth-truck]
   Presentation:
     Model: upgradable-factory
     Name: Завод Техники

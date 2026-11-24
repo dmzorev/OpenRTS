@@ -25,7 +25,7 @@ cannon:
 
 missile:
   Weapon:
-    Range: 6144
+    Range: 7192 # 6144
     AcquireRange: 8192
     Projectile: Missile
     Targets: [ground, air]
@@ -47,7 +47,7 @@ grenade:
     Damage: 35
     ReloadTicks: 65
     WindupTicks: 4
-    Versus: { Living: 140, Mechanical: 20, Building: 160 }
+    Versus: { Living: 140, Light: 80, Mechanical: 20, Building: 160 }
 
 repair:
   Weapon:
@@ -55,10 +55,10 @@ repair:
     Range: 2048
     AcquireRange: 2048
     Damage: 10
-    ReloadTicks: 16
+    ReloadTicks: 12
     WindupTicks: 1
     AnimationTicks: 6
-    Versus: { Living: 0, Mechanical: 100, Building: 100 }
+    Versus: { Living: 0, Light: 100, Mechanical: 100, Building: 100 }
 
 factory-repair:
   Inherits: repair
@@ -73,7 +73,7 @@ sniper-rifle:
     WindupTicks: 6
     PassengerDamage: 110
     PassengerDamageSpill: false
-    Versus: { Living: 100, Mechanical: 1, Building: 1 }
+    Versus: { Living: 100, Light: 10, Mechanical: 1, Building: 1 }
 
 crane-repair:
   Inherits: repair
