@@ -124,8 +124,54 @@ internal static class ConfigurationChecks
             models.ValidateUnits(units);
             Check(isometric.Settings.Presentation.ModelOverrides.ContainsKey("tank"), "The isometric tank override was omitted");
             foreach (var (id, replacement) in isometric.Settings.Presentation.ModelOverrides)
+            {
                 Check(ReferenceEquals(models.Models[id].Parts, models.Models[replacement].Parts), "Model override was ignored: " + id);
+                if (models.Models[replacement].Icon is { } icon)
+                    Check(models.Models[id].Icon == icon, "An overridden model did not inherit the generated icon: " + id);
+            }
             Check(!standard.LoadModels().Models.ContainsKey("iso-tank"), "Mod definitions leaked into the standard profile");
+            const string tankIcon = "res://assets/icons/isometric-game/iso-tank.png";
+            Check(isometric.Icons.Count == 1 && models.Models["iso-tank"].Icon == tankIcon && models.Models["tank"].Icon == tankIcon,
+                "The generated isometric tank icon was not attached through its model override");
+            Check(standard.LoadModels().Models["tank"].Icon is null, "Composed icons leaked into the standard profile");
+        });
+        test("Configuration: icon declarations require concrete models and res paths", () =>
+        {
+            InDirectory((root, write) =>
+            {
+                write("rules/unit.yaml", "unit: {Health: {HP: 1}}\n");
+                write("models/model.yaml", """
+                    m:
+                      Model:
+                        Parts:
+                          body: {Resource: 'res://body.tres'}
+                        Animations:
+                          idle: {Sequence: stand, Parts: [body]}
+                    """);
+                write("game.yaml", "Version: 1\nTitle: Test\nRules: [rules/unit.yaml]\nModels: [models/model.yaml]\nIcons: [icons.yaml]\n");
+                write("icons.yaml", "m: res://m.png\n");
+                var manifest = GameManifest.Load(Path.Combine(root, "game.yaml"));
+                Check(manifest.LoadModels().Models["m"].Icon == "res://m.png", "Icon declaration was not applied");
+                foreach (var (text, context) in new[]
+                {
+                    ("unknown: res://unknown.png\n", "unknown"),
+                    ("m: m.png\n", "res://"),
+                    ("^m: res://m.png\n", "concrete"),
+                    ("m: ''\n", "icons.yaml:")
+                })
+                {
+                    write("icons.yaml", text);
+                    try
+                    {
+                        GameManifest.Load(Path.Combine(root, "game.yaml")).LoadModels();
+                        throw new Exception("Expected an invalid icon declaration error: " + context);
+                    }
+                    catch (ContentException error)
+                    {
+                        Check(error.Message.Contains(context, StringComparison.Ordinal), "Missing icon diagnostic context: " + error.Message);
+                    }
+                }
+            });
         });
     }
 

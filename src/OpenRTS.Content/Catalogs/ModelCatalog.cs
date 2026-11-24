@@ -16,7 +16,7 @@ public sealed record ModelAnimation(string Sequence, ReadOnlyCollection<string> 
 public sealed record ModelState(double Red, double Green, double Blue, double Scale, double Opacity, double Pulse = 0);
 public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Parts,
     ReadOnlyDictionary<string, ModelAnimation> Animations, ReadOnlyDictionary<string, ModelState> States, string? DamagedState = null, string? DestroyedState = null,
-    ModelDrawLayer DrawLayer = ModelDrawLayer.World, double SortOffset = 0);
+    ModelDrawLayer DrawLayer = ModelDrawLayer.World, double SortOffset = 0, string? Icon = null);
 
 /// <summary>Adapter declarations, loaded separately from UnitCatalog; never used by World.Step.</summary>
 public sealed class ModelCatalog
@@ -30,10 +30,27 @@ public sealed class ModelCatalog
     }
 
     public float ScaleFor(UnitDefinition unit) => unit.Movable ? _unitScale : 1f;
-    public static ModelCatalog Load(IEnumerable<ContentSource> sources) => Load(sources, null);
+    public static ModelCatalog Load(IEnumerable<ContentSource> sources) => Load(sources, null, null);
 
-    internal static ModelCatalog Load(IEnumerable<ContentSource> sources, IReadOnlyDictionary<string, string>? overrides, float unitScale = 1f)
+    internal static ModelCatalog Load(IEnumerable<ContentSource> sources, IEnumerable<ContentSource>? icons,
+        IReadOnlyDictionary<string, string>? overrides, float unitScale = 1f)
     {
+        var iconDeclarations = new Dictionary<string, (string Path, Source Source)>(StringComparer.Ordinal);
+        foreach (var source in icons ?? Array.Empty<ContentSource>())
+        {
+            var yaml = new MapYaml(source);
+            foreach (var (id, node) in yaml.Fields(yaml.Root(), source.Name))
+            {
+                if (string.IsNullOrWhiteSpace(id) || id.StartsWith('^') || id.StartsWith('-'))
+                    throw yaml.Error(node, source.Name + "." + id, "An icon requires a concrete model ID.");
+                string path = yaml.Text(node, source.Name + "." + id);
+                if (!path.StartsWith("res://", StringComparison.Ordinal))
+                    throw yaml.Error(node, source.Name + "." + id, "An icon path must use the res:// scheme.");
+                if (iconDeclarations.TryGetValue(id, out var declared))
+                    throw yaml.Error(node, source.Name + "." + id, "Duplicate icon; the first is in " + declared.Source + ".");
+                iconDeclarations.Add(id, (path, yaml.Location(node)));
+            }
+        }
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>().Register<ModelOptions>("Model", (_, _, options) => options, required: true);
         registry.ValidateTemplates(definitions);
@@ -102,12 +119,13 @@ public sealed class ModelCatalog
                 states.Add(name, new(state.Tint[0], state.Tint[1], state.Tint[2], state.Scale, state.Opacity, state.Pulse));
             }
             models.Add(id, new(id, Array.AsReadOnly(ordered.ToArray()), new(animations), new(states), options.DamagedState, options.DestroyedState,
-                options.DrawLayer, options.SortOffset));
+                options.DrawLayer, options.SortOffset, options.Icon));
             void ValidateVector(double[] value, double min, double max, string name)
             {
                 if (value.Length != 2 || value.Any(v => v < min || v > max)) throw node.Error(id + ".Model.Parts." + name, $"Requires two values in {min}..{max}.");
             }
         }
+        ApplyIcons(models, iconDeclarations);
         if (overrides is null || overrides.Count == 0) return new(models, unitScale);
         var selected = new Dictionary<string, ModelDefinition>(models, StringComparer.Ordinal);
         foreach (var (id, alternative) in overrides)
@@ -116,7 +134,20 @@ public sealed class ModelCatalog
                 throw new ArgumentException($"Presentation.ModelOverrides.{id}: both '{id}' and '{alternative}' must name declared models.");
             selected[id] = model with { Id = id };
         }
+        // A replacement carries its own icon into the override; an explicit icon for the replaced ID still wins.
+        ApplyIcons(selected, iconDeclarations);
         return new(selected, unitScale);
+    }
+
+    private static void ApplyIcons(Dictionary<string, ModelDefinition> models,
+        IReadOnlyDictionary<string, (string Path, Source Source)> icons)
+    {
+        foreach (var (id, icon) in icons)
+        {
+            if (!models.TryGetValue(id, out var model))
+                throw new ContentException(icon.Source, "Icons." + id, "Unknown model.");
+            models[id] = model with { Icon = icon.Path };
+        }
     }
 
     public void ValidateUnits(UnitCatalog units)
@@ -141,6 +172,7 @@ public sealed class ModelCatalog
 
     private sealed class ModelOptions
     {
+        public string? Icon { get; set; }
         public string? DamagedState { get; set; }
         public string? DestroyedState { get; set; }
         public string Kind { get; set; } = "Sprite";

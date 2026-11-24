@@ -30,3 +30,5 @@ Settings:
   - content/settings/sensor-ranges.yaml
   - content/mods/isometric/match.yaml
   - content/mods/isometric/presentation.yaml
+Icons:
+  - assets/icons/isometric-game/icons.yaml

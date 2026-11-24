@@ -1,0 +1,22 @@
+{
+  "iso-apc-upgradable": "res://assets/icons/isometric-game/iso-apc-upgradable.png",
+  "iso-apc-missiles": "res://assets/icons/isometric-game/iso-apc-missiles.png",
+  "iso-tank": "res://assets/icons/isometric-game/iso-tank.png",
+  "iso-engineer": "res://assets/icons/isometric-game/iso-engineer.png",
+  "iso-construction-tiltrotor": "res://assets/icons/isometric-game/iso-construction-tiltrotor.png",
+  "iso-fighter": "res://assets/icons/isometric-game/iso-fighter.png",
+  "iso-heavy-air-transport": "res://assets/icons/isometric-game/iso-heavy-air-transport.png",
+  "iso-wheeled-howitzer": "res://assets/icons/isometric-game/iso-wheeled-howitzer.png",
+  "iso-missile-tiltrotor": "res://assets/icons/isometric-game/iso-missile-tiltrotor.png",
+  "iso-salvo-carrier": "res://assets/icons/isometric-game/iso-salvo-carrier.png",
+  "iso-mobile-aa": "res://assets/icons/isometric-game/iso-mobile-aa.png",
+  "iso-radar-buggy": "res://assets/icons/isometric-game/iso-radar-buggy.png",
+  "iso-ballistic-carrier": "res://assets/icons/isometric-game/iso-ballistic-carrier.png",
+  "iso-shield-truck": "res://assets/icons/isometric-game/iso-shield-truck.png",
+  "iso-stealth-truck": "res://assets/icons/isometric-game/iso-stealth-truck.png",
+  "iso-supply-tiltrotor": "res://assets/icons/isometric-game/iso-supply-tiltrotor.png",
+  "iso-supply-truck": "res://assets/icons/isometric-game/iso-supply-truck.png",
+  "iso-tank-mixed": "res://assets/icons/isometric-game/iso-tank-mixed.png",
+  "iso-tiltrotor": "res://assets/icons/isometric-game/iso-tiltrotor.png",
+  "iso-cruise-carrier": "res://assets/icons/isometric-game/iso-cruise-carrier.png"
+}

@@ -32,7 +32,9 @@ public partial class Sandbox
         if (model is not null && _modelCatalog!.Models.TryGetValue(model, out var definition))
         {
             var part = definition.Parts.First(p => p.Parent < 0);
-            var frames = GD.Load<SpriteFrames>(part.Resource);
+            var frames = definition.Icon is null ? GD.Load<SpriteFrames>(part.Resource) : null;
+            if (definition.Icon is not null) icon = GD.Load<Texture2D>(definition.Icon);
+            if (icon is null && definition.Icon is not null) frames = GD.Load<SpriteFrames>(part.Resource);
             if (frames is not null)
             {
                 string sequence = frames.HasAnimation("icon") ? "icon" : definition.Animations["idle"].Sequence;
@@ -111,7 +113,9 @@ public partial class Sandbox
         {
             var type = _catalog.Units[_activeType]; var product = type.Products.FirstOrDefault(p => p.Id == action.Id);
             int target = product is null ? _activeType : _catalog.Units.ToList().FindIndex(u => u.Id == product.Unit);
-            var icon = action.Icon is null ? UnitIcon(target) : GD.Load<Texture2D>(action.Icon);
+            var targetModel = _catalog.Presentations[target].Model;
+            bool composed = targetModel is not null && _modelCatalog!.Models[targetModel].Icon is not null;
+            var icon = action.Icon is null || product is not null && composed ? UnitIcon(target) : GD.Load<Texture2D>(action.Icon);
             var button = IconButton(action.Label, icon, _terminal is null ? 120 : 64);
             if (_terminal is not null)
             {

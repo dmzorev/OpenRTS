@@ -11,15 +11,16 @@ public sealed class GameManifest
     public IReadOnlyList<ContentSource> Terrain { get; }
     public IReadOnlyList<ContentSource> Weapons { get; }
     public IReadOnlyList<ContentSource> Models { get; }
+    public IReadOnlyList<ContentSource> Icons { get; }
     public IReadOnlyList<ContentSource> Effects { get; }
     public GameSettings Settings { get; }
 
     private GameManifest(ContentFiles files, string title, IReadOnlyList<ContentSource> rules,
         IReadOnlyList<ContentSource> terrain, IReadOnlyList<ContentSource> weapons,
-        IReadOnlyList<ContentSource> models, IReadOnlyList<ContentSource> effects, GameSettings settings)
+        IReadOnlyList<ContentSource> models, IReadOnlyList<ContentSource> icons, IReadOnlyList<ContentSource> effects, GameSettings settings)
     {
         Files = files; Title = title; Rules = rules; Terrain = terrain; Weapons = weapons;
-        Models = models; Effects = effects; Settings = settings;
+        Models = models; Icons = icons; Effects = effects; Settings = settings;
     }
 
     public static GameManifest Load(string filename)
@@ -33,7 +34,7 @@ public sealed class GameManifest
         var source = files.Read(filename);
         var yaml = new MapYaml(source);
         var root = yaml.Root();
-        var fields = yaml.Fields(root, filename, "Version", "Title", "Rules", "Terrain", "Weapons", "Models", "Effects", "Settings");
+        var fields = yaml.Fields(root, filename, "Version", "Title", "Rules", "Terrain", "Weapons", "Models", "Icons", "Effects", "Settings");
         yaml.Integer(yaml.Required(fields, "Version", root, filename), "Version", 1, 1);
         string title = yaml.Text(yaml.Required(fields, "Title", root, filename), "Title");
         IReadOnlyList<ContentSource> Sources(string key, bool required = false)
@@ -61,13 +62,13 @@ public sealed class GameManifest
             return result.AsReadOnly();
         }
         return new(files, title, Sources("Rules", true), Sources("Terrain"), Sources("Weapons"),
-            Sources("Models"), Sources("Effects"), GameSettings.Load(Sources("Settings")));
+            Sources("Models"), Sources("Icons"), Sources("Effects"), GameSettings.Load(Sources("Settings")));
     }
 
     public UnitCatalog LoadUnits(IEnumerable<ContentSource>? rules = null, IEnumerable<ContentSource>? weapons = null) =>
         UnitCatalog.Load(rules ?? Rules, Terrain.Count == 0 ? null : LocomotionCatalog.Load(Terrain),
             Weapons.Count == 0 && weapons is null ? null : WeaponCatalog.Load(weapons ?? Weapons));
 
-    public ModelCatalog LoadModels() => ModelCatalog.Load(Models, Settings.Presentation.ModelOverrides,
+    public ModelCatalog LoadModels() => ModelCatalog.Load(Models, Icons, Settings.Presentation.ModelOverrides,
         Settings.Presentation.Camera == GameCamera.Isometric ? 0.75f : 1f);
 }

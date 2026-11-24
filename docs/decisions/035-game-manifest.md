@@ -2,7 +2,7 @@
 
 Дата: 15 ноября 2026 года.
 
-`OpenRTS.Content.GameManifest` загружает `game.yaml` версии 1. Манифест содержит `Title`, обязательный список `Rules` и необязательные `Terrain`, `Weapons`, `Models`, `Effects`, `Settings`. Каждый элемент — файл или директория. Это обычный YAML, совместимость с MiniYaml не требуется.
+`OpenRTS.Content.GameManifest` загружает `game.yaml` версии 1. Манифест содержит `Title`, обязательный список `Rules` и необязательные `Terrain`, `Weapons`, `Models`, `Icons`, `Effects`, `Settings`. Каждый элемент — файл или директория. Это обычный YAML, совместимость с MiniYaml не требуется.
 
 ```yaml
 Version: 1
@@ -11,9 +11,12 @@ Rules: [content/rules]
 Terrain: [content/terrain.yaml]
 Weapons: [content/weapons]
 Models: [content/models]
+Icons: [assets/icons/game/icons.yaml]
 Effects: [content/effects.yaml]
 Settings: [content/settings]
 ```
+
+`Icons` — плоские объявления `Model ID: res://path.png` для готовых текстур панели команд. Это не модели: файл не требует `Parts` и `Animations`. Пути, неизвестные ID и повторы между файлами проверяются при `LoadModels`. Секция необязательна; без неё иконки берутся из корневого `ModelPart`, как раньше. Генерация и ограничения — [053](053-composed-unit-icons.md).
 
 ## Загрузка
 
