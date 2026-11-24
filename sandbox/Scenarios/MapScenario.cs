@@ -11,9 +11,10 @@ public static class MapScenario
 	public const string InfantryStartSet = "content/start-sets/infantry.yaml";
 	public const string CrossroadsMap = "content/maps/crossroads.yaml";
 	public const string RiversideMap = "content/maps/riverside-station.yaml";
-	public const int MaximumPlayers = 4;
+	public const int MaximumPlayers = 8;
 
-	private static readonly string[] PlayerNames = ["Синий", "Красный", "Зелёный", "Золотой"];
+	private static readonly string[] PlayerNames =
+		["Синий", "Красный", "Зелёный", "Золотой", "Бирюзовый", "Фиолетовый", "Оранжевый", "Розовый"];
 
 	public static string PlayerName(int index) => PlayerNames[index];
 

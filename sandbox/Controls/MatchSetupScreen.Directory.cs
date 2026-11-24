@@ -179,7 +179,7 @@ public sealed partial class MatchSetupScreen
         foreach (var match in _results.SelectMany(r => r.Games).Where(m => m.Expires > DateTimeOffset.UtcNow).OrderByDescending(m => m.Game.Revision).DistinctBy(m => m.Game.Match))
         {
             var game = match.Game;
-            bool supported = game.PlayerCount == 4;
+            bool supported = MatchSetupOptions.SupportsSeatCount(game.PlayerCount);
             AddGameRow(game.Title, game.Map, game.Players, game.AvailablePlayers.Length - match.ReservedPlayers, game.Spectators, game.PasswordRequired,
                 supported ? PhaseLabel(game.Phase) : "Для этой игры нужен клиент на " + game.PlayerCount + " сторон",
                 supported && game.HostAdmission && game.Phase == MatchPhase.Lobby, supported && game.HostAdmission && game.Phase is MatchPhase.Lobby or MatchPhase.Paused,
@@ -187,7 +187,7 @@ public sealed partial class MatchSetupScreen
                     var local = _browser?.Games.FirstOrDefault(g => g.Match == game.Match && g.Fingerprint == game.Fingerprint);
                     SelectedEndpoints = local is null ? game.Endpoints : game.Endpoints.Prepend(new(MatchEndpointKind.Direct, local.Address, local.Port)).Distinct().Take(3).ToArray();
                     var endpoint = SelectedEndpoints.OrderBy(e => e.Kind).First();
-                    EnterLobby(endpoint.Address, endpoint.Port, game.Fingerprint, watch ? 0u : 2u);
+                    EnterLobby(endpoint.Address, endpoint.Port, game.Fingerprint, watch ? 0u : 2u, game.PlayerCount);
                 },
                 supported ? "DirectoryJoinMatch" : "DirectoryUnsupportedJoin" + game.PlayerCount,
                 supported ? "DirectoryWatchMatch" : "DirectoryUnsupportedWatch" + game.PlayerCount);

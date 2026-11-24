@@ -201,7 +201,8 @@ public partial class Sandbox
         return PlayerFog ? owner == _fogViewer : owner == 1 || _opponentProfile is null && _mapMatch is not null && owner is >= 2 and <= MapScenario.MaximumPlayers;
     }
     private uint CommandOwner => _recordPlaytest ? 1 : _networkMode != 0 ? _fogViewer : PlayerFog ? _fogViewer : _opponentProfile is null ? Selected()?.Presentation.Owner ?? 1 : 1;
-    private bool SetupAllied(uint a, uint b) => a != 0 && b != 0 && (a == b || _configuredOptions is { } options && a <= 4 && b <= 4 && options.Seats[a - 1].Team != 0 && options.Seats[a - 1].Team == options.Seats[b - 1].Team);
+    private bool SetupAllied(uint a, uint b) => a != 0 && b != 0 && (a == b || _configuredOptions is { } options &&
+        a <= options.Seats.Length && b <= options.Seats.Length && options.Seats[a - 1].Team != 0 && options.Seats[a - 1].Team == options.Seats[b - 1].Team);
     private bool Ally(EntityPose pose) => pose.Presentation.Owner != 0 && pose.Presentation.Owner == CommandOwner;
     private bool Enemy(EntityPose pose) => pose.Presentation.Owner != 0 && !SetupAllied(pose.Presentation.Owner, CommandOwner) && _catalog!.Units[pose.UnitType].Destruction != DestructionPolicy.Invulnerable;
     private bool CanDamageSelected(EntityPose victim)
@@ -602,7 +603,7 @@ public partial class Sandbox
             var color = p.Presentation.Owner switch
             {
                 1 => new Color(0.6f, 1, 0.6f),
-                3 or 4 => TeamMarkerColor(p.Presentation.Owner),
+                >= 3 and <= MapScenario.MaximumPlayers => TeamMarkerColor(p.Presentation.Owner),
                 _ => new Color(1, 0.35f, 0.6f)
             };
             _ringBuffer[at + 12] = color.R; _ringBuffer[at + 13] = color.G;

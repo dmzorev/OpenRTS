@@ -9,10 +9,40 @@ Match:
       Description: Открытая долина с дорогами, озером и четырьмя месторождениями.
     - Path: content/maps/crossroads.yaml
       Title: Перекрёсток
-      Description: Городские кварталы и вокзал у пересечения дорог.
+      Description: Городские кварталы и вокзал у пересечения дорог. Три шахты лежат между стартовыми районами.
     - Path: content/maps/riverside-station.yaml
       Title: Береговая станция
-      Description: Два посёлка разделены рекой. Дороги сходятся к двум переправам.
+      Description: Два посёлка разделены рекой. По обе стороны каждой переправы есть шахты.
+    - Path: content/maps/north-lakes.yaml
+      Title: Северные озёра
+      Description: Два озера оставляют три сухопутных маршрута. Шахты стоят между озёрами, вышки — на внешних берегах.
+    - Path: content/maps/forest-ring.yaml
+      Title: Лесное кольцо
+      Description: Четыре просеки ведут к центральной поляне. Шахты стоят на подступах и в центре.
+    - Path: content/maps/salt-flats.yaml
+      Title: Солончак
+      Description: Диагональная насыпь пересекает топкую низину. От неё отходят дороги к шахтам.
+    - Path: content/maps/old-quarry.yaml
+      Title: Старый карьер
+      Description: Четыре выработки окружают перекрёсток. Шахты занимают подходы, вышки — площадки внутри карьера.
+    - Path: content/maps/basalt-terraces-isometric.ortmap.json
+      Title: Базальтовые террасы
+      Description: Две рампы поднимаются к шахтам и вышке на плато. Дополнительные шахты стоят на нижних обходах.
+    - Path: content/maps/red-canyons.mapsource.json
+      Title: Красные каньоны
+      Description: Два длинных хребта с рампами обрамляют низину. Шахты есть и наверху, и вдоль нижней дороги.
+    - Path: content/maps/lake-escarpment.mapsource.json
+      Title: Озёрный уступ
+      Description: Четыре дамбы ведут к высокому острову. Соперники могут обойти озеро по внешнему берегу.
+    - Path: content/maps/three-passes.mapsource.json
+      Title: Три перевала
+      Description: Три пары стартов выходят к отдельным горным переходам. Дороги в двух ущельях связывают фронты.
+    - Path: content/maps/stone-crown.mapsource.json
+      Title: Каменная корона
+      Description: Восемь стартов вокруг высокого плато. Четыре рампы ведут к верхним шахтам и вышкам.
+    - Path: content/maps/great-rift.mapsource.json
+      Title: Большой разлом
+      Description: Базы на двух высоких уступах спускаются в речную долину. В её центре есть отдельный поднятый переход.
   StartingSets:
     - Path: content/start-sets/supply.yaml
       Title: Снабжение · центр, инженер и грузовик

@@ -56,7 +56,13 @@ public partial class Sandbox
 
     private void SwitchFogViewer()
     {
-        _fogViewer = _fogViewer >= (_fogScenario ? 2 : _matchPlayers) ? 1u : _fogViewer + 1; _constructionViewer = _fogViewer;
+        using var frame = _session?.Frames.AcquireLatest();
+        if (frame is null || frame.Players.Length < 2) return;
+        var players = frame.Players[1..];
+        uint next = players[0].Id;
+        foreach (var player in players)
+            if (player.Id > _fogViewer) { next = player.Id; break; }
+        _fogViewer = _constructionViewer = next;
         _rtsOverlay?.RadarContacts.Clear();
         _selection.Reset(); _focusStartingBase = true; _combatEffects?.Clear(); _sprites?.ClearWrecks();
     }

@@ -29,7 +29,8 @@ public partial class Sandbox
         var set = receipt.ReadStartingSet(_manifest);
         if (receipt.Slots.Length == 0) throw new ArgumentException("Для записи нужен хотя бы один активный игрок.");
         string[] slots = map.Slots.ToArray();
-        var seats = Enumerable.Range(0, MapScenario.MaximumPlayers).Select(i => i < receipt.Slots.Length
+        int seatCount = receipt.Slots.Length > MatchSetupOptions.LegacySeatCount ? MapScenario.MaximumPlayers : MatchSetupOptions.LegacySeatCount;
+        var seats = Enumerable.Range(0, seatCount).Select(i => i < receipt.Slots.Length
             ? new MatchSeat(SlotController.Human, Array.IndexOf(slots, receipt.Slots[i]))
             : new MatchSeat(SlotController.None, 0)).ToArray();
         _configuredOptions = new MatchSetupOptions(map.Id, set?.Id ?? "", (int)OpenRTS.Core.Visibility.FogMode.Visible,
@@ -77,7 +78,6 @@ public partial class Sandbox
             _configuredOptions = options; _mapMatch = match;
             _networkMode = 0; _fogViewer = 0; _constructionViewer = 0; _opponentProfile = null; _opponent = null;
             _matchFogMode = (OpenRTS.Core.Visibility.FogMode)_configuredOptions.Fog;
-            _matchPlayers = options.Seats.Count(seat => seat.Controller != SlotController.None);
             _count = match.UnitCount; _paused = true; _playbackSpeed = 1;
             _session = new SandboxSession(new ReplaySession(path, actual =>
             {

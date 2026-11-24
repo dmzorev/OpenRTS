@@ -93,12 +93,11 @@ public partial class Sandbox
                 throw new ArgumentException("Прямая игра требует хотя бы двух игровых сторон.");
             _networkAddress = _matchSetup.NetworkAddress; _networkPort = _matchSetup.NetworkPort;
             _networkPin = _matchSetup.NetworkPin; _networkDelay = _matchSetup.NetworkInputDelay;
-            _networkPlayer = _matchSetup.NetworkPlayer; _networkAiPlayers = _matchSetup.NetworkAiPlayers;
+            _networkPlayer = _matchSetup.NetworkPlayer; _networkAiPlayers = _matchSetup.NetworkAiPlayers; _networkCapacity = _matchSetup.NetworkCapacity;
             _fogViewer = _networkMode == 2 ? _networkPlayer : 1u;
             _matchFogMode = _matchSetup!.SelectedFog;
             _fogStyle = _matchSetup.SelectedFogStyle;
             _radarStyle = _matchSetup.SelectedRadarStyle;
-            _matchPlayers = slots.Length;
             _configuredOptions = _matchSetup.Options;
             _mapMatch = PrepareMap(_configuredOptions);
             bool canPlanAi = aiOpponent || _networkMode != 0;

@@ -79,6 +79,11 @@ objects:
   - {id: east-house, type: civilian-house, position: [50688, 23040], owner: neutral}
   - {id: south-house, type: civilian-house, position: [40448, 43520], owner: neutral}
   - {id: north-west-mine, type: mine, position: [23040, 11264], owner: neutral}
-  - {id: north-east-oil, type: oil-derrick, position: [60928, 12800], owner: neutral}
-  - {id: south-west-oil, type: oil-derrick, position: [20992, 44544], owner: neutral}
+  - {id: north-east-mine, type: mine, position: [58880, 11264], owner: neutral}
+  - {id: south-west-mine, type: mine, position: [23040, 46080], owner: neutral}
   - {id: south-east-mine, type: mine, position: [58880, 46080], owner: neutral}
+  - {id: west-road-mine, type: mine, position: [19968, 28672], owner: neutral}
+  - {id: east-road-mine, type: mine, position: [61952, 28672], owner: neutral}
+  - {id: square-mine, type: mine, position: [41472, 28672], owner: neutral}
+  - {id: north-oil, type: oil-derrick, position: [41472, 9728], owner: neutral}
+  - {id: south-oil, type: oil-derrick, position: [40448, 47616], owner: neutral}

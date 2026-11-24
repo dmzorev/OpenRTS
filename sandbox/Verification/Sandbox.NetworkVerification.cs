@@ -25,10 +25,9 @@ public partial class Sandbox
         if (_directoryCapacityFixtures.IsFaulted) { GD.PushError(_directoryCapacityFixtures.Exception!.ToString()); GetTree().Quit(1); }
         async System.Threading.Tasks.Task Publish()
         {
-            foreach (int count in new[] { 2, 8 })
-                await _publications[0].Client.RegisterAsync(new(Guid.NewGuid(), 1, OpenRTS.Network.StarSession.ProtocolVersion, count,
-                    network.Descriptor.Rules, network.Descriptor.ContentHash, "Capacity fixture " + count, MatchSetupOptions.Parse(network.LobbySettings).Map,
-                    network.Fingerprint, OpenRTS.Network.MatchPhase.Lobby, [2], 1, 0, [new(OpenRTS.Network.MatchEndpointKind.Direct, "127.0.0.1", _networkPort)]));
+            await _publications[0].Client.RegisterAsync(new(Guid.NewGuid(), 1, OpenRTS.Network.StarSession.ProtocolVersion, 2,
+                network.Descriptor.Rules, network.Descriptor.ContentHash, "Capacity fixture 2", MatchSetupOptions.Parse(network.LobbySettings).Map,
+                network.Fingerprint, OpenRTS.Network.MatchPhase.Lobby, [2], 1, 0, [new(OpenRTS.Network.MatchEndpointKind.Direct, "127.0.0.1", _networkPort)]));
         }
     }
     private bool _networkVerifyNet3, _networkVerifyPaused, _networkPauseRequested;
@@ -130,13 +129,13 @@ public partial class Sandbox
             {
                 if (clock.Elapsed.TotalSeconds > 20) throw new TimeoutException("Directory UI did not list the hosted game and capacity fixtures");
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                var unsupported = new[] { "DirectoryUnsupportedJoin2", "DirectoryUnsupportedJoin8", "DirectoryUnsupportedWatch2", "DirectoryUnsupportedWatch8" }
+                var unsupported = new[] { "DirectoryUnsupportedJoin2", "DirectoryUnsupportedWatch2" }
                     .Select(name => _matchSetup.FindChild(name, owned: false) as Button).ToArray();
                 if (unsupported.Any(b => b is null)) continue;
                 if (unsupported.Any(b => !b!.Disabled)) throw new InvalidOperationException("Unsupported lobby capacity can be joined or watched.");
                 if (_matchSetup.FindChild("DirectoryJoinMatch", owned: false) is Button { Disabled: false } join)
                 {
-                    GD.Print("OPENRTS_DIRECTORY_CAPACITY:2/8 disabled");
+                    GD.Print("OPENRTS_DIRECTORY_CAPACITY:2 disabled, 8 enabled");
                     if (_capturePath is not null && DisplayServer.GetName() != "headless") await CaptureNetworkFrame(_capturePath + ".directory.png");
                     ((Button)_matchSetup.FindChild("DirectoryJoinMatch", owned: false)).EmitSignal(Button.SignalName.Pressed);
                     GD.Print("OPENRTS_DIRECTORY_UI_JOIN:requested"); return;

@@ -14,6 +14,7 @@ public partial class Sandbox
     private string _networkAddress = "127.0.0.1", _networkPin = "";
     private int _networkPort = 17771, _networkDelay = 6;
     private uint _networkPlayer = 2;
+    private int _networkCapacity = MapScenario.MaximumPlayers;
     private uint[] _networkAiPlayers = [];
     private Label? _networkLabel;
     private Label? _networkChatLabel;
@@ -62,6 +63,7 @@ public partial class Sandbox
             var options = MatchSetupOptions.Parse(data);
             options.RequireIdentity();
             if (options.Local) throw new InvalidDataException("Локальная запись не является сетевым матчем.");
+            if (options.Seats.Length != _networkCapacity) throw new InvalidDataException("Число мест не совпадает с вместимостью сетевого лобби.");
             if (data != options.Serialize()) throw new InvalidDataException("Неверное кодирование параметров матча.");
             var preparedMap = PrepareMap(options);
             var world = CreateConfiguredWorld(preparedMap, options);
@@ -81,10 +83,12 @@ public partial class Sandbox
             _networkLobby = new(setup.NetworkGameName, setup.AdvertiseHost, setup.MatchPassword,
                 setup.NetworkMode == 1 ? setup.PublicationSources() : [], setup.SelectedEndpoints, setup.RequestSeat);
         var lobby = _networkLobby ?? throw new InvalidOperationException("Нет параметров подключения к матчу.");
-        var network = new StarSession(_networkMode == 1, _networkAddress, _networkPort, _networkPin, Descriptor(ownerOptions, map),
-            () => CreateConfiguredWorld(map, ownerOptions), path, playerCount: 4, player: _networkPlayer,
-            aiPlayers: _networkAiPlayers, planAi: Plan, lobbySettings: ownerOptions.Serialize(), prepareSettings: Prepare,
-            closedPlayers: ownerOptions.Seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.None).Select(p => (uint)p.i + 1).ToArray(), resumeCredential: _networkResume,
+        bool host = _networkMode == 1;
+        var network = new StarSession(host, _networkAddress, _networkPort, _networkPin, Descriptor(ownerOptions, map),
+            () => CreateConfiguredWorld(map, ownerOptions), path, playerCount: _networkCapacity, player: _networkPlayer,
+            aiPlayers: host ? _networkAiPlayers : null, planAi: Plan, lobbySettings: ownerOptions.Serialize(), prepareSettings: Prepare,
+            closedPlayers: host ? ownerOptions.Seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.None).Select(p => (uint)p.i + 1).ToArray() : null,
+            resumeCredential: _networkResume,
             endpoints: lobby.Endpoints, password: lobby.Password, requestSeat: _networkResume is null && lobby.RequestSeat);
         _session = new SandboxSession(network);
         ClosePublications();

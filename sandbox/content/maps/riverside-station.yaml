@@ -83,9 +83,15 @@ objects:
   - {id: east-apartments, type: civilian-apartments, position: [59904, 40448], owner: neutral}
   - {id: east-house, type: civilian-house, position: [53760, 48640], owner: neutral}
   - {id: east-clinic, type: civilian-clinic, position: [58368, 47104], owner: neutral}
-  - {id: north-west-oil, type: oil-derrick, position: [24064, 9728], owner: neutral}
+  - {id: north-west-mine, type: mine, position: [24064, 9216], owner: neutral}
   - {id: north-east-mine, type: mine, position: [66048, 9216], owner: neutral}
-  - {id: south-west-mine, type: mine, position: [24064, 50176], owner: neutral}
-  - {id: south-east-oil, type: oil-derrick, position: [66048, 51712], owner: neutral}
+  - {id: south-west-mine, type: mine, position: [24064, 52224], owner: neutral}
+  - {id: south-east-mine, type: mine, position: [66048, 52224], owner: neutral}
   - {id: west-rocks, type: nature-rocks, position: [38912, 29696], owner: neutral}
   - {id: east-rocks, type: nature-rocks, position: [51200, 29696], owner: neutral}
+  - {id: north-crossing-west-mine, type: mine, position: [35328, 17408], owner: neutral}
+  - {id: north-crossing-east-mine, type: mine, position: [54784, 17408], owner: neutral}
+  - {id: south-crossing-west-mine, type: mine, position: [35328, 44032], owner: neutral}
+  - {id: south-crossing-east-mine, type: mine, position: [54784, 44032], owner: neutral}
+  - {id: west-bank-oil, type: oil-derrick, position: [26112, 30208], owner: neutral}
+  - {id: east-bank-oil, type: oil-derrick, position: [64000, 30208], owner: neutral}

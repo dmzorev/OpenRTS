@@ -14,6 +14,9 @@ public sealed record MatchSetupOptions(string Map, string Mode, int Fog, int Del
     string? EffectiveContentFingerprint = null, bool Local = false)
 {
     public const string Rules = "openrts-lobby-v4";
+    public const int LegacySeatCount = 4;
+
+    public static bool SupportsSeatCount(int count) => count is LegacySeatCount or MapScenario.MaximumPlayers;
 
     public MatchSetupOptions Bind(GameMap map, StartingSet? set) => this with
     {
@@ -38,7 +41,8 @@ public sealed record MatchSetupOptions(string Map, string Mode, int Fog, int Del
                 info.Descriptor.InputDelay != options.Delay)
                 throw new InvalidDataException("Параметры повтора не совпадают с описанием матча.");
         }
-        else if (options.Local || options.MapFingerprint is not null || options.EffectiveContentFingerprint is not null || options.StartingSetFingerprint is not null)
+        else if (options.Seats.Length != LegacySeatCount || options.Local || options.MapFingerprint is not null ||
+            options.EffectiveContentFingerprint is not null || options.StartingSetFingerprint is not null)
             throw new InvalidDataException("Старая версия повтора не поддерживает идентификаторы карт B6.");
         return options;
     }
@@ -52,7 +56,7 @@ public sealed record MatchSetupOptions(string Map, string Mode, int Fog, int Del
     }
 
     public string[] PlayerSlots(GameMap map) =>
-        Seats.Take(Math.Min(map.Slots.Count, MapScenario.MaximumPlayers)).Select(s => map.Slots[s.Start]).ToArray();
+        Seats.Take(map.Slots.Count).Select(s => map.Slots[s.Start]).ToArray();
 
     public MapMatch Prepare(GameMap map, StartingSet? set)
     {
@@ -62,7 +66,7 @@ public sealed record MatchSetupOptions(string Map, string Mode, int Fog, int Del
             throw new InvalidDataException("Правила карты не совпадают с параметрами матча.");
         if ((set?.Id ?? "") != Mode || MapFingerprint is not null && set?.Fingerprint != StartingSetFingerprint)
             throw new InvalidDataException($"Не установлена версия стартового набора '{Mode}' с отпечатком {StartingSetFingerprint}.");
-        int capacity = Math.Min(map.Slots.Count, MapScenario.MaximumPlayers);
+        int capacity = Math.Min(map.Slots.Count, Seats.Length);
         if (Seats.Take(capacity).Any(seat => seat.Start >= map.Slots.Count) ||
             Seats.Skip(capacity).Any(seat => seat.Controller != SlotController.None) ||
             (Local || set?.Id != "supply") && Seats.Any(seat => seat.Controller == SlotController.Ai))
@@ -95,8 +99,8 @@ public sealed record MatchSetupOptions(string Map, string Mode, int Fog, int Del
         if (string.IsNullOrWhiteSpace(options.Map) || options.Mode is null ||
             (options.Mode.Length != 0 ? string.IsNullOrWhiteSpace(options.Mode) : !options.Local) || options.Fog is < 0 or > 2 ||
             options.Delay is < 1 or > 16 || (options.Local ? options.TickRate is < 1 or > 1000 : options.TickRate is not (15 or 25 or 40)) ||
-            options.Seats is null || options.Seats.Length != 4 ||
-            options.Seats.Any(s => s is null || !Enum.IsDefined(s.Controller) || s.Start is < 0 or >= MapCompiler.MaximumSlots || s.Team > 4) ||
+            options.Seats is null || !SupportsSeatCount(options.Seats.Length) ||
+            options.Seats.Any(s => s is null || !Enum.IsDefined(s.Controller) || s.Start is < 0 or >= MapCompiler.MaximumSlots || s.Team > MapScenario.MaximumPlayers) ||
             options.Seats[0].Controller != SlotController.Human || options.SpeedPerTick is < 1 or > 1024 || options.FogHoldTicks is < 0 or > 250)
             throw new ArgumentException("Неверные настройки матча.");
         return options;

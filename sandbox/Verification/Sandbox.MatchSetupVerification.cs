@@ -56,7 +56,7 @@ public partial class Sandbox
             GD.Print("OPENRTS_FOG_MATCH:PASS hidden match, unit vision, filtering, minimap and player control");
             _verificationDone = true; GetTree().Quit(); return;
         }
-        CheckSkirmish(frame.Poses.Length == 26 && (PlayerFog ? !Controls(3) : Controls(3)), "Third side or alternate starting set is missing.");
+        CheckSkirmish(frame.Poses.Length == 32 && (PlayerFog ? !Controls(3) : Controls(3)), "Third side or alternate starting set is missing.");
         var poses = frame.Poses.ToArray();
         var craneOffset = _setupSets["infantry"].Units.Single(unit => unit.Type == "crane").Offset;
         for (uint owner = 1; owner <= 3; owner++)

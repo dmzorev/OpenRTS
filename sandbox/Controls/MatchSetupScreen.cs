@@ -14,17 +14,19 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     private readonly LineEdit _address = new() { Name = "NetworkAddress", Text = "127.0.0.1", PlaceholderText = "Адрес хоста" };
     private readonly SpinBox _port = new() { Name = "NetworkPort", MinValue = 1, MaxValue = 65535, Value = 17771 };
     private readonly LineEdit _pin = new() { Name = "NetworkPin", PlaceholderText = "SHA-256 отпечаток хоста" };
-    private readonly SpinBox _networkPlayer = new() { Name = "NetworkPlayer", MinValue = 2, MaxValue = 4, Value = 2, CustomMinimumSize = new(110, 36), Prefix = "Место: " };
-    private readonly SpinBox _networkAi = new() { Name = "NetworkAi", MinValue = 0, MaxValue = 3, Value = 0 };
+    private readonly SpinBox _networkPlayer = new() { Name = "NetworkPlayer", MinValue = 2, MaxValue = MapScenario.MaximumPlayers, Value = 2, CustomMinimumSize = new(110, 36), Prefix = "Место: " };
+    private readonly SpinBox _networkAi = new() { Name = "NetworkAi", MinValue = 0, MaxValue = MapScenario.MaximumPlayers - 1, Value = 0 };
     private readonly SpinBox _delay = new() { Name = "NetworkDelay", MinValue = 1, MaxValue = 16, Value = 6 };
     private readonly OptionButton _maps = new() { Name = "Maps" }, _modes = new() { Name = "Modes" }, _count = new() { Name = "PlayerCount" };
     private readonly OptionButton _fog = new() { Name = "Fog" }, _fogStyle = new() { Name = "FogStyle" }, _radarStyle = new() { Name = "RadarStyle" };
     private readonly OptionButton _speed = new() { Name = "GameSpeed" };
     private readonly CheckButton _opponent = new() { Name = "AiOpponent", Text = "Играть против ИИ" };
+    private readonly HBoxContainer _playerCountRow = new();
     private readonly GridContainer _players = new() { Name = "Players", Columns = 6, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
     private readonly List<OptionButton> _starts = [], _roles = [], _teams = [];
     private readonly List<Label> _readyLabels = [];
-    private MatchSeat[] _seats = [new(SlotController.Human, 0), new(SlotController.Human, 1), new(SlotController.None, 2), new(SlotController.None, 3)];
+    private readonly MatchSeat[] _seats = Enumerable.Range(0, MapScenario.MaximumPlayers)
+        .Select(i => new MatchSeat(i < 2 ? SlotController.Human : SlotController.None, i)).ToArray();
     private readonly Label _details = new() { AutowrapMode = TextServer.AutowrapMode.WordSmart }, _status = new() { AutowrapMode = TextServer.AutowrapMode.WordSmart };
     private readonly Label _title = new(), _viewers = new();
     private readonly Button _launch = new() { Name = "Launch", Text = "Начать матч" }, _readyNetwork = new() { Name = "NetworkReady", Text = "Готов" }, _startNetwork = new() { Name = "NetworkStart", Text = "Запустить матч" };
@@ -48,6 +50,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     public string NetworkPin => _pin.Text;
     public int NetworkInputDelay => (int)_delay.Value;
     public uint NetworkPlayer => _networkSession?.Player ?? (_joinRole.Selected == 1 ? 0 : (uint)_networkPlayer.Value);
+    public int NetworkCapacity { get; private set; } = MapScenario.MaximumPlayers;
     public uint[] NetworkAiPlayers => _seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.Ai).Select(p => (uint)p.i + 1).ToArray();
     public uint[] ClosedPlayers => _seats.Select((s, i) => (s, i)).Where(p => p.s.Controller == SlotController.None).Select(p => (uint)p.i + 1).ToArray();
     public SlotController[] Controllers => _seats.Select(s => s.Controller).ToArray();
@@ -55,9 +58,12 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     public OpenRTS.Godot.Rendering.FogDisplayStyle SelectedFogStyle => (OpenRTS.Godot.Rendering.FogDisplayStyle)_fogStyle.Selected;
     public OpenRTS.Godot.Rendering.ContactDisplayStyle SelectedRadarStyle => (OpenRTS.Godot.Rendering.ContactDisplayStyle)_radarStyle.Selected;
     public MatchSetupOptions Options => new MatchSetupOptions(CurrentMap.Id, _modeChoices[_modes.Selected].Set.Id, _fog.Selected, (int)_delay.Value,
-        new[] { 15, 25, 40 }[_speed.Selected], _seats.ToArray(), _simulationSpeed, _retentionTicks).Bind(CurrentMap, _modeChoices[_modes.Selected].Set);
+        new[] { 15, 25, 40 }[_speed.Selected], _seats.Take(RecipeSeatCount).ToArray(), _simulationSpeed, _retentionTicks).Bind(CurrentMap, _modeChoices[_modes.Selected].Set);
     private GameMap CurrentMap => _mapChoices[_maps.Selected].Map;
-    private int Capacity => Math.Min(MapScenario.MaximumPlayers, CurrentMap.Slots.Count);
+    private int Capacity => Math.Min(NetworkMode == 0 ? MapScenario.MaximumPlayers : NetworkCapacity, CurrentMap.Slots.Count);
+    private int RecipeSeatCount => NetworkMode == 0
+        ? (Capacity > MatchSetupOptions.LegacySeatCount ? MapScenario.MaximumPlayers : MatchSetupOptions.LegacySeatCount)
+        : NetworkCapacity;
     private bool Editable => NetworkMode != 2 && (!_busy || NetworkMode == 1 && _networkSession?.State.Phase == MatchPhase.Lobby);
 
     public void Build(Theme theme, LocomotionCatalog terrain, (string Title, string Description, GameMap Map)[] maps,
@@ -78,15 +84,27 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         foreach (string s in new[] { "Медленно · 15", "Обычно · 25", "Быстро · 40" }) _speed.AddItem(s); _speed.Select(1);
         _joinRole.AddItem("Игрок"); _joinRole.AddItem("Зритель");
         // Hidden selectors keep diagnostic scenarios on the same public controls as the shell.
-        foreach (Control c in new Control[] { _network, _maps, _count, _networkAi, _opponent, _port, _pin, _networkPlayer, _joinRole, _address }) { _root.AddChild(c); c.Hide(); }
+        foreach (Control c in new Control[] { _network, _maps, _networkAi, _opponent, _port, _pin, _networkPlayer, _joinRole, _address }) { _root.AddChild(c); c.Hide(); }
         BuildMain(); BuildBrowser(); BuildLobby(); BuildMaps(); BuildSettings(); BuildReplays();
         _maps.ItemSelected += _ => { SelectMap(); Changed(); };
         _count.ItemSelected += _ => {
-            for (int i = 1; i < 4; i++) _seats[i] = _seats[i] with { Controller = i <= _count.Selected ? SlotController.Human : SlotController.None };
+            bool addAi = NetworkMode == 0 && Capacity > MatchSetupOptions.LegacySeatCount && _modeChoices[_modes.Selected].Set.Id == "supply";
+            int last = Math.Min(_count.Selected, Capacity - 1);
+            for (int i = 1; i < _seats.Length; i++)
+            {
+                var controller = SlotController.None;
+                if (i <= last)
+                {
+                    controller = _seats[i].Controller;
+                    if (!addAi) controller = SlotController.Human;
+                    else if (controller == SlotController.None) controller = SlotController.Ai;
+                }
+                _seats[i] = _seats[i] with { Controller = controller };
+            }
             RebuildPlayers(); Changed();
         };
         _network.ItemSelected += _ => { ShowPage("lobby"); RefreshControls(); };
-        _modes.ItemSelected += _ => { if (_modeChoices[_modes.Selected].Set.Id != "supply") for (int i = 1; i < 4; i++) if (_seats[i].Controller == SlotController.Ai) _seats[i] = _seats[i] with { Controller = SlotController.Human }; RebuildPlayers(); Changed(); };
+        _modes.ItemSelected += _ => { if (_modeChoices[_modes.Selected].Set.Id != "supply") for (int i = 1; i < _seats.Length; i++) if (_seats[i].Controller == SlotController.Ai) _seats[i] = _seats[i] with { Controller = SlotController.Human }; RebuildPlayers(); Changed(); };
         _fog.ItemSelected += _ => { RefreshControls(); Changed(); }; _speed.ItemSelected += _ => Changed(); _delay.ValueChanged += _ => Changed();
         _networkAi.ValueChanged += value => { for (int i = 1; i < Capacity; i++) _seats[i] = _seats[i] with { Controller = i >= Capacity - (int)value ? SlotController.Ai : SlotController.Human }; RebuildPlayers(); Changed(); };
         _opponent.Toggled += enabled => { _seats[1] = _seats[1] with { Controller = enabled ? SlotController.Ai : SlotController.Human }; RebuildPlayers(); };
@@ -103,10 +121,9 @@ public sealed partial class MatchSetupScreen : CanvasLayer
     }
     private void SelectMap()
     {
-        int capacity = Capacity, previous = _count.Selected;
-        _count.Clear(); for (int i = 1; i <= capacity; i++) _count.AddItem(i.ToString()); _count.Select(Math.Clamp(previous, 0, capacity - 1));
-        if (previous < 0) _count.Select(Math.Min(1, capacity - 1));
-        for (int i = 0; i < 4; i++) _seats[i] = _seats[i] with { Start = i % capacity, Controller = i >= capacity ? SlotController.None : _seats[i].Controller };
+        int capacity = Capacity;
+        _count.Clear(); for (int i = 1; i <= capacity; i++) _count.AddItem(i.ToString());
+        for (int i = 0; i < _seats.Length; i++) _seats[i] = _seats[i] with { Start = i % capacity, Controller = i >= capacity ? SlotController.None : _seats[i].Controller };
         _details.Text = $"{_mapChoices[_maps.Selected].Title}   ·   {CurrentMap.Grid.Width} × {CurrentMap.Grid.Height}\n{_mapChoices[_maps.Selected].Description}";
         _mapButton.Text = _mapChoices[_maps.Selected].Title + "  ↗";
         _preview.SetMap(CurrentMap, _terrain); RebuildPlayers();
@@ -128,7 +145,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
             role.Select((int)_seats[i].Controller); _players.AddChild(role); _roles.Add(role);
             var faction = new OptionButton { CustomMinimumSize = new(78, 36), Disabled = true }; faction.AddItem("OpenRTS"); _players.AddChild(faction);
             var team = new OptionButton { Name = "Team" + (i + 1), CustomMinimumSize = new(64, 36), TooltipText = "Одинаковый альянс: без атак друг на друга. Обзор и управление раздельные." };
-            team.AddItem("Нет"); for (int t = 1; t <= 4; t++) team.AddItem(t.ToString()); team.Select((int)_seats[i].Team); _players.AddChild(team); _teams.Add(team);
+            team.AddItem("Нет"); for (int t = 1; t <= MapScenario.MaximumPlayers; t++) team.AddItem(t.ToString()); team.Select((int)_seats[i].Team); _players.AddChild(team); _teams.Add(team);
             var start = new OptionButton { Name = "Start" + (i + 1), CustomMinimumSize = new(58, 36) };
             for (int t = 0; t < CurrentMap.Slots.Count; t++) start.AddItem((t + 1).ToString("00")); start.Select(_seats[i].Start); _players.AddChild(start); _starts.Add(start);
             var ready = new Label { HorizontalAlignment = HorizontalAlignment.Center }; _players.AddChild(ready); _readyLabels.Add(ready);
@@ -136,16 +153,18 @@ public sealed partial class MatchSetupScreen : CanvasLayer
             team.ItemSelected += value => { _seats[row] = _seats[row] with { Team = (uint)value }; Changed(); };
             start.ItemSelected += value => {
                 int old = _seats[row].Start;
-                int other = Array.FindIndex(_seats, s => s.Start == (int)value);
+                int other = Array.FindIndex(_seats, 0, Capacity, s => s.Start == (int)value);
                 if (other >= 0 && other != row) { _seats[other] = _seats[other] with { Start = old }; if (other < _starts.Count) _starts[other].Select(old); }
                 _seats[row] = _seats[row] with { Start = (int)value }; _preview.SetAssignments(_seats.Take(Capacity).Select(s => s.Start).ToArray()); Changed();
             };
         }
+        _count.Select(_seats.Take(Capacity).Count(s => s.Controller != SlotController.None) - 1);
         _preview.SetAssignments(_seats.Take(Capacity).Select(s => s.Start).ToArray()); RefreshControls();
     }
     private void RefreshControls()
     {
         _publicationStatus.Visible = NetworkMode == 1;
+        _playerCountRow.Visible = NetworkMode == 0 && Capacity > MatchSetupOptions.LegacySeatCount;
         _opponent.Disabled = NetworkMode != 0 || _modeChoices[_modes.Selected].Set.Id != "supply";
         _opponent.SetPressedNoSignal(_seats[1].Controller == SlotController.Ai);
         _title.Text = NetworkMode == 0 ? "Skirmish" : NetworkMode == 1 ? "Лобби · Host" : NetworkPlayer == 0 ? "Лобби · Зритель" : "Лобби · Игрок " + NetworkPlayer;
@@ -178,7 +197,8 @@ public sealed partial class MatchSetupScreen : CanvasLayer
             if (map < 0 || mode < 0) throw new ArgumentException("Карта или стартовый набор не установлены.");
             bool changedMap = _maps.Selected != map; _maps.Select(map); _modes.Select(mode);
             if (changedMap) SelectMap();
-            _fog.Select(options.Fog); _delay.Value = options.Delay; _speed.Select(Array.IndexOf(new[] { 15, 25, 40 }, options.TickRate)); _seats = options.Seats.ToArray();
+            _fog.Select(options.Fog); _delay.Value = options.Delay; _speed.Select(Array.IndexOf(new[] { 15, 25, 40 }, options.TickRate));
+            Array.Copy(options.Seats, _seats, options.Seats.Length);
             RebuildPlayers();
         }
         finally { _applying = false; }
@@ -191,7 +211,7 @@ public sealed partial class MatchSetupScreen : CanvasLayer
         if (!ReferenceEquals(_shownState, network.State))
         {
             _shownState = network.State;
-            for (int i = 0; i < 4; i++) _seats[i] = _seats[i] with { Controller = network.State.Slots[i].Controller };
+            for (int i = 0; i < network.State.Slots.Count; i++) _seats[i] = _seats[i] with { Controller = network.State.Slots[i].Controller };
             _viewers.Text = $"Наблюдатели: {network.State.Spectators}" + (NetworkMode == 2 ? "   ·   Настройки задаёт Host" : ""); RebuildPlayers();
         }
         RefreshControls();

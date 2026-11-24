@@ -82,6 +82,9 @@ public sealed partial class MatchSetupScreen
         var body = new HBoxContainer(); body.AddThemeConstantOverride("separation", 20); box.AddChild(body);
         box.AddChild(_publicationStatus);
         var left = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; body.AddChild(left);
+        left.AddChild(_playerCountRow);
+        _playerCountRow.AddChild(new Label { Text = "Число участников" });
+        _playerCountRow.AddChild(_count);
         left.AddChild(_players);
         var fill = new Control { CustomMinimumSize = new(0, 150), SizeFlagsVertical = Control.SizeFlags.ExpandFill }; left.AddChild(fill);
         left.AddChild(new Label { Text = "Одинаковый альянс — союзники. Фракция пока одна: OpenRTS.", Modulate = new("#9ba98e") });
@@ -125,12 +128,17 @@ public sealed partial class MatchSetupScreen
     private void BeginNetworkLobby(bool host)
     {
         _network.Select(host ? 1 : 2); _busy = false; _networkSession = null; _shownState = null; _lastSettings = "";
-        if (host) _address.Text = "0.0.0.0";
+        if (host)
+        {
+            _address.Text = "0.0.0.0";
+            NetworkCapacity = MapScenario.MaximumPlayers;
+        }
         ShowPage("lobby"); RefreshControls(); LaunchMatch();
     }
-    private void EnterLobby(string address, int port, string pin, uint player)
+    private void EnterLobby(string address, int port, string pin, uint player, int capacity)
     {
         _pendingBrowserAction = null; _directoryCancellation?.Cancel();
+        NetworkCapacity = capacity;
         RequestSeat = player != 0;
         _address.Text = address; _port.Value = port; _pin.Text = pin; _joinRole.Select(player == 0 ? 1 : 0);
         if (player != 0) _networkPlayer.Value = player;
@@ -163,12 +171,12 @@ public sealed partial class MatchSetupScreen
             .DistinctBy(g => (g.Fingerprint, g.Port)).Where(g => !listed.Contains(g.Match));
         foreach (var game in lan)
         {
-            bool compatible = game.Capacity == 4 && game.Protocol == StarSession.ProtocolVersion &&
+            bool compatible = MatchSetupOptions.SupportsSeatCount(game.Capacity) && game.Protocol == StarSession.ProtocolVersion &&
                 (game.Rules is null || game.Rules == MatchSetupOptions.Rules) && (game.Content is null || game.Content == _directoryContent);
             AddGameRow(game.Title, game.Map, game.Players, game.OpenSlots, game.Spectators, game.PasswordRequired, compatible ? PhaseLabel(game.Phase) : "Несовместимая версия игры или контента",
                 compatible && game.Phase == MatchPhase.Lobby, compatible && game.Spectators < 8 && game.Phase is MatchPhase.Lobby or MatchPhase.Paused, watch => {
                     SelectedEndpoints = null;
-                    EnterLobby(game.Address, game.Port, game.Fingerprint, watch ? 0u : 2u);
+                    EnterLobby(game.Address, game.Port, game.Fingerprint, watch ? 0u : 2u, game.Capacity);
                 }, fromAddress.Contains(game) ? "AddressJoin" : "LanJoin", "LanWatch");
         }
         int count = _gameRows.GetChildCount();
@@ -189,7 +197,7 @@ public sealed partial class MatchSetupScreen
             var panel = new PanelContainer { CustomMinimumSize = new(310, 0) }; panel.AddThemeStyleboxOverride("panel", Sandbox.TerminalBox(new("#172018"), new("#647453"), 9)); _mapTiles.AddChild(panel);
             var tile = new VBoxContainer(); panel.AddChild(tile);
             var preview = new MatchSetupPreview { CustomMinimumSize = new(280, 180), MouseFilter = Control.MouseFilterEnum.Ignore }; tile.AddChild(preview); preview.SetMap(map.Map, _terrain);
-            tile.AddChild(new Label { Text = $"{map.Title}\n{map.Map.Slots.Count} игрока · {map.Map.Grid.Width} × {map.Map.Grid.Height}" });
+            tile.AddChild(new Label { Text = $"{map.Title}\nСтартов {map.Map.Slots.Count} · {map.Map.Grid.Width} × {map.Map.Grid.Height}" });
             tile.AddChild(new Label { Text = map.Description, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new(260, 48) });
             var select = Button("Выбрать", () => { if (!Editable) return; _maps.Select(index); _maps.EmitSignal(OptionButton.SignalName.ItemSelected, index); ShowPage("lobby"); }, "SelectMap" + index); select.Disabled = !Editable || _networkSession?.State.Slots.Any(s => s.Connected && s.Player > map.Map.Slots.Count) == true; tile.AddChild(select);
         }

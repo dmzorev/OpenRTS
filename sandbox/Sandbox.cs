@@ -25,7 +25,6 @@ public partial class Sandbox : Node3D
     private int _fogHoldTicks;
     private OpenRTS.Core.Visibility.FogMode _matchFogMode = OpenRTS.Core.Visibility.FogMode.Visible;
     private FogDisplayStyle _fogStyle = FogDisplayStyle.Circles;
-    private int _matchPlayers = 2;
     private bool PlayerFog => _fogScenario || _mapMatch is not null &&
         (_sensorVisibility || _matchFogMode != OpenRTS.Core.Visibility.FogMode.Visible);
     private uint _fogViewer = 1;
@@ -338,6 +337,7 @@ public partial class Sandbox : Node3D
     private static Color TeamColor(uint owner) => owner switch
     {
         1 => new(0.14f, 0.52f, 1), 2 => new(1, 0.20f, 0.16f), 3 => new("#66bf53"), 4 => new("#ffc149"),
+        5 => new("#39d4c5"), 6 => new("#a688f4"), 7 => new("#fa872d"), 8 => new("#ee8cb9"),
         _ => new(0.72f, 0.78f, 0.80f)
     };
 
