@@ -3,6 +3,7 @@ using OpenRTS.AI;
 using OpenRTS.Content;
 using OpenRTS.Core;
 using OpenRTS.Core.Orders;
+using System.Text.RegularExpressions;
 using static NavigationChecks;
 
 internal static class SkirmishAiChecks
@@ -47,11 +48,12 @@ internal static class SkirmishAiChecks
             foreach (var (before, after) in new[]
             {
                 ("Strategy: Guard", "Strategy: Unknown"),
-                ("rifle-guard: {Min:", "undefined-sergeant: {Min:"),
-                ("Min: 1, Max: 2", "Min: 3, Max: 2"),
+                ("    rifle-guard:", "    undefined-sergeant:"),
                 ("RetainCredits: 1800", "RetainCredits: 4300")
             })
                 NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(source with { Text = source.Text.Replace(before, after) }, catalog, profile.Id));
+            NavigationChecks.Reject<ContentException>(() => SkirmishAiCatalog.Load(
+                source with { Text = Regex.Replace(source.Text, @"Min: 1,\s+Max: 2", "Min: 3, Max: 2") }, catalog, profile.Id));
             var legacy = SkirmishAiCatalog.Load(new("legacy.yaml", """
                 legacy:
                   Version: 1
@@ -69,8 +71,8 @@ internal static class SkirmishAiChecks
         test("AI2 keeps a guard independent and rebuilds a wiped assault group", () =>
         {
             const uint player = 1;
-            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Min: 1, Max: 2", "Min: 1, Max: 1")
-                .Replace("Target: 5", "Target: 3").Replace("Target: 2, Recipe: {Producer: barracks", "Target: 1, Recipe: {Producer: barracks")
+            var fixture = SkirmishAiCatalog.Load(source with { Text = Regex.Replace(source.Text, @"Min: 1,\s+Max: 2", "Min: 1, Max: 1")
+                .Replace("Target: 5", "Target: 3").Replace("Min: 1, Target: 2, Recipe:", "Min: 1, Target: 1, Recipe:")
                 .Replace("EarliestTick: 900", "EarliestTick: 25") }, catalog, profile.Id);
             var map = MapScenario.Load(catalog, Read, MapScenario.DefaultMap);
             using var world = map.CreateWorld(4, restrictPlayerCommands: true);
@@ -107,7 +109,7 @@ internal static class SkirmishAiChecks
         test("AI2 switches strategy on threat and releases a discretionary squad after spending", () =>
         {
             const uint player = 1;
-            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Min: 1, Max: 2", "Min: 1, Max: 1")
+            var fixture = SkirmishAiCatalog.Load(source with { Text = Regex.Replace(source.Text, @"Min: 1,\s+Max: 2", "Min: 1, Max: 1")
                 .Replace("Target: 5", "Target: 3").Replace("Truck: supply-truck, Target: 2", "Truck: supply-truck, Target: 1")
                 .Replace("Min: 1, Max: 1, Priority: 50, EarliestTick: 900",
                     "Min: 0, Max: 1, Priority: 50, StartCredits: 4700, RetainCredits: 4650")
@@ -145,12 +147,13 @@ internal static class SkirmishAiChecks
                 : rule));
             NavigationChecks.Check(definitions.Units.Single(u => u.Id == "rocketeer").Weapons.Count == 0,
                 "Fixture must use unarmed patrols.");
-            var fixture = SkirmishAiCatalog.Load(source with { Text = source.Text.Replace("Strategy: Assault", "Strategy: Patrol")
-                .Replace("Strategy: Guard", "Strategy: Patrol").Replace(", UnderThreatStrategy: Guard", "")
-                .Replace("rifleman", "rocketeer").Replace("Min: 3, Target: 5", "Min: 1, Target: 1")
-                .Replace("Target: 2, Recipe: {Producer: barracks", "Target: 1, Recipe: {Producer: barracks")
-                .Replace("Min: 1, Max: 2", "Min: 1, Max: 1").Replace("EarliestTick: 900", "EarliestTick: 0")
-                .Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, definitions, profile.Id);
+            var patrols = Regex.Replace(source.Text, @",\s+UnderThreatStrategy: Guard", "")
+                .Replace("Strategy: Assault", "Strategy: Patrol").Replace("Strategy: Guard", "Strategy: Patrol");
+            patrols = Regex.Replace(patrols,
+                @"rifleman:\s*\{\s*Min: (?:3, Target: 5|1, Target: 2), Recipe: \{\s*Producer: barracks, Action: rifleman\s*\}\s*\}",
+                "rocketeer: {Min: 1, Target: 1, Recipe: {Producer: barracks, Action: rocketeer}}");
+            var fixture = SkirmishAiCatalog.Load(source with { Text = Regex.Replace(patrols, @"Min: 1,\s+Max: 2", "Min: 1, Max: 1")
+                .Replace("EarliestTick: 900", "EarliestTick: 0").Replace("MacroIntervalTicks: 25", "MacroIntervalTicks: 1") }, definitions, profile.Id);
             var map = MapScenario.Load(definitions, Read, MapScenario.DefaultMap);
             using var world = map.CreateWorld();
             int Type(string id) => definitions.Units.ToList().FindIndex(u => u.Id == id);
@@ -344,6 +347,40 @@ internal static class SkirmishAiChecks
                             foreach (var id in recipients.Ids) deployed |= produced.Contains(id);
                 });
                 NavigationChecks.Check(produced.Count >= 2 && deployed, $"Player {player} did not produce and deploy two vehicles.");
+            }
+        });
+
+        test("Combined-arms AI produces specialist infantry, heavy vehicles and both kinds of aircraft", () =>
+        {
+            foreach (var (game, player, workers) in new[] { (manifest, 2u, 4), (GameManifest.Load("sandbox/isometric-game.yaml"), 1u, 1) })
+            {
+                var units = game.LoadUnits();
+                var combined = SkirmishAiCatalog.Load(game.Files.Read(game.Settings.Match.AiConfig), units, game.Settings.Match.AiProfile);
+                var map = MapScenario.Load(units, game.Files.Read, game.Settings.Match.DefaultMap, defaultStartSetPath: game.Settings.Match.DefaultStartSet);
+                using var world = map.CreateWorld(workers, restrictPlayerCommands: true);
+                var ai = SkirmishAiScenario.Create(units, combined, map.Map, player);
+                var produced = new HashSet<string>();
+                var airborne = new HashSet<string>();
+                int factoryUpgrades = 0;
+                SkirmishAiScenario.Run(world, ai, 12000, state =>
+                {
+                    foreach (var command in state.AppliedCommands)
+                        if (command.Kind == CommandKind.StartUpgrade && command.Action == "heavy") factoryUpgrades++;
+                    foreach (var e in state.Events)
+                        if (e.Kind == WorldEventKind.Produced)
+                        {
+                            var unit = Poses(state).SingleOrDefault(p => p.Id == e.TargetEntity);
+                            if (unit.Presentation.Owner == player) produced.Add(units.Units[unit.UnitType].Id);
+                        }
+                    if (state.Tick % 25 == 0)
+                        foreach (var pose in Poses(state))
+                            if (pose.Presentation.Owner == player && pose.Flight.Airborne)
+                                airborne.Add(units.Units[pose.UnitType].Id);
+                });
+                string[] expected = ["rifleman", "rocketeer", "sniper", "apc-mg", "tank", "howitzer", "tiltrotor", "missile-tiltrotor", "fighter"];
+                var missing = expected.Except(produced).ToArray();
+                NavigationChecks.Check(missing.Length == 0 && factoryUpgrades == 1 && airborne.IsSupersetOf(["tiltrotor", "missile-tiltrotor", "fighter"]),
+                    $"Player {player}: missing production [{string.Join(", ", missing)}], airborne [{string.Join(", ", airborne)}], upgrades {factoryUpgrades}. {ai.Diagnostics}");
             }
         });
 

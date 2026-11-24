@@ -42,7 +42,7 @@ public partial class Sandbox
         {
             CheckSkirmish(session.IsPaused && frame.Tick == 0 && session.GetCommandLog().Length == 0 &&
                 _opponent?.Diagnostics == "start", "AI planned while the match was paused at tick zero.");
-            CheckSkirmish(_opponentProfile?.Id == (_aiProfileId ?? SkirmishAiScenario.ProfileId), "The selected AI profile was not loaded.");
+            CheckSkirmish(_opponentProfile?.Id == (_aiProfileId ?? _manifest!.Settings.Match.AiProfile), "The selected AI profile was not loaded.");
             var yards = frame.Poses.ToArray().Where(p => _catalog!.Units[p.UnitType].Id == "supply-center").ToArray();
             var own = yards.Single(p => p.Presentation.Owner == 1);
             var enemy = yards.Single(p => p.Presentation.Owner == 2);

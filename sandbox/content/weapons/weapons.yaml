@@ -21,7 +21,7 @@ cannon:
     Damage: 70
     ReloadTicks: 38
     WindupTicks: 3
-    Versus: { Living: 10, Mechanical: 150, Building: 90 }
+    Versus: { Living: 10, Light: 100, Mechanical: 150, Building: 90 }
 
 missile:
   Weapon:
@@ -35,16 +35,16 @@ missile:
     Damage: 35
     ReloadTicks: 48
     WindupTicks: 4
-    Versus: { Living: 100, Mechanical: 100, Building: 100 }
+    Versus: { Living: 100, Light: 100, Mechanical: 100, Building: 100 }
 
 grenade:
   Weapon:
-    Range: 4096
+    Range: 3296
     AcquireRange: 6144
     Projectile: Grenade
     Speed: 224
     SplashRadius: 1800
-    Damage: 45
+    Damage: 35
     ReloadTicks: 65
     WindupTicks: 4
     Versus: { Living: 140, Mechanical: 20, Building: 160 }
@@ -54,8 +54,8 @@ repair:
     Effect: Repair
     Range: 2048
     AcquireRange: 2048
-    Damage: 18
-    ReloadTicks: 8
+    Damage: 10
+    ReloadTicks: 16
     WindupTicks: 1
     AnimationTicks: 6
     Versus: { Living: 0, Mechanical: 100, Building: 100 }
@@ -66,8 +66,8 @@ factory-repair:
 
 sniper-rifle:
   Weapon:
-    Range: 8192
-    AcquireRange: 8192
+    Range: 10192
+    AcquireRange: 10192
     Damage: 80
     ReloadTicks: 65
     WindupTicks: 6

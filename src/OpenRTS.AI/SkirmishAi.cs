@@ -7,7 +7,7 @@ namespace OpenRTS.AI;
 /// <summary>Skirmish policy for an exclusively controlled player. Call once per completed world tick.</summary>
 public sealed class SkirmishAi
 {
-    public const int PolicyVersion = 5;
+    public const int PolicyVersion = 6;
 
     private readonly SkirmishAiProfile _profile;
     private readonly IReadOnlyList<UnitDefinition> _types;
@@ -130,15 +130,28 @@ public sealed class SkirmishAi
         long credits = _players.First(p => p.Id == _player).Credits - _profile.CreditReserve - unpaidTasks -
             _projects.Where(p => p.Owner == _player).Sum(p => (long)p.UnpaidCost);
         var plannedQueues = new HashSet<(EntityId, int)>();
+        var plannedUpgrades = new HashSet<EntityId>();
         bool IssueProduction(AiRecipe recipe)
         {
             foreach (var producer in own)
             {
                 if (producer.UnitType != recipe.ProducerType || producer.Construction.Active) continue;
-                if (!_types[producer.UnitType].ProductEnabled(recipe.Action, producer.Upgrade.Completed)) continue;
                 var key = (producer.Id, recipe.Queue);
                 if (plannedQueues.Contains(key)) continue;
                 if (_tasks.Any(t => t.Producer == producer.Id && t.Queue == recipe.Queue)) continue;
+                var definition = _types[producer.UnitType];
+                if (!definition.ProductEnabled(recipe.Action, producer.Upgrade.Completed))
+                {
+                    if (producer.Upgrade is not { Completed: null, Project: null } || plannedUpgrades.Contains(producer.Id)) continue;
+                    var upgrade = definition.Upgrades.Where(u => !u.Support && u.Products.Contains(recipe.Action))
+                        .OrderBy(u => u.Cost).ThenBy(u => u.Id, StringComparer.Ordinal).FirstOrDefault();
+                    if (upgrade is null || credits < upgrade.Cost) continue;
+                    _commands.Add(new(0, 0, 0, CommandKind.StartUpgrade, producer.Id, TargetEntity: producer.Id, Action: upgrade.Id));
+                    credits -= upgrade.Cost;
+                    plannedUpgrades.Add(producer.Id);
+                    plannedQueues.Add(key);
+                    return true;
+                }
                 if (credits < recipe.Cost) continue;
                 _commands.Add(new(0, 0, 0, CommandKind.EnqueueTask, producer.Id, Action: recipe.Action));
                 credits -= recipe.Cost;
@@ -171,7 +184,7 @@ public sealed class SkirmishAi
             IssueProduction(supply.Truck);
         UpdateArmy(world, own, credits, tactics);
         _army.PlanReinforcements(_tasks, own, _player, IssueProduction);
-        if (_commands.Skip(firstUnitCommand).FirstOrDefault(c => c.Kind == CommandKind.EnqueueTask).Action is { } action)
+        if (_commands.Skip(firstUnitCommand).FirstOrDefault(c => c.Kind is CommandKind.EnqueueTask or CommandKind.StartUpgrade).Action is { } action)
             _productionStatus += $" · {action}";
         if (unpaidTasks > 0) _productionStatus += $" · reserved for tasks: {unpaidTasks}";
         return credits;

@@ -2,11 +2,11 @@ anti-air-missile:
   Inherits: missile
   Weapon:
     Targets: [air]
-    Range: 8192
-    AcquireRange: 8192
+    Range: 12192
+    AcquireRange: 12192
     Speed: 420
     TravelLimit: 16384
-    Damage: 50
+    Damage: 100
 
 iso-grenade:
   Inherits: grenade

@@ -2,7 +2,7 @@ Match:
   DefaultMap: content/maps/skirmish.yaml
   DefaultStartSet: content/start-sets/supply.yaml
   AiConfig: content/ai/skirmish-ai.yaml
-  AiProfile: infantry-skirmish
+  AiProfile: combined-arms-skirmish
   Maps:
     - Path: content/maps/skirmish.yaml
       Title: Долина

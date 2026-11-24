@@ -1,17 +1,70 @@
 rifle-section:
   Strategy: Assault
   Members:
-    rifleman: {Min: 3, Target: 5, Recipe: {Producer: barracks, Action: rifleman}}
+    rifleman:
+      { Min: 3, Target: 5, Recipe: { Producer: barracks, Action: rifleman } }
+    rocketeer:
+      { Min: 0, Target: 2, Recipe: { Producer: barracks, Action: rocketeer } }
 
 rifle-guard:
   Strategy: Guard
   Members:
-    rifleman: {Min: 1, Target: 2, Recipe: {Producer: barracks, Action: rifleman}}
+    rifleman:
+      { Min: 1, Target: 3, Recipe: { Producer: barracks, Action: rifleman } }
+    rocketeer:
+      { Min: 0, Target: 2, Recipe: { Producer: barracks, Action: rocketeer } }
 
 apc-section:
   Strategy: Assault
   Members:
-    apc-mg: {Min: 1, Target: 2, Recipe: {Producer: factory, Action: apc}}
+    apc-mg: { Min: 1, Target: 2, Recipe: { Producer: factory, Action: apc } }
+
+specialist-section:
+  Strategy: Assault
+  Members:
+    rifleman:
+      { Min: 2, Target: 5, Recipe: { Producer: barracks, Action: rifleman } }
+    rocketeer:
+      { Min: 0, Target: 4, Recipe: { Producer: barracks, Action: rocketeer } }
+    sniper:
+      { Min: 0, Target: 2, Recipe: { Producer: barracks, Action: sniper } }
+
+armor-section:
+  Strategy: Assault
+  Members:
+    tank: { Min: 1, Target: 3, Recipe: { Producer: factory, Action: tank } }
+    tank-mixed:
+      { Min: 0, Target: 2, Recipe: { Producer: factory, Action: mixed-tank } }
+    howitzer:
+      { Min: 0, Target: 2, Recipe: { Producer: factory, Action: howitzer } }
+
+artillery-section:
+  Strategy: Assault
+  Members:
+    tank-mixed:
+      { Min: 1, Target: 2, Recipe: { Producer: factory, Action: mixed-tank } }
+    mlrs: { Min: 1, Target: 2, Recipe: { Producer: factory, Action: mlrs } }
+    scud: { Min: 0, Target: 1, Recipe: { Producer: factory, Action: scud } }
+
+rotorcraft-section:
+  Strategy: Assault
+  Members:
+    tiltrotor:
+      { Min: 1, Target: 2, Recipe: { Producer: helipad, Action: tiltrotor } }
+
+missile-rotorcraft-section:
+  Strategy: Assault
+  Members:
+    missile-tiltrotor:
+      Min: 1
+      Target: 2
+      Recipe: { Producer: helipad, Action: missile-tiltrotor }
+
+fighter-section:
+  Strategy: Assault
+  Members:
+    fighter:
+      { Min: 1, Target: 2, Recipe: { Producer: airfield, Action: fighter } }
 
 infantry-skirmish:
   Version: 2
@@ -19,17 +72,27 @@ infantry-skirmish:
   Buildings:
     power-plant: 1
     barracks: 1
-  BuildingPriorities: {power-plant: 100, barracks: 50}
+  BuildingPriorities: { power-plant: 100, barracks: 50 }
   Sergeants:
-    rifle-section: {Min: 1, Max: 2, Priority: 100, StartCredits: 4200, RetainCredits: 1800, UnderThreatStrategy: Guard}
-    rifle-guard: {Min: 1, Max: 1, Priority: 50, EarliestTick: 900}
-  Capture: {Unit: construction-engineer, Action: capture}
-  Supply: {Truck: supply-truck, Target: 2, ImproveMines: true}
+    rifle-section:
+      Min: 1
+      Max: 2
+      Priority: 100
+      StartCredits: 4200
+      RetainCredits: 1800
+      UnderThreatStrategy: Guard
+    rifle-guard:
+      Min: 1
+      Max: 1
+      Priority: 50
+      EarliestTick: 900
+  Capture: { Unit: construction-engineer, Action: capture }
+  Supply: { Truck: supply-truck, Target: 2, ImproveMines: true }
   Recipes:
-    power-plant: {Producer: construction-engineer, Action: site-power}
-    barracks: {Producer: construction-engineer, Action: site-barracks}
-    supply-truck: {Producer: supply-center, Action: truck}
-    construction-engineer: {Producer: supply-center, Action: engineer}
+    power-plant: { Producer: construction-engineer, Action: site-power }
+    barracks: { Producer: construction-engineer, Action: site-barracks }
+    supply-truck: { Producer: supply-center, Action: truck }
+    construction-engineer: { Producer: supply-center, Action: engineer }
   CreditReserve: 300
   MacroIntervalTicks: 25
   TacticsIntervalTicks: 5
@@ -40,10 +103,45 @@ mechanized-skirmish:
   Opening: [power-plant, barracks, factory]
   Buildings:
     factory: 1
-  BuildingPriorities: {factory: 25}
+  BuildingPriorities: { factory: 25 }
   Sergeants:
-    apc-section: {Min: 1, Max: 2, Priority: 100, StartCredits: 10000, RetainCredits: 4500, UnderThreatStrategy: Guard}
-    rifle-section: {Max: 1, Priority: 50}
-    rifle-guard: {Min: 0, Priority: 25, EarliestTick: 1500, StartCredits: 3600, RetainCredits: 1400}
+    apc-section:
+      Min: 1
+      Max: 2
+      Priority: 100
+      StartCredits: 10000
+      RetainCredits: 4500
+      UnderThreatStrategy: Guard
+    rifle-section:
+      Max: 1
+      Priority: 50
+    rifle-guard:
+      Min: 0
+      Priority: 25
+      EarliestTick: 1500
+      StartCredits: 3600
+      RetainCredits: 1400
   Recipes:
-    factory: {Producer: construction-engineer, Action: site-factory}
+    factory: { Producer: construction-engineer, Action: site-factory }
+
+combined-arms-skirmish:
+  Inherits: mechanized-skirmish
+  Buildings:
+    power-plant: 2
+    helipad: 1
+    airfield: 1
+  BuildingPriorities: { helipad: 20, airfield: 10 }
+  Sergeants:
+    -rifle-section:
+    -rifle-guard:
+    apc-section: { Max: 1 }
+    specialist-section: { Min: 1, Max: 2, Priority: 90 }
+    armor-section: { Min: 1, Max: 2, Priority: 120, EarliestTick: 600 }
+    artillery-section: { Min: 1, Max: 1, Priority: 80, EarliestTick: 900 }
+    rotorcraft-section: { Min: 1, Max: 1, Priority: 70, EarliestTick: 900 }
+    missile-rotorcraft-section:
+      { Min: 1, Max: 2, Priority: 60, EarliestTick: 1200 }
+    fighter-section: { Min: 1, Max: 2, Priority: 60, EarliestTick: 1200 }
+  Recipes:
+    helipad: { Producer: construction-engineer, Action: site-helipad }
+    airfield: { Producer: construction-engineer, Action: site-airfield }

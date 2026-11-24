@@ -35,9 +35,10 @@ internal sealed class Sergeant(AiSergeant definition, IEnumerable<EntityPose> me
 
     public IEnumerable<(AiRecipe Recipe, int Missing)> Reinforcements()
     {
-        foreach (var member in definition.Members)
+        var needs = definition.Members.Select(member => (Member: member, Count: _members.Count(p => p.UnitType == member.Recipe.ProductType)));
+        foreach (var (member, count) in needs.OrderByDescending(need => need.Count < need.Member.Minimum))
         {
-            int missing = member.Target - _members.Count(p => p.UnitType == member.Recipe.ProductType);
+            int missing = member.Target - count;
             if (missing > 0) yield return (member.Recipe, missing);
         }
     }
