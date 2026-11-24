@@ -458,9 +458,10 @@ public partial class Sandbox
         if (_rtsOverlay is null) return;
         _rtsOverlay.Pointer = _pointer;
         var cursor = RtsCursor.Default;
-        if (CommandPoint(_pointer) is { } point)
+        var pointerPoint = CommandPoint(_pointer);
+        var hovered = pointerPoint is { } groundPoint ? Pick(groundPoint) : null;
+        if (pointerPoint is { } point)
         {
-            var hovered = Pick(point);
             if (_armedAction is not null && !CanIssue(_armedAction.Value)) cursor = RtsCursor.Unavailable;
             else if (_armedAction == UnitActionKind.UnloadAt) cursor = RtsCursor.Unload;
             else if (_armedAction == UnitActionKind.Enter)
@@ -510,34 +511,31 @@ public partial class Sandbox
         {
             var binding = _catalog!.Presentations[_activeType].Actions!.First(a => a.Id == custom);
             var ability = _catalog.Units[_activeType].Abilities.First(a => a.Id == custom);
-            var customPoint = CommandPoint(_pointer);
-            var hovered = customPoint is { } p ? Pick(p) : null;
-            bool valid = customPoint is { } ground && (ability.GroundTarget ||
+            bool valid = pointerPoint is { } ground && (ability.GroundTarget ||
                 hovered is { } target && AbilityTarget(ability, _catalog.Units[_activeType], target) ||
                 ability.Kind == AbilityKind.Build && PickProject(ground) is { } project && project.Owner == CommandOwner);
             if (valid) _rtsOverlay.CustomCursor = binding.Cursor; else cursor = RtsCursor.Unavailable;
         }
-        if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && CommandPoint(_pointer) is { } capturePoint && Pick(capturePoint) is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
+        if (cursor is not (RtsCursor.Enter or RtsCursor.Unload) && _armedCustom is null && _armedAction is null && hovered is { } captureHover && CapturableTarget(captureHover) && Controlled().Any(id => _catalog!.Units[_selectionPoses[id].UnitType].Abilities.Any(a => a.Kind == AbilityKind.Capture))) _rtsOverlay.CustomCursor = "capture";
         if (_sitePlacement is { } placement)
         {
-            if ((_placementDrag?.Anchor ?? CommandPoint(_pointer)) is { } buildPoint && CanPlanSite(placement.Type, PlacementPoint(buildPoint, placement.Type)))
+            if ((_placementDrag?.Anchor ?? pointerPoint) is { } buildPoint && CanPlanSite(placement.Type, PlacementPoint(buildPoint, placement.Type)))
                 _rtsOverlay.CustomCursor = "build";
             else cursor = RtsCursor.Unavailable;
         }
         else if (_armedAction is null && _armedCustom is null && !Input.IsPhysicalKeyPressed(Key.Ctrl) &&
-            !Input.IsPhysicalKeyPressed(Key.Alt) && CommandPoint(_pointer) is { } workPoint)
+            !Input.IsPhysicalKeyPressed(Key.Alt) && pointerPoint is { } workPoint)
         {
-            if (Pick(workPoint) is { } supply)
+            if (hovered is { } supply)
             {
                 if (ContextUpgrade(supply) is not null) _rtsOverlay.CustomCursor = "upgrade";
                 else if (ContextSupplyAction(supply) is not null) _rtsOverlay.CustomCursor = "harvest";
             }
             var ghost = PickProject(workPoint);
-            var site = Pick(workPoint);
             if (ghost is { Upgrade: not null } upgrade && BuildersFor(upgrade.Owner, upgrade.Position).Length > 0)
                 _rtsOverlay.CustomCursor = "upgrade";
             else if (ghost is { } plan && BuildersFor(plan.Owner, plan.Position).Length > 0 ||
-                site is { } unfinished && unfinished.Construction.Active && BuildersFor(unfinished.Presentation.Owner, unfinished.Current).Length > 0)
+                hovered is { } unfinished && unfinished.Construction.Active && BuildersFor(unfinished.Presentation.Owner, unfinished.Current).Length > 0)
                 _rtsOverlay.CustomCursor = "build";
         }
         _rtsOverlay.Rally = _rtsOverlay.RallyExit = null;

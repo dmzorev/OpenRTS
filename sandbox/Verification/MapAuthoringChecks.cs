@@ -573,6 +573,11 @@ public partial class MapAuthoringChecks : Node
                 "Picking the diagonal surface lost exact XY or height.");
             Check(terrain.Pick(camera, camera.UnprojectPosition(new(28.5f, 0.5f, 22))) is null,
                 "An exposed diagonal ramp cliff accepted a ground order.");
+            camera.Projection = Camera3D.ProjectionType.Perspective;
+            Check(terrain.Pick(camera, camera.UnprojectPosition(new(28.25f, 928f / size, 21.75f))) == point,
+                "Perspective picking lost the diagonal ramp position.");
+            Check(terrain.Pick(camera, camera.UnprojectPosition(new(40, 0, 21.5f))) is null,
+                "A ray outside the terrain returned a ground point.");
         }
         finally
         {
