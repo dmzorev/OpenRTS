@@ -146,14 +146,14 @@ factory:
   ActionPanel:
     Buttons:
       truck: { Label: Грузовик снабжения, Order: 0 }
-      engineer: { Label: Инженер, Order: 0 }
-      radar-buggy: { Label: Разведчик, Order: 1 }
-      apc: { Label: БТР, Order: 2 }
-      tank: { Label: Танк, Order: 3 }
-      mixed-tank: { Label: Мобильный радар, Order: 4 }
-      howitzer: { Label: Самоходная гаубица, Order: 5 }
-      mlrs: { Label: Реактивная система залпового огня, Order: 6 }
-      scud: { Label: Установка баллистической ракеты, Order: 7 }
+      engineer: { Label: Инженер, Order: 1 }
+      radar-buggy: { Label: Разведчик, Order: 2 }
+      apc: { Label: БТР, Order: 3 }
+      tank: { Label: Танк, Order: 4 }
+      mixed-tank: { Label: Мобильный радар, Order: 5 }
+      howitzer: { Label: Самоходная гаубица, Order: 6 }
+      mlrs: { Label: Реактивная система залпового огня, Order: 7 }
+      scud: { Label: Установка баллистической ракеты, Order: 8 }
       #tomahawk: { Label: Установка крылатой ракеты, Order: 8 }
       mobile-aa: { Label: Мобильное ПВО, Order: 9 }
       stealth-truck: { Label: Стелс-генератор, Order: 10 }
@@ -223,16 +223,8 @@ helipad:
     Buttons:
       tiltrotor: { Label: Конвертоплан поддержки }
       missile-tiltrotor: { Label: Ракетный конвертоплан }
-      engineer-air:
-        {
-          Label: Воздушный инженер,
-          Icon: "res://assets/units/engineering-tiltrotor.png",
-        }
-      supply-air:
-        {
-          Label: Воздушное снабжение,
-          Icon: "res://assets/units/supply-tiltrotor.png",
-        }
+      engineer-air: { Label: Воздушный инженер }
+      supply-air: { Label: Воздушное снабжение }
       heavy-transport: { Label: Тяжёлый транспорт }
   Presentation: { Model: helipad, Name: Вертолётная площадка }
 

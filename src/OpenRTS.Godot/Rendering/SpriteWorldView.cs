@@ -22,7 +22,7 @@ public sealed class SpriteWorldView
     }
     private sealed record Part(ModelPart Definition, Sequence[]?[] Sequences, Sequence[]?[]? Windups, ModelAnimation?[] Animations, int Mount, uint Visible, uint Hidden, uint SpinWhen, uint LoopWhen, int LoopAnimation, int WorkAnimation);
     private sealed record Model(UnitDefinition Unit, Part[] Parts, ModelState[] States, uint Damaged, uint Destroyed, uint NearlyDestroyed,
-        ModelDrawLayer DrawLayer, int DrawLayers, double SortOffset, int PartLayerCount);
+        ModelDrawLayer DrawLayer, int DrawLayers, double SortOffset, int PartLayerCount, float Scale);
     private readonly record struct DrawItem(int Index, int Layer, double Depth, uint Id) : IComparable<DrawItem>
     {
         public int CompareTo(DrawItem other)
@@ -104,7 +104,8 @@ public sealed class SpriteWorldView
         var center = camera.UnprojectPosition(position);
         float angle = _workFlights.Heading(pose, _workTime, Angle(pose.Presentation.PreviousBodyFacing, pose.Presentation.BodyFacing, alpha));
         float squared = 24 * 24;
-        foreach (var part in _models[pose.UnitType].Parts)
+        var model = _models[pose.UnitType];
+        foreach (var part in model.Parts)
         {
             var root = part.Definition;
             if (root.Parent >= 0) continue;
@@ -112,7 +113,7 @@ public sealed class SpriteWorldView
             {
                 var corner = Rotate(new((float)((x - root.PivotX) * root.Width), (float)((y - root.PivotY) * root.Height)),
                     angle + Mathf.DegToRad((float)root.SpriteRotation)) + Rotate(new((float)root.OffsetX, (float)root.OffsetY), angle);
-                squared = Math.Max(squared, center.DistanceSquaredTo(camera.UnprojectPosition(position + new Vector3(corner.X, 0, corner.Y))));
+                squared = Math.Max(squared, center.DistanceSquaredTo(camera.UnprojectPosition(position + new Vector3(corner.X, 0, corner.Y) * model.Scale)));
             }
         }
         return MathF.Sqrt(squared) + 4;
@@ -162,7 +163,7 @@ public sealed class SpriteWorldView
                 foreach (var part in definition.Parts) drawLayers |= 1 << (int)(part.DrawLayer ?? definition.DrawLayer);
                 _models[i] = new(type, parts, type.States.Select(name => definition.States[name]).ToArray(), definition.DamagedState is null ? 0 : type.StateMask(definition.DamagedState), definition.DestroyedState is null ? 0 : type.StateMask(definition.DestroyedState), type.States.Contains("nearly-destroyed") ? type.StateMask("nearly-destroyed") : 0,
                     definition.DrawLayer, drawLayers, definition.SortOffset,
-                    definition.Parts.Max(part => Math.Max(part.Layer, part.FarLayer ?? 0)) + 1);
+                    definition.Parts.Max(part => Math.Max(part.Layer, part.FarLayer ?? 0)) + 1, models.ScaleFor(type));
                 MaximumParts = Math.Max(MaximumParts, parts.Length);
             }
         }
@@ -327,7 +328,7 @@ public sealed class SpriteWorldView
                 pose.Order is { Kind: UnitActionKind.Move or UnitActionKind.AttackMove,
                     Phase: OrderPhase.Moving or OrderPhase.Approaching or OrderPhase.Waiting or OrderPhase.Withdrawing };
             Color tint = ghost ? new(0.7f, 0.9f, 1, 0.42f) : pose.Cloaked ? new(0.62f, 0.7f, 0.76f, 0.42f) : Colors.White;
-            float scale = 1, stateFlash = 0;
+            float scale = model.Scale, stateFlash = 0;
             for (int state = 0; state < model.States.Length; state++) if ((view.States & (1u << state)) != 0)
             {
                 var style = model.States[state]; stateFlash = Math.Max(stateFlash, (float)style.Pulse * (0.5f + 0.5f * MathF.Sin((float)time * MathF.Tau * 2 / tickRate))); tint *= new Color((float)style.Red, (float)style.Green, (float)style.Blue, (float)style.Opacity); scale *= (float)style.Scale;
@@ -438,7 +439,7 @@ public sealed class SpriteWorldView
                 float pulse = playback.DurationTicks > 0 ? MathF.Sin(MathF.PI * Math.Clamp(progress * 3, 0, 1)) : 0;
                 float bob = (float)effect.Bob * MathF.Sin((float)(time - playback.StartTick) * MathF.Tau * 3 / tickRate);
                 mount += Rotate(new(bob + (float)effect.SlideX * MathF.Sin((float)(time - playback.StartTick) / tickRate * MathF.Tau),
-                    Math.Max((float)effect.Recoil * pulse, extraRecoil) + (float)effect.SlideY * MathF.Sin((float)(time - playback.StartTick) / tickRate * MathF.Tau)), angle);
+                    Math.Max((float)effect.Recoil * pulse, extraRecoil) + (float)effect.SlideY * MathF.Sin((float)(time - playback.StartTick) / tickRate * MathF.Tau)), angle) * model.Scale;
                 pivots[p] = mount;
                 float buildScale = playback.DurationTicks > 0 ? Mathf.Lerp((float)effect.ScaleFrom, 1, progress) : 1;
                 Vector2 size = new((float)part.Width * scale * buildScale, (float)part.Height * scale * buildScale);

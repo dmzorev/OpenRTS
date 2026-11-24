@@ -1,4 +1,4 @@
-[gd_scene load_steps=42 format=3]
+[gd_scene load_steps=43 format=3]
 
 [ext_resource type="PackedScene" path="res://assets/production-buildings/factory.glb" id="1"]
 [ext_resource type="PackedScene" path="res://assets/infrastructure/power-plant.glb" id="2"]
@@ -44,6 +44,7 @@
 [ext_resource type="PackedScene" path="res://assets/vehicles/fighter.glb" id="33"]
 [ext_resource type="PackedScene" path="res://assets/vehicles/tiltrotor.glb" id="34"]
 [ext_resource type="PackedScene" path="res://assets/vehicles/missile-tiltrotor.glb" id="35"]
+[ext_resource type="PackedScene" path="res://assets/vehicles/supply-tiltrotor.glb" id="36"]
 [ext_resource type="PackedScene" path="res://assets/vehicles/heavy-air-transport.glb" id="37"]
 [ext_resource type="PackedScene" path="res://assets/quaternius/Sniper.tscn" id="38"]
 [ext_resource type="PackedScene" path="res://assets/quaternius/Rocketeer.tscn" id="39"]
@@ -474,6 +475,16 @@ position = Vector3(-22.2, 0.3, -15.8)
 billboard = 1
 pixel_size = 0.014
 text = "Нефтяная вышка"
+
+[node name="SupplyTiltrotor" parent="." instance=ExtResource("36")]
+position = Vector3(21.1, 0, 8.4)
+rotation_degrees = Vector3(0, 139, 0)
+
+[node name="SupplyTiltrotorLabel" type="Label3D" parent="."]
+position = Vector3(21.1, 0.3, 10.45)
+billboard = 1
+pixel_size = 0.014
+text = "Воздушное снабжение"
 
 [node name="HeavyAirTransport" parent="." instance=ExtResource("37")]
 position = Vector3(21, 0, 14.3)

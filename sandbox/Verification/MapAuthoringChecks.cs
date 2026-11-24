@@ -101,7 +101,8 @@ public partial class MapAuthoringChecks : Node
         effects.Apply(projectiles, 0, world.Tick);
         var shot = effects.Node.GetNode<MultiMeshInstance3D>("Projectiles").Multimesh;
         var local = models.Models["infantry-rifleman"].Animations["throw"].LaunchLocal!.Value;
-        var expected = new Vector3(4 - (float)local.Z, (float)local.Y + SpriteWorldView.OverlayHeight, 4 + (float)local.X);
+        var origin = new Vector3(4, SpriteWorldView.OverlayHeight, 4);
+        var expected = origin + new Vector3(-(float)local.Z, (float)local.Y, (float)local.X) * 0.75f;
         var projectile = projectiles[0];
         var launch = effects.LaunchVisual(unit, projectile.Mount, projectile.Departure, effectCatalog.Weapons["iso-grenade"], Vector3.Right);
         Check(shot.VisibleInstanceCount == 1 && launch is { } departure && departure.Center.IsEqualApprox(expected),
@@ -151,7 +152,7 @@ public partial class MapAuthoringChecks : Node
         Check(fired.Departure.Tick > 0 && AtlasRegion(shooting, "shoot", 0).IsEqualApprox(FrameRegion("shoot-2", 0)),
             "The first firing frame did not face the target.");
         var muzzle = models.Models["infantry-rifleman"].Parts.Single(p => p.Id == "body").MuzzleLocal!.Value;
-        var muzzleEast = new Vector3(4 - (float)muzzle.Z, (float)muzzle.Y + SpriteWorldView.OverlayHeight, 4 + (float)muzzle.X);
+        var muzzleEast = origin + new Vector3(-(float)muzzle.Z, (float)muzzle.Y, (float)muzzle.X) * 0.75f;
         var rifleLaunch = effects.LaunchVisual(unit, fired.Mount, fired.Departure, effectCatalog.Weapons["rifleman"], Vector3.Right);
         Check(rifleLaunch is { } barrel && barrel.Center.IsEqualApprox(muzzleEast),
             "The rifle launch point did not follow the firing direction independently of the body.");
@@ -390,9 +391,9 @@ public partial class MapAuthoringChecks : Node
                     }
                     var offset = new Vector2(0, isometric ? 0.52f : 0.18f).Rotated(body) +
                         new Vector2(0, isometric ? -2.313f : (0.10f - 0.71f) * 1.65f).Rotated(aim);
-                    var expected = new Vector3(launch.Origin.X / 1024f + offset.X,
-                        launch.Origin.Elevation / 1024f + SpriteWorldView.OverlayHeight + (isometric ? 1.401f : 0),
-                        launch.Origin.Y / 1024f + offset.Y);
+                    var expected = new Vector3(launch.Origin.X / 1024f,
+                        launch.Origin.Elevation / 1024f + SpriteWorldView.OverlayHeight, launch.Origin.Y / 1024f) +
+                        new Vector3(offset.X, isometric ? 1.401f : 0, offset.Y) * (isometric ? 0.75f : 1);
                     bool flashAtMuzzle = Enumerable.Range(0, flashes.VisibleInstanceCount)
                         .Any(i => Instance(flashes, i).Position.DistanceTo(expected) < 0.001f);
                     Check(shotPosition.DistanceTo(expected) < 0.001f && flashAtMuzzle,
@@ -406,6 +407,12 @@ public partial class MapAuthoringChecks : Node
                     Check(before.Position.DistanceTo(after.Position) < 0.001f && before.Direction.Dot(after.Direction) > 0.9999f &&
                         Mathf.IsEqualApprox(after.Direction.Y, MathF.Sin(Mathf.DegToRad((float)mount.LaunchPitch))),
                         weapon.Id + ": the first flying sprite must match the raised rocket.");
+                    if (isometric)
+                    {
+                        var data = batch.Buffer;
+                        Check(Mathf.IsEqualApprox(new Vector3(data[2], data[6], data[10]).Length(), 0.75f),
+                            weapon.Id + ": the rocket mesh did not match the scaled launcher.");
+                    }
                     var tail = after.Position - after.Direction * (float)effect.Size;
                     var smokeBuffer = smoke.Buffer;
                     bool exhaust = false;

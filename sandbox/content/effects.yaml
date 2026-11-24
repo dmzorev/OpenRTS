@@ -1,24 +1,65 @@
 rifle:
-  Effect: {Color: [1, 0.90, 0.45], ImpactColor: [1, 0.7, 0.2], Size: 0.06, ImpactSize: 0.2, DurationTicks: 3, BeamWidth: 0.025}
+  Effect:
+    {
+      Color: [1, 0.90, 0.45],
+      ImpactColor: [1, 0.7, 0.2],
+      Size: 0.06,
+      ImpactSize: 0.2,
+      DurationTicks: 3,
+      BeamWidth: 0.025,
+    }
 rifleman:
+  Inherits: rifle
+autocanon:
   Inherits: rifle
 
 cannon:
-  Effect: {ProjectileTexture: res://assets/effects/indirect-fire/cannon-shell.png, Color: [1, 0.75, 0.2], ImpactColor: [1, 0.4, 0.08], Size: 0.16, ImpactSize: 0.75, DurationTicks: 8}
+  Effect:
+    {
+      ProjectileTexture: res://assets/effects/indirect-fire/cannon-shell.png,
+      Color: [1, 0.75, 0.2],
+      ImpactColor: [1, 0.4, 0.08],
+      Size: 0.16,
+      ImpactSize: 0.75,
+      DurationTicks: 8,
+    }
 missile:
-  Effect: {ProjectileTexture: res://assets/effects/indirect-fire/standard-missile.png, Color: [1, 0.5, 0.18], ImpactColor: [1, 0.25, 0.08], Size: 0.20, ImpactSize: 0.85, DurationTicks: 10, BeamWidth: 0.07}
+  Effect:
+    {
+      ProjectileTexture: res://assets/effects/indirect-fire/standard-missile.png,
+      Color: [1, 0.5, 0.18],
+      ImpactColor: [1, 0.25, 0.08],
+      Size: 0.20,
+      ImpactSize: 0.85,
+      DurationTicks: 10,
+      BeamWidth: 0.07,
+    }
 grenade:
-  Effect: {Color: [0.4, 0.6, 0.2], ImpactColor: [1, 0.65, 0.12], Size: 0.19, ImpactSize: 1.8, DurationTicks: 12}
+  Effect:
+    {
+      Color: [0.4, 0.6, 0.2],
+      ImpactColor: [1, 0.65, 0.12],
+      Size: 0.19,
+      ImpactSize: 1.8,
+      DurationTicks: 12,
+    }
 repair:
-  Effect: {Color: [0.2, 1, 0.65], ImpactColor: [0.1, 1, 0.5], Size: 0.10, ImpactSize: 0.5, DurationTicks: 6, BeamWidth: 0.08}
-
+  Effect:
+    {
+      Color: [0.2, 1, 0.65],
+      ImpactColor: [0.1, 1, 0.5],
+      Size: 0.10,
+      ImpactSize: 0.5,
+      DurationTicks: 6,
+      BeamWidth: 0.08,
+    }
 
 factory-repair:
   Inherits: repair
 
 sniper-rifle:
   Inherits: rifle
-  Effect: {BeamWidth: 0.045}
+  Effect: { BeamWidth: 0.045 }
 
 crane-repair:
   Inherits: repair

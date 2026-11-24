@@ -592,8 +592,9 @@ public partial class Sandbox
                     position.Y = (_displayGrid?.SurfaceElevationAt(p.Current) ?? 0) / 1024f;
                 }
             }
-            _ringBuffer[at] = (halfWidth + 0.2f) / 0.88f;
-            _ringBuffer[at + 10] = (halfHeight + 0.2f) / 0.88f;
+            float ringScale = isometric && type.Movable ? 0.5f : 1f;
+            _ringBuffer[at] = (halfWidth + 0.2f) / 0.88f * ringScale;
+            _ringBuffer[at + 10] = (halfHeight + 0.2f) / 0.88f * ringScale;
             _ringBuffer[at + 5] = 1;
             _ringBuffer[at + 3] = position.X;
             _ringBuffer[at + 7] = position.Y + (isometric ? SpriteWorldView.GroundMarkerHeight : SpriteWorldView.OverlayHeight);

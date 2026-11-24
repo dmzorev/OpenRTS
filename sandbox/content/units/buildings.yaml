@@ -144,15 +144,15 @@ factory:
   ActionPanel:
     Buttons:
       truck: { Label: Грузовик снабжения, Order: 0 }
-      engineer: { Label: Инженер, Order: 0 }
-      radar-buggy: { Label: Разведчик, Order: 1 }
-      apc: { Label: БТР, Order: 2 }
-      tank: { Label: Танк, Order: 3 }
-      mixed-tank: { Label: Мобильный радар, Order: 4 }
-      howitzer: { Label: Самоходная гаубица, Order: 5 }
-      mlrs: { Label: Реактивная установка залпового огня, Order: 6 }
-      tomahawk: { Label: Установка крылатой ракеты, Order: 7 }
-      stealth-truck: { Label: Стелс-генератор, Order: 8 }
+      engineer: { Label: Инженер, Order: 1 }
+      radar-buggy: { Label: Разведчик, Order: 2 }
+      apc: { Label: БТР, Order: 3 }
+      tank: { Label: Танк, Order: 4 }
+      mixed-tank: { Label: Мобильный радар, Order: 5 }
+      howitzer: { Label: Самоходная гаубица, Order: 6 }
+      mlrs: { Label: Реактивная установка залпового огня, Order: 7 }
+      tomahawk: { Label: Установка крылатой ракеты, Order: 8 }
+      stealth-truck: { Label: Стелс-генератор, Order: 9 }
       # repair: { Label: Ремонт, Cursor: repair, Order: 4 }
   Footprint: { Rows: ["#####", "###++", "###++", "###++"] }
   Armaments:

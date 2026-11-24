@@ -86,37 +86,40 @@ apc-mg:
   Inherits: ^apc
   Armaments:
     Mounts:
-      main: { Weapon: rifle, FireWhileMoving: true }
-      option-rocket: { Weapon: missile, FireWhileMoving: true }
+      # main: { Weapon: rifle, FireWhileMoving: true }
+      main: { Weapon: missile, FireWhileMoving: true }
+      option-mg: { Weapon: rifle, FireWhileMoving: true }
       option-cannon: { Weapon: cannon }
   Upgrades:
     Variants:
-      rockets:
-        {
-          Cost: 200,
-          Ticks: 90,
-          Support: true,
-          ReplaceWeapons: true,
-          Mounts: [option-rocket],
-        }
+      # rockets:
+      #   Cost: 200
+      #   Ticks: 90
+      #   Support: true
+      #   ReplaceWeapons: true
+      #   Mounts: [option-rocket
+      firing-ports:
+        Cost: 125
+        Ticks: 75
+        Support: true
+        PassengerFire: true
+        ReplaceWeapons: true
+        Mounts: [option-mg]
       cannon:
-        {
-          Cost: 250,
-          Ticks: 110,
-          Support: true,
-          ReplaceWeapons: true,
-          Mounts: [option-cannon],
-        }
-      firing-ports: { Cost: 125, Ticks: 75, Support: true, PassengerFire: true }
+        Cost: 250
+        Ticks: 110
+        Support: true
+        ReplaceWeapons: true
+        Mounts: [option-cannon]
   Presentation:
     Model: apc-upgradable
     Animations: [idle, move, fire, construct]
-    States: [damaged, swimming, rockets, cannon, firing-ports]
+    States: [damaged, swimming, cannon, firing-ports]
     Name: БТР · пулемёт
 
 apc-rocket:
   Inherits: ^apc
-  Transport: { FireFromInside: true }
+  Transport: { FireFromInside: false }
   Armaments:
     Mounts:
       main: { Weapon: missile }
@@ -153,7 +156,7 @@ tank-mixed:
   Inherits: tank
   Armaments:
     Mounts:
-      main: { Weapon: rifle, Animation: fire }
+      main: { Weapon: autocanon, Animation: fire }
       missiles: { Weapon: missile, Animation: missiles, FireWhileMoving: true }
   Presentation:
     Model: tank-mixed
@@ -169,7 +172,7 @@ stealth-truck:
 
 radar-buggy:
   Inherits: ^unit
-  Armaments: { Mounts: { main: { Weapon: rifle, FireWhileMoving: true } } }
+  Armaments: { Mounts: { main: { Weapon: autocanon, FireWhileMoving: true } } }
   Health: { HP: 180, Armor: Light }
   Vision: { Radius: 10144 }
   Sensors:
@@ -190,7 +193,7 @@ radar-buggy:
           Counters: [stealth],
         },
       ]
-  Presentation: { Model: radar-buggy, Name: Багги · разведчик }
+  Presentation: { Model: radar-buggy, Name: Разведывательная машина }
 
 howitzer:
   Inherits: tank

@@ -3,14 +3,14 @@ cruise-missile:
   Effect:
     -ProjectileTexture:
     ProjectileModel: res://assets/effects/indirect-fire/military-truck-missile.glb
-    Size: 0.76
+    Size: 0.57
 
 ballistic-missile:
   Inherits: ^ballistic-missile-effect
   Effect:
     -ProjectileTexture:
     ProjectileModel: res://assets/effects/indirect-fire/military-truck-ballistic-missile.glb
-    Size: 0.94
+    Size: 0.705
 
 anti-air-missile:
   Inherits: missile

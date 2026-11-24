@@ -95,7 +95,7 @@ internal partial class MapEditorPreview2D : Node2D
                 _heights.Add((_projection.Project(point) + new Vector2(5, -4), elevation));
             var tint = new Color(paint, start ? 0.55f : valid ? 1 : 0.8f);
             if (catalog.Presentations[index].Model is { } model && models.Models.TryGetValue(model, out var definition))
-                AddModel(definition, type, point, turns, tint);
+                AddModel(definition, type, point, turns, tint, models.ScaleFor(type));
             AddLines(point, MapPreviewGeometry.Body(type.Body), !valid ? Colors.OrangeRed : Colors.Cyan);
             if (type.Footprint is not { } footprint) continue;
             foreach (var cell in footprint.Cells)
@@ -118,7 +118,7 @@ internal partial class MapEditorPreview2D : Node2D
         }
     }
 
-    private void AddModel(ModelDefinition model, UnitDefinition type, WorldPosition point, int turns, Color tint)
+    private void AddModel(ModelDefinition model, UnitDefinition type, WorldPosition point, int turns, Color tint, float scale)
     {
         var idle = model.Animations[type.Animations[type.IdleAnimation]];
         float yaw = turns * Mathf.Pi / 2;
@@ -128,7 +128,7 @@ internal partial class MapEditorPreview2D : Node2D
         {
             var part = model.Parts[i];
             pivots[i] = (part.Parent < 0 ? Vector2.Zero : pivots[part.Parent]) +
-                new Vector2((float)part.OffsetX, (float)part.OffsetY).Rotated(yaw);
+                new Vector2((float)part.OffsetX, (float)part.OffsetY).Rotated(yaw) * scale;
         }
         foreach (int i in Enumerable.Range(0, model.Parts.Count).OrderBy(i => model.Parts[i].Layer))
         {
@@ -145,7 +145,7 @@ internal partial class MapEditorPreview2D : Node2D
                 sequence += "-" + (int)MathF.Round(turns * part.Facings / 4f) % part.Facings;
             if (!frames.HasAnimation(sequence) || frames.GetFrameCount(sequence) == 0) continue;
             if (frames.GetFrameTexture(sequence, 0) is not { } texture) continue;
-            var size = new Vector2((float)part.Width, (float)part.Height);
+            var size = new Vector2((float)part.Width, (float)part.Height) * scale;
             var rect = new Rect2(-new Vector2((float)part.PivotX, (float)part.PivotY) * size, size);
             float rotation = (part.Facings == 0 ? yaw : 0) + Mathf.DegToRad((float)part.SpriteRotation);
             _sprites.Add(new(texture, rect, basis * new Transform2D(rotation, pivots[i]), tint));

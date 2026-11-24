@@ -164,6 +164,48 @@ iso-heavy-air-transport:
       move: { Sequence: travel, Parts: [flight] }
       fire: { Sequence: stand, Parts: [body] }
 
+iso-supply-tiltrotor:
+  Inherits: ^sprite
+  Model:
+    States:
+      airborne: { Tint: [1, 1, 1] }
+      loaded: { Tint: [1, 1, 1] }
+    Parts:
+      body:
+        Resource: res://resources/units/isometric/supply-tiltrotor.tres
+        Size: [4.83942, 4.83942]
+        Pivot: [0.65611, 0.65611]
+        Facings: 32
+        HiddenWhen: [airborne, loaded]
+      flight:
+        Resource: res://resources/units/isometric/supply-tiltrotor-airborne.tres
+        Size: [4.81752, 4.83942]
+        Pivot: [0.65455, 0.65611]
+        Facings: 32
+        VisibleWhen: [airborne]
+        HiddenWhen: [loaded]
+        LoopAnimation: move
+        LoopWhen: airborne
+      loaded-body:
+        Resource: res://resources/units/isometric/supply-tiltrotor-loaded.tres
+        Size: [4.83942, 4.83942]
+        Pivot: [0.65611, 0.65611]
+        Facings: 32
+        VisibleWhen: [loaded]
+        HiddenWhen: [airborne]
+      loaded-flight:
+        Resource: res://resources/units/isometric/supply-tiltrotor-loaded-airborne.tres
+        Size: [4.81752, 4.83942]
+        Pivot: [0.65455, 0.65611]
+        Facings: 32
+        VisibleWhen: [loaded, airborne]
+        LoopAnimation: move
+        LoopWhen: airborne
+    Animations:
+      idle:
+        { Sequence: stand, Parts: [body, flight, loaded-body, loaded-flight] }
+      move: { Sequence: travel, Parts: [flight, loaded-flight] }
+
 iso-construction-tiltrotor:
   Inherits: ^sprite
   Model:
@@ -288,15 +330,15 @@ iso-apc-upgradable:
   Inherits@hull: ^iso-apc-hull
   Model:
     Parts:
+      # turret:
+      #   Resource: res://resources/units/isometric/tracked-apc-turret.tres
+      #   Size: [2.03650, 2.03650]
+      #   Pivot: [0.91935, 0.91935]
+      #   Offset: [0, -0.246]
+      #   -Muzzle:
+      #   MuzzleLocal: [0.042, 1.098, -0.563]
+      #   Facings: 32
       turret:
-        Resource: res://resources/units/isometric/tracked-apc-turret.tres
-        Size: [2.03650, 2.03650]
-        Pivot: [0.91935, 0.91935]
-        Offset: [0, -0.246]
-        -Muzzle:
-        MuzzleLocal: [0.042, 1.098, -0.563]
-        Facings: 32
-      rocket:
         Resource: res://resources/units/isometric/tracked-apc-missiles.tres
         Size: [1.83942, 1.83942]
         Pivot: [0.91071, 0.91071]
@@ -312,14 +354,32 @@ iso-apc-upgradable:
         -Muzzle:
         MuzzleLocal: [0, 1.125, -0.675]
         Facings: 32
+      firing-ports:
+        Resource: res://resources/units/isometric/tracked-apc-turret.tres
+        Size: [2.03650, 2.03650]
+        Pivot: [0.91935, 0.91935]
+        Offset: [0, -0.246]
+        -Muzzle:
+        MuzzleLocal: [0.042, 1.098, -0.563]
+        Facings: 32
     Animations:
+      idle:
+        Sequence: stand
+        Parts: [body, turret, firing-ports, cannon, ports]
+      move:
+        Sequence: travel
+        Parts: [body]
+        Bob: 0.008
       fire:
-        {
-          Sequence: stand,
-          Parts: [turret, rocket, cannon],
-          Recoil: 0,
-          Flash: 0.35,
-        }
+        Sequence: stand
+        Parts: [turret, cannon, firing-ports]
+        Recoil: 0
+        Flash: 0.35
+      construct:
+        Sequence: stand
+        Parts: [body, turret, cannon, firing-ports, ports]
+        ScaleFrom: 0.85
+        OpacityFrom: 0.35
 
 iso-apc-missiles:
   Inherits: apc-missiles

@@ -49,6 +49,8 @@ public partial class Sandbox
             var power = (directionalPower ? IsometricBatch("power-plant") : Batch("power-plant")).Multimesh;
             var colors = power.Buffer;
             Check(power.VisibleInstanceCount == 5 && colors[2 * 20 + 12] < 0.6f && colors[1 * 20 + 12] > 0.99f && colors[3 * 20 + 19] > 0.005f && colors[4 * 20 + 19] > 0.005f, "Normal/damaged/working/combined states are not distinct");
+            if (_manifest.Settings.Presentation.Camera == OpenRTS.Content.GameCamera.Isometric)
+                CheckSelectionScale();
             bool directionalDoors = _manifest.Settings.Presentation.ModelOverrides.TryGetValue("barracks", out var barracksModel) && barracksModel == "iso-barracks";
             if (directionalDoors)
             {
@@ -372,6 +374,8 @@ public partial class Sandbox
                     "Medium tank did not select independent directional hull and turret frames.");
                 CheckAnchor(hull, pose, "body", "units");
                 CheckAnchor(turret, pose, "turret", "units");
+                var buffer = IsometricBatch(hull, "units").Multimesh.Buffer;
+                Check(Mathf.IsEqualApprox(buffer[0], 3.43796f * 0.75f), "Isometric tank mesh did not use the reduced width.");
 
                 var nextFacing = new FacingDirection(199, -1000);
                 var turning = pose with { Presentation = pose.Presentation with
@@ -384,7 +388,7 @@ public partial class Sandbox
 
                 var style = OpenRTS.Content.EffectCatalog.Load(_manifest.Effects).Weapons["cannon"];
                 var muzzle = _combatEffects!.LaunchVisual(typeIndex, 0, new(1, pose.Id, pose.Current, north, east), style, Vector3.Right);
-                var expected = new Vector3(pose.Current.X / 1024f + 1.474f, 0.917f, pose.Current.Y / 1024f);
+                var expected = new Vector3(pose.Current.X / 1024f, 0, pose.Current.Y / 1024f) + new Vector3(1.474f, 0.917f, 0) * 0.75f;
                 Check(muzzle is { } launch && _camera!.UnprojectPosition(launch.Center).DistanceTo(_camera.UnprojectPosition(expected)) < 0.05f,
                     "The cannon effect missed the visible muzzle of the east-facing turret.");
                 _sprites.Apply(poses, 1, tick, rate, weapons);
@@ -420,7 +424,7 @@ public partial class Sandbox
                 CheckAnchor(bodyAtlas, gunApc, "body", "units");
                 var center = new Vector3(gunApc.Current.X / 1024f, 0, gunApc.Current.Y / 1024f);
                 var pivot = SpriteScreenPivot("tracked-apc-turret", gunApc, "turret", "units");
-                Check(pivot.DistanceTo(_camera!.UnprojectPosition(center + Vector3.Right * 0.246f)) < 0.05f,
+                Check(pivot.DistanceTo(_camera!.UnprojectPosition(center + Vector3.Right * (0.246f * 0.75f))) < 0.05f,
                     "The APC turret socket did not rotate with the hull.");
                 var driving = gunApc with { Presentation = gunApc.Presentation with { Body = new(units[apc].MoveAnimation, 0, 0) } };
                 _sprites.Apply([driving], 0, (int)Math.Ceiling(rate / 12d), rate);
@@ -429,7 +433,7 @@ public partial class Sandbox
                 var effect = OpenRTS.Content.EffectCatalog.Load(_manifest.Effects).Weapons["rifle"];
                 var muzzle = _combatEffects!.LaunchVisual(apc, 0, new(1, gunApc.Id, gunApc.Current, east, north), effect, Vector3.Forward);
                 Check(muzzle is { } launch && _camera.UnprojectPosition(launch.Center).DistanceTo(
-                    _camera.UnprojectPosition(center + new Vector3(.288f, 1.098f, -.563f))) < 0.05f,
+                    _camera.UnprojectPosition(center + new Vector3(.288f, 1.098f, -.563f) * 0.75f)) < 0.05f,
                     "The APC shot effect did not follow the off-center turret.");
 
                 var cannon = Pose(1, apc, south, east, "cannon");
@@ -513,9 +517,8 @@ public partial class Sandbox
                     var style = effects.Weapons[effectId];
                     var launch = _combatEffects!.LaunchVisual(truck.UnitType, 0,
                         new(1, truck.Id, truck.Current, north, east), style, Vector3.Right);
-                    var expected = new Vector3(truck.Current.X / 1024f + 0.58f, 1.019f, truck.Current.Y / 1024f + 0.56f);
-                    if (style.MountedRocket is not null)
-                        expected = new(truck.Current.X / 1024f - 0.94f, 0.994f, truck.Current.Y / 1024f + 0.56f);
+                    var offset = style.MountedRocket is null ? new Vector3(0.58f, 1.019f, 0.56f) : new Vector3(-0.94f, 0.994f, 0.56f);
+                    var expected = new Vector3(truck.Current.X / 1024f, 0, truck.Current.Y / 1024f) + offset * 0.75f;
                     Check(launch.HasValue, file + " did not publish a visual launch point.");
                     var (flightDirection, center) = launch!.Value;
                     var anchor = style.MountedRocket is null ? center : center - flightDirection * (float)style.Size;
@@ -591,7 +594,7 @@ public partial class Sandbox
                 var missileFrame = SpriteFrame(launcher, "units");
                 var radarFrame = SpriteFrame(radar, "units");
                 var antenna = SpriteScreenPivot(radar, aa, "radar", "units");
-                var expected = _camera!.UnprojectPosition(new Vector3(32 - 0.304f, 0, 36 + 0.52f));
+                var expected = _camera!.UnprojectPosition(new Vector3(32 - 0.304f * 0.75f, 0, 36 + 0.52f * 0.75f));
                 Check(antenna.DistanceTo(expected) < 0.05f && SpriteFrame(hull, "units") == chassisFrame,
                     "The radar socket must rotate with the launcher while both variants share one hull.");
                 _sprites.Apply([aa], 1, rate / 2, rate);
@@ -623,7 +626,7 @@ public partial class Sandbox
                     SpriteFrame(rack, "units").Y == 0 && SpriteFrame("medium-tank-hull", "units").Y == 0,
                     "The mixed tank must use the standard hull and aim guns and missiles independently.");
                 var radarFrame = SpriteFrame(radar, "units");
-                var radarPoint = _camera!.UnprojectPosition(new Vector3(32 - .293f, 0, 36));
+                var radarPoint = _camera!.UnprojectPosition(new Vector3(32 - .293f * 0.75f, 0, 36));
                 _sprites.Apply([tank], 1, rate / 2, rate, mounts);
                 Check(SpriteFrame(radar, "units") != radarFrame &&
                     radarPoint.DistanceTo(SpriteScreenPivot(radar, tank, "radar", "units")) < 0.05f,
@@ -633,7 +636,8 @@ public partial class Sandbox
                 foreach (var mount in mounts)
                 {
                     bool cannon = definition.Weapons[mount.Mount].Id == "main";
-                    var expected = cannon ? new Vector3(33.039f, 1.036f, 36) : new Vector3(32.53f, 1.385f, 35.567f);
+                    var offset = cannon ? new Vector3(1.039f, 1.036f, 0) : new Vector3(.53f, 1.385f, -.433f);
+                    var expected = new Vector3(32, 0, 36) + offset * 0.75f;
                     var launch = _combatEffects!.LaunchVisual(type, mount.Mount,
                         new(1, tank.Id, tank.Current, north, mount.Facing), styles[definition.Weapons[mount.Mount].Weapon.Id], Vector3.Forward);
                     Check(launch is { } firing &&
@@ -659,7 +663,7 @@ public partial class Sandbox
                 var aimFrame = SpriteFrame(turret, "units");
                 Check(_sprites.SpriteCount == 2 && idleFrame.Y == 0 && aimFrame.Y == 0.5f,
                     "The radar buggy's turret must aim independently of the hull.");
-                var mountPoint = _camera!.UnprojectPosition(new Vector3(32, 0, 36 - .035f));
+                var mountPoint = _camera!.UnprojectPosition(new Vector3(32, 0, 36 - .035f * 0.75f));
                 Check(mountPoint.DistanceTo(SpriteScreenPivot(turret, buggy, "turret", "units")) < 0.05f,
                     "The radar buggy turret must pivot at its hull socket.");
 
@@ -670,7 +674,7 @@ public partial class Sandbox
                 var styles = OpenRTS.Content.EffectCatalog.Load(_manifest.Effects).Weapons;
                 var launch = _combatEffects!.LaunchVisual(type, 0, new(1, buggy.Id, point, north, east),
                     styles[unit.Weapons[0].Weapon.Id], Vector3.Forward);
-                var muzzle = new Vector3(32 + .614f, 1.532f, 36 - .035f);
+                var muzzle = new Vector3(32, 0, 36) + new Vector3(.614f, 1.532f, -.035f) * 0.75f;
                 Check(launch is { } firing &&
                     _camera.UnprojectPosition(_combatEffects.Node.ToGlobal(firing.Center)).DistanceTo(_camera.UnprojectPosition(muzzle)) < 0.05f,
                     "The radar buggy's shot must start at the rotated muzzle.");
@@ -852,6 +856,30 @@ public partial class Sandbox
                 var pivot = new Vector3(sprite[3] + x * sprite[0] + z * sprite[2],
                     sprite[7] + x * sprite[4] + z * sprite[6], sprite[11] + x * sprite[8] + z * sprite[10]);
                 return _camera!.UnprojectPosition(pivot);
+            }
+
+            void CheckSelectionScale()
+            {
+                var selected = _selection.Ids.ToArray();
+                var building = poses.Single(p => p.Id.Value == 2);
+                var structure = _catalog!.Units[building.UnitType].WithRotation(building.QuarterTurns).Footprint!;
+                var unit = poses.First(p => _catalog.Units[p.UnitType].Movable);
+                var definition = _catalog.Units[unit.UnitType];
+                var model = _modelCatalog!.Models[_catalog.Presentations[unit.UnitType].Model!];
+                float radius = (float)model.Parts.Where(part => part.Parent < 0).Max(part => Math.Max(part.Width, part.Height)) / 2;
+                CheckRing(building.Id, structure.HalfWidth / 1024f * MathF.Sqrt(2), structure.HalfHeight / 1024f * MathF.Sqrt(2), 1);
+                CheckRing(unit.Id, Math.Max(radius, definition.Body.HalfWidth / 1024f), Math.Max(radius, definition.Body.HalfHeight / 1024f), 0.5f);
+                _selection.Change(selected, OpenRTS.Godot.Controls.SelectionChange.Replace);
+                UpdateSelection(1);
+
+                void CheckRing(EntityId id, float width, float height, float scale)
+                {
+                    _selection.Change([id], OpenRTS.Godot.Controls.SelectionChange.Replace);
+                    UpdateSelection(1);
+                    Check(_selectionRing!.Multimesh.VisibleInstanceCount == 1 &&
+                        Mathf.IsEqualApprox(_ringBuffer[0], (width + 0.2f) / 0.88f * scale) &&
+                        Mathf.IsEqualApprox(_ringBuffer[10], (height + 0.2f) / 0.88f * scale), "Incorrect isometric selection ring size.");
+                }
             }
 
             void CheckFactoryExit(int factoryType)

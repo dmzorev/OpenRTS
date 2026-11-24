@@ -178,23 +178,28 @@ bunker-mixed:
       move: { Sequence: stand, Parts: [body] }
 
 apc-upgradable:
-  Inherits: apc-machinegun
+  Inherits: ^sprite
   Model:
     States:
-      rockets: {}
+      #rockets: {}
       cannon: {}
       firing-ports: {}
+      machinegun: {}
     Parts:
-      turret: { HiddenWhen: [rockets, cannon] }
-      rocket:
+      body:
+        Resource: res://resources/units/apc-hull.tres
+        Size: [1.8, 1.8]
+      # turret: { HiddenWhen: [rockets, cannon] }
+      turret:
         Parent: body
         Facing: Weapon
-        Mount: option-rocket
+        Mount: main
         Muzzle: [0.50, 0.20]
         Resource: res://resources/units/apc-rocket-turret.tres
         Size: [1.25, 1.25]
         Layer: 1
-        VisibleWhen: [rockets]
+        HiddenWhen: [firing-ports, cannon]
+        # VisibleWhen: [rockets]
       cannon:
         Parent: body
         Facing: Weapon
@@ -205,6 +210,17 @@ apc-upgradable:
         Pivot: [0.5, 0.73]
         Layer: 1
         VisibleWhen: [cannon]
+      firing-ports:
+        Parent: body
+        Facing: Weapon
+        Mount: option-mg
+        Resource: res://resources/units/apc-mg-turret.tres
+        Muzzle: [0.50, 0.13]
+        Size: [1.25, 1.25]
+        Pivot: [0.5, 0.70]
+        Offset: [0, -0.04]
+        Layer: 1
+        VisibleWhen: [firing-ports]
       ports:
         Parent: body
         Resource: res://resources/buildings/work-strip.tres
@@ -213,21 +229,23 @@ apc-upgradable:
         Layer: 1
         VisibleWhen: [firing-ports]
     Animations:
-      idle: { Sequence: stand, Parts: [body, turret, rocket, cannon, ports] }
+      idle:
+        Sequence: stand
+        Parts: [body, turret, firing-ports, cannon, ports]
+      move:
+        Sequence: travel
+        Parts: [body]
+        Bob: 0.008
       fire:
-        {
-          Sequence: shoot,
-          Parts: [turret, rocket, cannon],
-          Recoil: 0.06,
-          Flash: 0.35,
-        }
+        Sequence: shoot
+        Parts: [turret, cannon, firing-ports]
+        Recoil: 0.06
+        Flash: 0.35
       construct:
-        {
-          Sequence: stand,
-          Parts: [body, turret, rocket, cannon, ports],
-          ScaleFrom: 0.85,
-          OpacityFrom: 0.35,
-        }
+        Sequence: stand
+        Parts: [body, turret, cannon, firing-ports, ports]
+        ScaleFrom: 0.85
+        OpacityFrom: 0.35
 
 fighter:
   Inherits: ^sprite

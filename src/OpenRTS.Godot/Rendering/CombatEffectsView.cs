@@ -10,10 +10,11 @@ public sealed partial class CombatEffectsView
     private readonly UnitCatalog _units;
     private readonly EffectCatalog _effects;
     private readonly ModelDefinition?[] _models;
+    private readonly ModelCatalog? _modelCatalog;
     private readonly List<WorldEvent> _events = [];
     private readonly Dictionary<EntityId, EntityPose> _workSources = [];
     private readonly Dictionary<string, (ColoredMeshBatch Batch, float Aspect)> _projectileSprites = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ColoredMeshBatch> _projectileModels = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (ColoredMeshBatch Batch, float HalfLength)> _projectileModels = new(StringComparer.Ordinal);
     private readonly ColoredMeshBatch _rounds = new(new SphereMesh { Radius = 0.5f, Height = 1, RadialSegments = 8, Rings = 4 }, "Projectiles");
     private readonly ColoredMeshBatch _beams = new(new BoxMesh { Size = Vector3.One }, "Tracers");
     private readonly ColoredMeshBatch _impacts = new(new SphereMesh { Radius = 0.5f, Height = 1, RadialSegments = 12, Rings = 4 }, "Impacts");
@@ -29,13 +30,13 @@ public sealed partial class CombatEffectsView
 
     public CombatEffectsView(UnitCatalog units, EffectCatalog effects, ModelCatalog? models = null)
     {
-        _units = units; _effects = effects;
+        _units = units; _effects = effects; _modelCatalog = models;
         _models = units.Presentations.Select(binding => binding.Model is { } id ? models?.Models.GetValueOrDefault(id) : null).ToArray();
         foreach (var type in units.Units) foreach (var mount in type.Weapons)
         {
             if (!effects.Weapons.TryGetValue(mount.Weapon.Id, out var style)) throw new ArgumentException("Missing effect: " + mount.Weapon.Id);
             if (style.ProjectileModel is { } modelPath && !_projectileModels.ContainsKey(modelPath))
-                AddProjectileModel(modelPath, (float)style.Size);
+                AddProjectileModel(modelPath);
             if (style.ProjectileTexture is not { } path || _projectileSprites.ContainsKey(path)) continue;
             var texture = GD.Load<Texture2D>(path) ?? throw new ArgumentException("Missing projectile texture: " + path);
             var material = new StandardMaterial3D
@@ -70,7 +71,7 @@ public sealed partial class CombatEffectsView
         alpha = Math.Clamp(alpha, 0, 1);
         _rounds.Clear(); _beams.Clear(); _impacts.Clear(); ProjectileCount = shots.Length;
         foreach (var sprite in _projectileSprites.Values) sprite.Batch.Clear();
-        foreach (var batch in _projectileModels.Values) batch.Clear();
+        foreach (var model in _projectileModels.Values) model.Batch.Clear();
         if (tick < _lastSmokeTick) _puffs.Clear();
         bool emitSmoke = tick != _lastSmokeTick;
         _lastSmokeTick = tick;
@@ -183,7 +184,7 @@ public sealed partial class CombatEffectsView
         if (write < _events.Count) _events.RemoveRange(write, _events.Count - write);
         _rounds.Publish(); _beams.Publish(); _impacts.Publish();
         foreach (var sprite in _projectileSprites.Values) sprite.Batch.Publish();
-        foreach (var batch in _projectileModels.Values) batch.Publish();
+        foreach (var model in _projectileModels.Values) model.Batch.Publish();
     }
     internal WorldPosition WorkSource(in EntityPose actor, WorldPosition target, float alpha)
     {

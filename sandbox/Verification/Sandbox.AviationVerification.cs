@@ -90,7 +90,7 @@ public partial class Sandbox
         var effects = OpenRTS.Content.EffectCatalog.Load(_manifest.Effects).Weapons;
         var effect = _combatEffects!.LaunchVisual(type, 0, new(1, flying.Id, air, east, north),
             effects[unit.Weapons[0].Weapon.Id], Vector3.Right);
-        var socket = new Vector3(32 + .51f, air.Elevation / 1024f + .173f, 32);
+        var socket = new Vector3(32, air.Elevation / 1024f, 32) + new Vector3(.51f, .173f, 0) * 0.75f;
         if (effect is not { } launch ||
             _camera!.UnprojectPosition(launch.Center).DistanceTo(_camera.UnprojectPosition(socket)) > 0.05f)
             throw new InvalidOperationException("Fighter launch effect did not follow its body heading and altitude.");

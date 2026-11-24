@@ -68,5 +68,6 @@ public sealed class GameManifest
         UnitCatalog.Load(rules ?? Rules, Terrain.Count == 0 ? null : LocomotionCatalog.Load(Terrain),
             Weapons.Count == 0 && weapons is null ? null : WeaponCatalog.Load(weapons ?? Weapons));
 
-    public ModelCatalog LoadModels() => ModelCatalog.Load(Models, Settings.Presentation.ModelOverrides);
+    public ModelCatalog LoadModels() => ModelCatalog.Load(Models, Settings.Presentation.ModelOverrides,
+        Settings.Presentation.Camera == GameCamera.Isometric ? 0.75f : 1f);
 }

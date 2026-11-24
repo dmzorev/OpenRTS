@@ -17,7 +17,9 @@ rifle-guard:
 apc-section:
   Strategy: Assault
   Members:
-    apc-mg: { Min: 1, Target: 2, Recipe: { Producer: factory, Action: apc } }
+    apc-mg: { Min: 1, Target: 1, Recipe: { Producer: factory, Action: apc } }
+    radar-buggy:
+      { Min: 1, Target: 2, Recipe: { Producer: factory, Action: radar-buggy } }
 
 specialist-section:
   Strategy: Assault

@@ -12,6 +12,18 @@ rifle:
 rifleman:
   Inherits: rifle
 
+autocanon:
+  Weapon:
+    Range: 6144
+    AcquireRange: 8192
+    Targets: [ground, air]
+    Damage: 14
+    Burst: 5
+    BurstIntervalTicks: 5
+    ReloadTicks: 28
+    WindupTicks: 1
+    Versus: { Living: 100, Light: 55, Mechanical: 30, Building: 10 }
+
 cannon:
   Weapon:
     Range: 6144
@@ -35,7 +47,7 @@ missile:
     Damage: 35
     ReloadTicks: 48
     WindupTicks: 4
-    Versus: { Living: 100, Light: 100, Mechanical: 100, Building: 100 }
+    Versus: { Living: 70, Light: 120, Mechanical: 100, Building: 100 }
 
 grenade:
   Weapon:

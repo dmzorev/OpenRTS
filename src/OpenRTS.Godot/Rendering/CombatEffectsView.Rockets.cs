@@ -46,12 +46,12 @@ public sealed partial class CombatEffectsView
         var socket = MountVisual(unit, mountIndex, body, yaw, spatialOnly: true);
         if (socket is { } local) yaw = local.Angle;
         var horizontal = new Vector3(MathF.Sin(yaw), 0, -MathF.Cos(yaw));
-        var tail = socket is { } anchor ? position + anchor.Point : position +
+        var tailOffset = socket is { } anchor ? anchor.Point :
             new Vector3(MathF.Sin(body), 0, -MathF.Cos(body)) * (float)style.ChassisOffset +
             horizontal * (float)style.TailOffset + Vector3.Up * (float)style.Height;
         float pitch = Mathf.DegToRad((float)style.LaunchPitch * phase);
         var direction = horizontal * MathF.Cos(pitch) + Vector3.Up * MathF.Sin(pitch);
-        return (direction, tail + direction * halfLength);
+        return (direction, position + tailOffset * ModelScale(unit) + direction * halfLength);
     }
 
     internal (Vector3 Direction, Vector3 Center)? LaunchVisual(int unit, int mount, ProjectileDeparture launch, EffectStyle style, Vector3 direction)
@@ -71,11 +71,13 @@ public sealed partial class CombatEffectsView
                 angle = MathF.Floor(Mathf.PosMod(angle, MathF.Tau) / step + 0.5f) * step;
             }
             var offset = new Vector2((float)local.X, (float)local.Z).Rotated(angle);
-            return (direction, origin + new Vector3(offset.X, (float)local.Y, offset.Y));
+            return (direction, origin + new Vector3(offset.X, (float)local.Y, offset.Y) * ModelScale(unit));
         }
         var socket = MountVisual(unit, mount, body, weapon, spatialOnly: false);
-        return socket is { } anchor ? (direction, origin + anchor.Point) : null;
+        return socket is { } anchor ? (direction, origin + anchor.Point * ModelScale(unit)) : null;
     }
+
+    private float ModelScale(int unit) => _modelCatalog?.ScaleFor(_units.Units[unit]) ?? 1f;
 
     private ModelAnimation? LaunchAnimation(int unit, int mount) =>
         _models[unit]?.Animations.GetValueOrDefault(_units.Units[unit].Weapons[mount].Animation);
@@ -114,7 +116,7 @@ public sealed partial class CombatEffectsView
         return null;
     }
 
-    private void AddProjectileModel(string path, float halfLength)
+    private void AddProjectileModel(string path)
     {
         var asset = GD.Load<PackedScene>(path) ?? throw new ArgumentException("Missing projectile model: " + path);
         var root = asset.Instantiate<Node3D>();
@@ -126,12 +128,12 @@ public sealed partial class CombatEffectsView
                 !instance.Transform.IsEqualApprox(Transform3D.Identity) || !root.Transform.IsEqualApprox(Transform3D.Identity))
                 throw new ArgumentException("Projectile model requires one identity-transformed mesh: " + path);
             var bounds = mesh.GetAabb();
-            if (MathF.Abs(bounds.Position.Z + halfLength) > 0.025f ||
-                MathF.Abs(bounds.End.Z - halfLength) > 0.025f)
-                throw new ArgumentException("Projectile model length must match twice Effect.Size and be centered: " + path);
+            float halfLength = -bounds.Position.Z;
+            if (halfLength <= 0 || MathF.Abs(bounds.End.Z - halfLength) > 0.025f)
+                throw new ArgumentException("Projectile model must be centered along its length: " + path);
             var batch = new ColoredMeshBatch(mesh, path.GetFile().GetBaseName(), preserveMaterials: true);
             batch.Node.Layers = ProjectileLightingLayer;
-            _projectileModels.Add(path, batch);
+            _projectileModels.Add(path, (batch, halfLength));
             Node.AddChild(batch.Node);
         }
         finally { root.Free(); }
@@ -146,7 +148,8 @@ public sealed partial class CombatEffectsView
     {
         if (style.ProjectileModel is { } model)
         {
-            _projectileModels[model].Add(point, Vector3.One, PitchBasis(direction, Vector3.Up), Colors.White);
+            var (mesh, halfLength) = _projectileModels[model];
+            mesh.Add(point, Vector3.One * ((float)style.Size / halfLength), PitchBasis(direction, Vector3.Up), Colors.White);
             return;
         }
         var (batch, aspect) = _projectileSprites[style.ProjectileTexture!];

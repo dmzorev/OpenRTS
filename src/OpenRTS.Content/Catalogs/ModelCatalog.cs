@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using DeclarativeContent;
+using OpenRTS.Core;
 
 namespace OpenRTS.Content;
 
@@ -21,10 +22,17 @@ public sealed record ModelDefinition(string Id, ReadOnlyCollection<ModelPart> Pa
 public sealed class ModelCatalog
 {
     public ReadOnlyDictionary<string, ModelDefinition> Models { get; }
-    private ModelCatalog(Dictionary<string, ModelDefinition> models) => Models = new(models);
+    private readonly float _unitScale;
+    private ModelCatalog(Dictionary<string, ModelDefinition> models, float unitScale)
+    {
+        Models = new(models);
+        _unitScale = unitScale;
+    }
+
+    public float ScaleFor(UnitDefinition unit) => unit.Movable ? _unitScale : 1f;
     public static ModelCatalog Load(IEnumerable<ContentSource> sources) => Load(sources, null);
 
-    internal static ModelCatalog Load(IEnumerable<ContentSource> sources, IReadOnlyDictionary<string, string>? overrides)
+    internal static ModelCatalog Load(IEnumerable<ContentSource> sources, IReadOnlyDictionary<string, string>? overrides, float unitScale = 1f)
     {
         var definitions = DefinitionSet.Load(sources);
         var registry = new TraitRegistry<string>().Register<ModelOptions>("Model", (_, _, options) => options, required: true);
@@ -100,7 +108,7 @@ public sealed class ModelCatalog
                 if (value.Length != 2 || value.Any(v => v < min || v > max)) throw node.Error(id + ".Model.Parts." + name, $"Requires two values in {min}..{max}.");
             }
         }
-        if (overrides is null || overrides.Count == 0) return new(models);
+        if (overrides is null || overrides.Count == 0) return new(models, unitScale);
         var selected = new Dictionary<string, ModelDefinition>(models, StringComparer.Ordinal);
         foreach (var (id, alternative) in overrides)
         {
@@ -108,7 +116,7 @@ public sealed class ModelCatalog
                 throw new ArgumentException($"Presentation.ModelOverrides.{id}: both '{id}' and '{alternative}' must name declared models.");
             selected[id] = model with { Id = id };
         }
-        return new(selected);
+        return new(selected, unitScale);
     }
 
     public void ValidateUnits(UnitCatalog units)

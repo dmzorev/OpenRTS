@@ -19,7 +19,7 @@ bunker:
   Armaments:
     Mounts:
       cannon: { Weapon: cannon }
-      machinegun: { Weapon: rifle }
+      machinegun: { Weapon: autocanon }
       missiles: { Weapon: missile }
   Upgrades:
     Variants:

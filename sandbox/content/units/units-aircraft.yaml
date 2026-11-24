@@ -1,7 +1,7 @@
 fighter:
   Inherits: ^unit
   Movement: { Locomotor: tracked }
-  Health: { HP: 280, Armor: Mechanical }
+  Health: { HP: 280, Armor: Light }
   Body: { Radius: 320 }
   Buildable: { Ticks: 450, Cost: 1200 }
   Aircraft:
@@ -18,12 +18,15 @@ fighter:
   Armaments:
     Mounts:
       main: { Weapon: fighter-missile, FireWhileMoving: true }
-  Presentation: { Model: fighter, Name: Истребитель, States: [damaged, airborne] }
+  Presentation:
+    Model: fighter
+    Name: Истребитель
+    States: [damaged, airborne]
 
 tiltrotor:
   Inherits: ^unit
   Movement: { Locomotor: tracked }
-  Health: { HP: 350, Armor: Mechanical }
+  Health: { HP: 250, Armor: Light }
   Body: { Radius: 320 }
   Buildable: { Ticks: 325, Cost: 1000 }
   Aircraft:
@@ -39,7 +42,9 @@ tiltrotor:
       main: { Weapon: tiltrotor-autogun, FireWhileMoving: true }
   Transport: { Accepts: [infantry], Slots: 4, UnloadDistance: 768 }
   Presentation:
-    { Model: tiltrotor, Name: Конвертоплан поддержки, States: [damaged, airborne] }
+    Model: tiltrotor
+    Name: Конвертоплан поддержки
+    States: [damaged, airborne]
 
 missile-tiltrotor:
   Inherits: tiltrotor

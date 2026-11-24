@@ -11,6 +11,7 @@ Presentation:
     fighter: iso-fighter
     tiltrotor: iso-tiltrotor
     missile-tiltrotor: iso-missile-tiltrotor
+    supply-tiltrotor: iso-supply-tiltrotor
     heavy-air-transport: iso-heavy-air-transport
     engineering-tiltrotor: iso-construction-tiltrotor
     apc-upgradable: iso-apc-upgradable
